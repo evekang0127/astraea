@@ -217,6 +217,7 @@
 #shiftHud.ready #shiftKey{color:#ffb347;font-weight:bold;}
 #shiftHud.active #shiftbar>div{background:#ff6a3d;}
 #eatPrompt{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);padding:9px 18px;background:rgba(40,12,6,.82);border:1px solid #ff9a6a;border-radius:8px;color:#ffe2cf;font-size:15px;font-weight:bold;letter-spacing:.5px;box-shadow:0 0 18px rgba(255,120,60,.45);pointer-events:none;z-index:7;}
+.account .legal{font-size:11px;opacity:.7;} .account .legal a{color:inherit;}
 #skillbar{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);display:flex;gap:8px;pointer-events:none;z-index:6;}
 #skillbar .sk{position:relative;min-width:84px;padding:6px 10px 5px 33px;white-space:nowrap;background:rgba(12,14,20,.72);border:1px solid rgba(255,190,110,.45);border-radius:8px;color:#f3e6cf;font-size:12px;line-height:1.25;box-shadow:0 2px 10px rgba(0,0,0,.35);}
 #skillbar .sk b{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:5px;background:#ffb347;color:#1b1206;font-size:12px;display:flex;align-items:center;justify-content:center;}
@@ -233,7 +234,7 @@
 <div id="overlay">
   <canvas id="embers"></canvas>
   <div class="topbar">
-    <div class="account"><span id="accountStatus" role="status">게스트</span><div id="googleButton"></div><button id="logout" type="button" hidden>로그아웃</button></div>
+    <div class="account"><span id="accountStatus" role="status">게스트</span><div id="googleButton"></div><button id="logout" type="button" hidden>로그아웃</button><span class="legal"><a href="https://evekang0127.github.io/astraea/privacy.html" target="_blank" rel="noopener">개인정보 처리방침</a> · <a href="https://evekang0127.github.io/astraea/terms.html" target="_blank" rel="noopener">이용약관</a></span></div>
     <span class="badge">3D · WEBGL</span>
   </div>
   <div class="layout">
@@ -285,6 +286,7 @@
         <label>출현 거인<select id="encounter"><option value="mixed">9거인 순환</option><option value="classic">기존 일반 거인</option></select></label>
         <label>변신할 거인 (먹어서 계승한 것만)<select id="heir"></select></label>
         <label>Google 클라이언트 ID<span class="cid"><input id="googleClientId" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false"><button type="button" id="saveClientId">저장</button></span></label>
+        <label>소리<select id="volume"><option value="1">켜기</option><option value="0.5">작게</option><option value="0">끄기</option></select></label>
         <label>동료 수<select id="allyCount"></select></label>
         <label>동료 소속<select id="allyFaction"><option value="mixed">혼성 편성</option><option value="survey">조사병단</option><option value="garrison">주둔병단</option><option value="police">헌병단</option></select></label>
         <label>화질<select id="quality"><option value="auto">자동 · 성능 우선</option><option value="low">가볍게 · 그림자 끄기</option><option value="high">고화질</option></select></label>
@@ -325,6 +327,7 @@
       <label>시점<select id="pView"><option value="3">3인칭</option><option value="1">1인칭</option></select></label>
       <label>화질<select id="pQuality"></select></label>
       <label>계승 거인<select id="pHeir"></select></label>
+      <label>소리<select id="pVolume"></select></label>
       <label>동료 수<select id="pAllies"></select></label>
       <label>동료 소속<select id="pFaction"></select></label>
       <label>출현 거인 (다음 출현부터)<select id="pEncounter"></select></label>
@@ -6575,6 +6578,152 @@ Account.use('guest');
 
 </script>
 <script>
+// ===== 소리 (12차): 외부 파일 없이 Web Audio로 그 자리에서 합성 =====
+// 한 번 쓰고 버리는 효과음(와이어·베기·타격·처치·발소리·번개·폭발·포효·먹기)은 위치에 따라 크기와 좌우가 바뀌고,
+// 이어지는 소리(바람·가스·땅울림)는 매 프레임 Sound.update가 크기를 맞춤. 브라우저 규칙상 첫 클릭·키 입력 때 켜짐
+const Sound = {
+  ctx: null, master: null, vol: 1, last: {}, lastUpdate: 0, loops: {},
+  // 같은 소리가 너무 촘촘히 겹치지 않게 (ms)
+  GAP: { hit: 45, kill: 70, punch: 60, step: 60, gas: 110, boom: 70, slash: 60, hook: 80, attach: 60, land: 120, roar: 300, thunder: 200, crunch: 200 },
+
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    this.ctx = new C();
+    this.master = this.ctx.createGain(); this.master.gain.value = this.vol;
+    const comp = this.ctx.createDynamicsCompressor();   // 큰 폭발이 겹쳐도 찢어지지 않게
+    this.master.connect(comp); comp.connect(this.ctx.destination);
+    const n = this.ctx.sampleRate * 2, buf = this.ctx.createBuffer(1, n, this.ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    this.noiseBuf = buf;
+    // 이어지는 소리: 바람(빠르게 날 때) · 가스(감기·분사) · 땅울림(낮은 진동)
+    for (const [k, type, f, q] of [['wind', 'bandpass', 500, 0.6], ['gas', 'highpass', 2600, 0.7], ['rumble', 'lowpass', 90, 1.2]]) {
+      const src = this.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      const fl = this.ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+      const g = this.ctx.createGain(); g.gain.value = 0;
+      src.connect(fl); fl.connect(g); g.connect(this.master); src.start(0, Math.random());
+      this.loops[k] = { g, fl };
+    }
+    // 일시정지·시작 화면처럼 update가 멈추면 이어지는 소리를 끔
+    setInterval(() => { if (performance.now() - this.lastUpdate > 250) for (const l of Object.values(this.loops)) l.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.06); }, 200);
+  },
+  setVolume(v) {
+    this.vol = v;
+    try { localStorage.setItem('astraea-volume', String(v)); } catch (_) {}
+    if (this.master) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
+  },
+
+  // ---- 소리 재료 ----
+  env(g, t0, dur, peak) {
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + Math.min(0.02, dur * 0.2));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  },
+  noise(dest, t0, dur, type, f0, f1, q, peak) {
+    const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf;
+    const fl = this.ctx.createBiquadFilter(); fl.type = type; fl.Q.value = q;
+    fl.frequency.setValueAtTime(f0, t0); fl.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    const g = this.ctx.createGain(); this.env(g, t0, dur, peak);
+    s.connect(fl); fl.connect(g); g.connect(dest); s.start(t0, Math.random() * 1.5); s.stop(t0 + dur + 0.05);
+  },
+  tone(dest, t0, dur, type, f0, f1, peak) {
+    const o = this.ctx.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    const g = this.ctx.createGain(); this.env(g, t0, dur, peak);
+    o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + dur + 0.05);
+  },
+  // 듣는 위치(카메라) 기준 크기·좌우. range가 클수록 멀리서도 들림
+  out(pos, k, range) {
+    let gain = k, pan = 0;
+    if (pos && typeof camera !== 'undefined') {
+      const dx = pos.x - camera.position.x, dy = (pos.y || 0) - camera.position.y, dz = pos.z - camera.position.z, d = Math.hypot(dx, dy, dz);
+      gain *= 1 / (1 + d / range);
+      if (d > 0.5) { const yaw = camera.rotation.y; pan = (dx * Math.cos(yaw) - dz * Math.sin(yaw)) / d; }
+    }
+    if (gain < 0.015) return null;
+    const g = this.ctx.createGain(); g.gain.value = Math.min(1.5, gain);
+    if (this.ctx.createStereoPanner) { const p = this.ctx.createStereoPanner(); p.pan.value = Math.max(-0.9, Math.min(0.9, pan)); g.connect(p); p.connect(this.master); }
+    else g.connect(this.master);
+    return g;
+  },
+  play(name, pos = null, k = 1, range = 40) {
+    if (!this.ctx || this.vol <= 0 || this.ctx.state !== 'running') return;
+    const now = performance.now();
+    if (now - (this.last[name] || 0) < (this.GAP[name] || 40)) return;
+    this.last[name] = now;
+    const o = this.out(pos, Math.min(1.2, k), range);
+    if (o) this.SFX[name].call(this, o, this.ctx.currentTime, k);
+  },
+
+  SFX: {
+    hook(o, t) { this.noise(o, t, 0.2, 'bandpass', 2500, 7500, 2, 0.45); this.tone(o, t, 0.07, 'square', 1700, 800, 0.1); },          // 와이어 발사: 쉭
+    attach(o, t) { this.tone(o, t, 0.06, 'triangle', 2600, 1500, 0.22); this.noise(o, t, 0.05, 'highpass', 5000, 3000, 1, 0.25); },  // 박힘: 탁
+    slash(o, t) { this.noise(o, t, 0.24, 'bandpass', 1100, 6500, 1.3, 0.7); this.tone(o, t, 0.14, 'sawtooth', 800, 2800, 0.05); },    // 칼: 휙
+    hit(o, t) { this.tone(o, t, 0.18, 'sine', 150, 60, 0.75); this.noise(o, t, 0.5, 'highpass', 2000, 5200, 0.5, 0.22); },              // 목덜미 타격 + 증기
+    kill(o, t) { this.tone(o, t, 0.45, 'sine', 115, 38, 1); this.noise(o, t, 0.35, 'lowpass', 700, 100, 1, 0.6); this.noise(o, t + 0.05, 1.4, 'highpass', 1500, 6000, 0.4, 0.35); },
+    punch(o, t) { this.tone(o, t, 0.3, 'sine', 95, 40, 0.95); this.noise(o, t, 0.25, 'lowpass', 900, 140, 0.8, 0.6); },                // 거인 주먹: 쿵
+    gas(o, t) { this.noise(o, t, 0.38, 'highpass', 1700, 4200, 0.7, 0.45); },                                                         // 가스 분사: 푸슉
+    land(o, t, k) { this.tone(o, t, 0.15, 'sine', 120, 55, 0.4 * k); this.noise(o, t, 0.2, 'lowpass', 700, 150, 0.8, 0.35 * k); },
+    step(o, t, k) { this.tone(o, t, 0.45, 'sine', 75 / Math.sqrt(Math.max(1, k)), 28, 0.9); this.noise(o, t, 0.3, 'lowpass', 320, 55, 0.8, 0.45); },   // 거인 발소리: 둥
+    thunder(o, t) { this.noise(o, t, 0.16, 'highpass', 3200, 1400, 0.5, 0.8); this.noise(o, t + 0.05, 2.4, 'lowpass', 900, 55, 0.7, 0.95); this.tone(o, t, 1.4, 'sine', 62, 28, 0.6); },
+    boom(o, t, k) { this.tone(o, t, 0.9 + k * 0.4, 'sine', 85, 24, 1); this.noise(o, t, 1.3 + k * 0.8, 'lowpass', 1300, 45, 0.6, 0.95); this.noise(o, t, 0.12, 'highpass', 2600, 800, 0.5, 0.5); },
+    // 거인 포효: 떨리는 톱니파를 낮은 필터로 거칠게
+    roar(o, t, k) {
+      const dur = 1.3, osc = this.ctx.createOscillator(), lfo = this.ctx.createOscillator(), lg = this.ctx.createGain(), fl = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
+      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(120 / Math.sqrt(k), t); osc.frequency.exponentialRampToValueAtTime(70 / Math.sqrt(k), t + dur);
+      lfo.frequency.value = 7; lg.gain.value = 9; lfo.connect(lg); lg.connect(osc.frequency);
+      fl.type = 'lowpass'; fl.frequency.value = 900; fl.Q.value = 2;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(fl); fl.connect(g); g.connect(o); osc.start(t); lfo.start(t); osc.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+      this.noise(o, t, dur, 'bandpass', 700, 300, 1.5, 0.3);
+    },
+    crunch(o, t) { for (let i = 0; i < 4; i++) this.noise(o, t + i * 0.08, 0.09, 'bandpass', 900 + i * 300, 300, 2, 0.8); this.tone(o, t, 0.35, 'sine', 160, 55, 0.6); },   // 먹기: 와작
+  },
+
+  // 매 프레임: 바람(속도)·가스(감기/분사)·땅울림
+  update() {
+    if (!this.ctx) return;
+    this.lastUpdate = performance.now();
+    const t = this.ctx.currentTime, p = Player, human = !Shifter.active;
+    const sp = human ? p.vel.length() : 0, k = p.keys || {};
+    const wind = Math.min(0.55, Math.max(0, (sp - 8) / 70));
+    this.loops.wind.g.gain.setTargetAtTime(wind, t, 0.08); this.loops.wind.fl.frequency.setTargetAtTime(300 + sp * 14, t, 0.1);
+    const hooked = human && p.isHooked(), boost = human && (k.ShiftLeft || k.ShiftRight) && !p.onGround;
+    this.loops.gas.g.gain.setTargetAtTime(hooked && k.Space ? 0.28 : boost ? 0.22 : hooked ? 0.07 : 0, t, 0.05);
+    this.loops.rumble.g.gain.setTargetAtTime(Shifter.rumble ? 1.1 : 0, t, 0.3);
+  },
+};
+try { const v = parseFloat(localStorage.getItem('astraea-volume')); if (v >= 0 && v <= 1) Sound.vol = v; } catch (_) {}
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => Sound.init(), true);
+
+// ---------- 게임 사건에 소리 연결 ----------
+{
+  const wrap = (obj, name, after) => { const f = obj[name]; obj[name] = function (...a) { const before = after.pre ? after.pre.call(this, ...a) : undefined; const r = f.apply(this, a); after.call(this, r, before, ...a); return r; }; };
+  wrap(Player, 'fireHook', Object.assign(function (r, before) { if (this.hooks[0] && this.hooks[0] !== before) Sound.play('hook'); }, { pre: function () { return this.hooks[0]; } }));
+  wrap(Player, 'updateHook', Object.assign(function (r, before) { const n = this.hooks.filter(h => h && h.attached).length; if (n > before) Sound.play('attach'); }, { pre: function () { return this.hooks.filter(h => h && h.attached).length; } }));
+  wrap(Player, 'doSlash', function () { Sound.play('slash'); });
+  wrap(Player, 'onLand', function (r, b, impact) { Sound.play('land', null, Math.min(1, impact / 40)); });
+  wrap(Effects, 'gasBurst', function (r, b, at) { Sound.play('gas', at, 0.9, 30); });
+  wrap(Effects, 'lightning', function (r, b, at, h) { Sound.play('thunder', at, 1, 120 + (h || 0) * 2); });
+  wrap(Effects, 'blast', function (r, b, at, radius) { Sound.play('boom', at, Math.min(3, radius / 50), 80 + radius * 3); });
+  wrap(Titans, 'strike', function (killed, b, titan, opts) {
+    const at = titan.pos.clone().setY(titan.height * 0.8);
+    Sound.play(killed ? 'kill' : opts && opts.source === 'shifter' ? 'punch' : 'hit', at, 1, 60);
+  });
+  wrap(Shifter, 'useSkill', Object.assign(function (r, before) { if (this.ab && this.ab !== before && this.titan) Sound.play('roar', this.titan.pos, Math.max(1, this.titan.scale), 200); }, { pre: function () { return this.ab; } }));
+  wrap(Shifter, 'tryEat', Object.assign(function (r, before) { if (before) Sound.play('crunch', before.g.position, 1, 30); }, { pre: function () { return this.nearUser; } }));
+  // 거인 발소리: 걸음 위상이 반 바퀴 넘어갈 때마다, 큰 거인일수록 낮고 멀리 들림 (땅울림 거인은 땅울림 소리가 대신)
+  const walk = Titan.prototype.animateWalk;
+  Titan.prototype.animateWalk = function (dt, moving, player) {
+    const before = Math.floor(this.walk / Math.PI);
+    walk.call(this, dt, moving, player);
+    if (moving && !this.rumbler && Math.floor(this.walk / Math.PI) !== before) Sound.play('step', this.pos, Math.max(1, this.scale), 30 + this.height * 3);
+  };
+}
+
+</script>
+<script>
 // ===== 미니맵: 플레이어 중심, 바라보는 방향이 항상 위쪽 =====
 const Minimap = {
   RANGE: 160,          // 미니맵 반지름이 나타내는 실제 거리 (m)
@@ -6762,7 +6911,7 @@ const Menu = {
     const store=(k,v)=>{try{sessionStorage.setItem(k,v);}catch(_){}},load=k=>{try{return sessionStorage.getItem(k);}catch(_){return null;}};
     const heirs=Nine.order.map(id=>[id,Nine.defs[id].name]),allies=[...Array(9).keys()].map(n=>[String(n),n?n+'명':'없음']);
     fill($('heir'),heirs);fill($('pHeir'),heirs);fill($('allyCount'),allies);fill($('pAllies'),allies);
-    for(const [src,dst] of [['quality','pQuality'],['encounter','pEncounter'],['allyFaction','pFaction']])fill($(dst),[...$(src).options].map(o=>[o.value,o.textContent]));
+    for(const [src,dst] of [['quality','pQuality'],['encounter','pEncounter'],['allyFaction','pFaction'],['volume','pVolume']])fill($(dst),[...$(src).options].map(o=>[o.value,o.textContent]));
     if(Nine.defs[load('heir')])Shifter.kind=load('heir');
     const n=parseInt(load('allies'),10);if(n>=0&&n<=8)Allies.count=n;
     if(Allies.factions[load('faction')]||load('faction')==='mixed')Allies.faction=load('faction');
@@ -6771,6 +6920,7 @@ const Menu = {
     bind(['allyCount','pAllies'],()=>String(Allies.count),v=>Allies.setCount(+v),'allies');
     bind(['allyFaction','pFaction'],()=>Allies.faction,v=>Allies.setFaction(v),'faction');
     bind(['quality','pQuality'],()=>Quality.mode,v=>Quality.setMode(v));
+    bind(['volume','pVolume'],()=>String(Sound.vol),v=>Sound.setVolume(+v));
     bind(['encounter','pEncounter'],()=>Nine.selection,v=>Nine.selection=v,'encounter');
     $('pView').addEventListener('change',e=>Player.thirdPerson=e.target.value==='3');
     $('toMenu').addEventListener('click',()=>location.reload());
@@ -7389,6 +7539,7 @@ function loop(now = performance.now()) {
     Shifter.postUpdate(dt);
     Allies.update(dt, Player);
     if (World.fallTex) World.fallTex.offset.y += dt * 0.9;   // 지하 폭포 물줄기가 흘러내림
+    Sound.update();                                          // 바람·가스·땅울림 소리
     Game.update(dt);
     Effects.update(dt);
   }
