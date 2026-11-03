@@ -6984,14 +6984,21 @@ const el=document.getElementById('specimen');if(!el)return;
   },
   initAuth(){
     const status=document.getElementById('accountStatus'),holder=document.getElementById('googleButton'),logout=document.getElementById('logout');
+    // 로그인 유지: 맵을 바꾸거나 메인으로 가면 페이지가 다시 열리므로, 로그인한 계정을 이 브라우저에 기억했다가 바로 되살림 (로그아웃할 때까지)
+    const KEY='astraea-account';
+    const showIn=(id,name)=>{Account.use(id,name);status.textContent=(name||'플레이어')+` · 계승 ${Shifter.owned.size}/9 저장됨`;holder.hidden=true;logout.hidden=false;};
+    let saved=null;try{saved=JSON.parse(localStorage.getItem(KEY)||'null');}catch(_){}
+    if(saved&&saved.id)showIn(saved.id,saved.name);
+    logout.addEventListener('click',()=>{try{localStorage.removeItem(KEY);}catch(_){}if(window.google&&google.accounts)google.accounts.id.disableAutoSelect();Account.use('guest');holder.hidden=false;logout.hidden=true;status.textContent='게스트';});
     let clientId=(window.ASTRAEA_AUTH||{}).googleClientId;try{clientId=localStorage.getItem('astraea-google-client-id')||clientId;}catch(_){}
+    if(saved&&saved.id&&!clientId)return;
     if(!clientId){status.textContent='게스트 · 설정에 Google 클라이언트 ID를 넣으면 로그인';return;}
-    if(location.protocol==='file:'){status.textContent='Google 로그인은 웹 주소(예: GitHub Pages)에서 이용할 수 있습니다.';return;}
-    if(/claude\.ai$|claudeusercontent\.com$|claude\.site$/.test(location.hostname)){status.textContent='claude.ai 미리보기에서는 Google 로그인이 막혀 있음 · 웹에 올린 주소에서 이용';return;}
-    status.textContent='Google 로그인 불러오는 중…';
+    if(location.protocol==='file:'){if(!saved)status.textContent='Google 로그인은 웹 주소(예: GitHub Pages)에서 이용할 수 있습니다.';return;}
+    if(/claude\.ai$|claudeusercontent\.com$|claude\.site$/.test(location.hostname)){if(!saved)status.textContent='claude.ai 미리보기에서는 Google 로그인이 막혀 있음 · 웹에 올린 주소에서 이용';return;}
+    if(!saved)status.textContent='Google 로그인 불러오는 중…';
     const script=document.createElement('script');script.src='https://accounts.google.com/gsi/client';script.async=true;script.defer=true;
-    const timeout=setTimeout(()=>{status.textContent='로그인을 불러오지 못했습니다. 게스트로 시작할 수 있습니다.';},12000);
-    script.onerror=()=>{clearTimeout(timeout);status.textContent='Google 연결 실패 · 게스트로 시작할 수 있습니다.';};
+    const timeout=setTimeout(()=>{if(!saved)status.textContent='로그인을 불러오지 못했습니다. 게스트로 시작할 수 있습니다.';},12000);
+    script.onerror=()=>{clearTimeout(timeout);if(!saved)status.textContent='Google 연결 실패 · 게스트로 시작할 수 있습니다.';};
     script.onload=()=>{
       clearTimeout(timeout);
       try{
@@ -7002,15 +7009,15 @@ const el=document.getElementById('specimen');if(!el)return;
             const raw=response.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
             const profile=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw),c=>c.charCodeAt(0))));
             if(profile.aud!==clientId||profile.exp*1000<Date.now())throw new Error('expired');
-            Account.use('g:'+profile.sub,profile.name);   // 계정별 저장: 계승한 거인
+            try{localStorage.setItem(KEY,JSON.stringify({id:'g:'+profile.sub,name:profile.name||''}));}catch(_){}
+            showIn('g:'+profile.sub,profile.name);   // 계정별 저장: 계승한 거인
             status.textContent=(profile.name||'플레이어')+` · 계승 ${Shifter.owned.size}/9 저장됨`;holder.hidden=true;logout.hidden=false;
           }catch(_){status.textContent='계정 연결을 확인하지 못했습니다. 다시 시도해 주세요.';}
         }});
         google.accounts.id.renderButton(holder,{theme:'outline',size:'large',text:'signin_with',locale:'ko'});
-        status.textContent='게스트 · 원하는 경우 Google 계정 연결';
+        if(!saved)status.textContent='게스트 · 원하는 경우 Google 계정 연결';
       }catch(_){status.textContent='Google 설정을 확인해 주세요. 게스트 플레이는 가능합니다.';}
     };
-    logout.addEventListener('click',()=>{google.accounts.id.disableAutoSelect();Account.use('guest');holder.hidden=false;logout.hidden=true;status.textContent='게스트';});
     document.head.appendChild(script);
   }
 };
