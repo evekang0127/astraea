@@ -1389,7 +1389,7 @@ const World = {
     }
   },
 
-  // 날개 문장 깃발 (조사병단): 짙은 초록 천 + 금테 + 방패 위 흰 날개·푸른 날개
+  // 소속 깃발: 짙은 초록 천 + 금테 + 방패 위 교차한 두 칼 (직접 만든 문장)
   bannerMat() {
     if (this._bannerMat) return this._bannerMat;
     const tex = this.canvasTex(128, (g, s) => {
@@ -1397,10 +1397,9 @@ const World = {
       g.strokeStyle = '#c9a646'; g.lineWidth = 6; g.strokeRect(5, 5, s - 10, s - 10);
       g.fillStyle = '#3b2a1c'; g.strokeStyle = '#c9a646'; g.lineWidth = 3;
       g.beginPath(); g.moveTo(30, 30); g.lineTo(98, 30); g.lineTo(98, 72); g.quadraticCurveTo(64, 108, 30, 72); g.closePath(); g.fill(); g.stroke();
-      for (let i = 0; i < 5; i++) {
-        g.fillStyle = '#ffffff'; g.beginPath(); g.ellipse(52 - i * 3, 44 + i * 8, 17 - i * 2, 4.5, 0.55, 0, Math.PI * 2); g.fill();
-        g.fillStyle = '#3a6fc4'; g.beginPath(); g.ellipse(76 + i * 3, 44 + i * 8, 17 - i * 2, 4.5, -0.55, 0, Math.PI * 2); g.fill();
-      }
+      g.strokeStyle = '#e8e4d8'; g.lineWidth = 5;
+      g.beginPath(); g.moveTo(42, 40); g.lineTo(86, 86); g.moveTo(86, 40); g.lineTo(42, 86); g.stroke();
+      g.fillStyle = '#c9a646'; g.fillRect(56, 58, 16, 6);
     });
     tex.anisotropy = 4;
     return (this._bannerMat = new THREE.MeshLambertMaterial({ map: tex }));
@@ -7580,73 +7579,78 @@ setTimeout(() => { bootWorld(); bootFinish(); loop(); }, 60);
 
 </script>
 <script>
-// ===== 스토리 모드 (13차): 애니 줄거리를 9장으로 따라가는 목표형 진행. 자유 모드(기존)는 그대로 =====
-// 출격을 누르면 모드 선택 → 스토리는 장 선택. 장마다 맞는 맵이 다르면 그 맵으로 다시 열고(sessionStorage) 바로 이어 시작
-// 대사·설명은 줄거리를 따라 새로 쓴 문장. 진행률(전체 %)은 화면 위쪽, 목표는 그 아래, 대사는 아래쪽 상자
+// ===== 스토리 모드 (13·14차): 애니 줄거리를 9장으로 따라가는 목표형 진행. 자유 모드(기존)는 그대로 =====
+// 출격을 누르면 모드 선택 → 스토리는 장 선택. 고르면 거인 주먹이 카드를 부수고 시작. 장 맵이 다르면 그 맵으로 다시 열고 이어 시작
+// 대사·설명은 줄거리를 따라 새로 쓴 문장(원작 대사 인용 아님). 진행률(전체 %)은 화면 위쪽, 목표는 그 아래, 대사는 아래쪽 상자
+// 14차 고증 수정: 1장은 초대형 거인이 먼저 나타나 성문을 차고 사라짐 → 거인 유입 → 갑옷 거인이 내문을 뚫고 사라짐(둘 다 쓰러뜨리지 못함),
+// 2장도 초대형 출현으로 시작, 3장 여성형은 숲에서 포획 → 비명으로 거인을 불러 탈출, 6장은 갑옷 → 초대형(낙하 폭발) → 짐승 순
 const Story = {
   ready: false, active: false, ch: -1, step: 0, stepT: 0, stepKills: 0, done: false, lines: [], lineT: 0,
   KEY: 'astraea-story-pending',
 
   // 장: map, powers(이 장에서 쓸 수 있는 거인), allies, steps[{t: 목표 종류, ...}]
   // 목표 종류: kill(n) · boss(kind, at) · survive(sec) · transform(kind) · reach(at, r) · rumble
+  // 보스 설정(boss: {...} 또는 boss 단계): still(제자리에 서 있음) · vanish(n초 뒤 증기 속에 사라짐) · kick([x,z] 성문 차기 폭발) · drop(나타날 때 큰 폭발)
   chapters: [
     { title: '시간시나 함락', year: '845년', map: 'gateward', powers: [], allies: 2,
-      brief: '백 년의 평화가 깨지는 날. 성벽 위로 거대한 얼굴이 나타난다.',
+      brief: '백 년 동안 아무 일도 없던 성벽. 그날, 성벽보다 큰 얼굴이 나타났다.',
       steps: [
-        { t: 'kill', n: 6, pure: 6, text: '성문으로 몰려드는 거인 6마리 토벌',
-          say: [['한네스', '성벽 너머가 조용하지 않다. 훈련병들, 와이어를 확인해라!'], ['에렌', '저게 뭐야… 성벽보다 큰 놈이 있잖아!']] },
-        { t: 'survive', sec: 40, pure: 7, boss: { kind: 'colossal', at: [0, 70] }, text: '초대형 거인이 성문을 걷어찼다 · 40초 동안 버티며 피난을 엄호',
-          say: [['아르민', '성문이 뚫렸어! 사람들이 아직 안쪽에 있어!'], ['미카사', '에렌, 혼자 앞서가지 마. 내가 같이 간다.']] },
-        { t: 'boss', kind: 'armored', at: [0, 120], pure: 4, text: '내문으로 돌진하는 갑옷 거인 저지',
-          say: [['한네스', '저 거인은 포탄을 튕겨 낸다… 목덜미를 노려!']] },
+        { t: 'survive', sec: 16, pure: 0, boss: { kind: 'colossal', at: [0, 44], still: true, vanish: 15, kick: [0, 12] }, text: '성벽 너머에 초대형 거인 출현 · 성문이 부서진다',
+          say: [['한네스', '…저게 뭐야. 성벽 위로 손이 올라왔어!'], ['에렌', '거인이다… 성벽보다 커!']] },
+        { t: 'kill', n: 6, pure: 7, text: '부서진 외문으로 쏟아진 거인 6마리 토벌 · 피난 엄호',
+          say: [['아르민', '초대형 거인이 사라졌어… 그런데 문이 뚫려서 거인들이 들어오고 있어!'], ['한네스', '주민들을 내문 쪽으로! 내가 길을 연다.']] },
+        { t: 'reach', at: [0, -210], r: 34, pure: 5, boss: { kind: 'armored', at: [0, 100], vanish: 28 }, text: '갑옷 거인이 내문으로 돌진 · 피난선(빛 기둥)까지 후퇴',
+          say: [['주둔병단', '포탄이 튕겨 나간다! 저 거인은 온몸이 단단해!'], ['미카사', '에렌, 지금은 살아서 빠져나가야 해.']] },
       ] },
     { title: '트로스트 구 공방전', year: '850년', map: 'embergate', powers: ['attack'], allies: 4,
-      brief: '훈련병 졸업 다음 날, 초대형 거인이 다시 나타나 외문을 부순다.',
+      brief: '5년 뒤 훈련병 해산 다음 날. 초대형 거인이 다시 나타나 트로스트 외문을 부순다.',
       steps: [
-        { t: 'kill', n: 10, pure: 9, text: '구역 안으로 들어온 거인 10마리 토벌',
-          say: [['아르민', '보급탑이 거인에게 둘러싸였어. 가스가 바닥나기 전에 뚫어야 해!'], ['미카사', '싸워서 이기면 살아남는다. 간다.']] },
+        { t: 'survive', sec: 12, pure: 0, boss: { kind: 'colossal', at: [0, 222], still: true, vanish: 11, kick: [0, 196] }, text: '외문에 초대형 거인 출현 · 외문이 부서진다',
+          say: [['에렌', '5년 전의… 그 녀석이다!'], ['아르민', '사라졌어. 하지만 구멍이 뚫렸어!']] },
+        { t: 'kill', n: 10, pure: 9, text: '구역 안으로 들어온 거인 10마리 토벌 · 보급탑 탈환',
+          say: [['아르민', '보급탑이 거인에게 둘러싸였어. 가스가 바닥나기 전에 뚫어야 해!'], ['미카사', '싸우면 이긴다. 이기면 산다.']] },
         { t: 'transform', kind: 'attack', pure: 4, text: '[T] 진격의 거인으로 변신',
-          say: [['에렌', '…몸 안에서 뭔가 깨어난다. 이 힘이라면!'], ['픽시스 사령관', '그 거인이 우리 편이라면, 큰 바위로 외문을 막아 보게.']] },
-        { t: 'reach', at: [0, 175], r: 26, pure: 5, text: '바위를 짊어지고 부서진 외문(빛 기둥)까지 이동',
+          say: [['에렌', '…몸 안에서 뭔가 깨어난다.'], ['픽시스 사령관', '그 힘으로 큰 바위를 옮겨 외문을 막아 보게.']] },
+        { t: 'reach', at: [0, 178], r: 26, pure: 5, text: '바위를 짊어지고 부서진 외문(빛 기둥)까지 이동',
           say: [['아르민', '에렌! 정신 차려, 문을 막는 거야!']] },
         { t: 'kill', n: 5, pure: 6, text: '구역에 남은 거인 5마리 소탕',
-          say: [['리바이', '뒤처리는 우리가 한다. 꼬마들은 숨이나 돌려.']] },
+          say: [['리바이', '뒤처리는 조사병단이 한다. 숨이나 돌려라.']] },
       ] },
-    { title: '제57회 벽외조사', year: '850년', map: 'skyroot', powers: ['attack'], allies: 5,
+    { title: '제57회 벽외조사', year: '850년', map: 'skyroot', powers: [], allies: 5,
       brief: '조사병단이 벽 밖으로 나선다. 대열 오른쪽이 정체불명의 거인에게 무너진다.',
       steps: [
-        { t: 'kill', n: 5, pure: 6, text: '대열을 습격한 거인 5마리 토벌',
+        { t: 'kill', n: 5, pure: 6, text: '대열 오른쪽을 습격한 거인 5마리 토벌',
           say: [['엘빈 단장', '전 병력, 거대수의 숲으로. 나무 위에서 대기한다.']] },
-        { t: 'reach', at: [0, -40], r: 30, pure: 3, boss: { kind: 'female', at: [0, 220] }, text: '여성형 거인을 숲 한가운데(빛 기둥)까지 유인',
+        { t: 'reach', at: [0, -40], r: 30, pure: 3, boss: { kind: 'female', at: [0, 230] }, text: '쫓아오는 여성형 거인을 숲 한가운데 덫(빛 기둥)까지 유인',
           say: [['아르민', '저 거인은 사람이 들어 있어. 누군가를 찾고 있어!'], ['리바이', '돌아보지 말고 달려라.']] },
-        { t: 'boss', kind: 'female', at: null, pure: 2, text: '여성형 거인 토벌',
-          say: [['엘빈 단장', '지금이다, 사격! 놈을 묶어라!']] },
+        { t: 'survive', sec: 30, pure: 12, boss: { kind: 'female', at: null, still: true, vanish: 30 }, text: '여성형 거인 포획 · 비명을 듣고 몰려오는 거인 막기',
+          say: [['엘빈 단장', '사격! 놈을 묶었다.'], ['리바이', '…비명이다. 주변 거인들이 모여든다!']] },
       ] },
     { title: '스토헤스 구 습격', year: '850년', map: 'ironhold', powers: ['attack'], allies: 4,
-      brief: '여성형 거인의 정체를 밝혀내기 위한 작전. 도시 한가운데서 두 거인이 맞붙는다.',
+      brief: '여성형 거인의 정체를 밝히는 작전. 도시 한가운데서 두 거인이 맞붙는다.',
       steps: [
         { t: 'transform', kind: 'attack', pure: 2, text: '[T] 진격의 거인으로 변신',
           say: [['아르민', '정체가 드러났어. 이제 도망치게 둘 수 없어.']] },
-        { t: 'boss', kind: 'female', at: [60, 60], pure: 2, text: '거리에서 여성형 거인 격파',
-          say: [['에렌', '배신자… 끝까지 쫓아가 주마!']] },
+        { t: 'boss', kind: 'female', at: [60, 60], pure: 2, text: '거리에서 여성형 거인 제압',
+          say: [['에렌', '끝까지 쫓아가 주마!']] },
       ] },
     { title: '우트가르드 성', year: '850년', map: 'moonfall', powers: [], allies: 3,
       brief: '벽 안쪽에서 거인이 나타났다. 무너진 고성에서 밤을 새워 버텨야 한다.',
       steps: [
         { t: 'survive', sec: 90, pure: 12, text: '해가 뜰 때까지 고성 방어 (90초)',
-          say: [['게르게르', '탑으로 올라가! 놈들이 밤인데도 움직인다!'], ['유미르', '…이대로 여기서 끝낼 순 없지.']] },
+          say: [['게르게르', '탑으로 올라가! 놈들이 밤인데도 움직인다!'], ['크리스타', '모두 살아서 돌아가는 거야!']] },
         { t: 'kill', n: 8, pure: 10, text: '성벽에 매달린 거인 8마리 토벌',
-          say: [['크리스타', '모두 살아서 돌아가는 거야!']] },
+          say: [['유미르', '…이대로 여기서 끝낼 순 없지.']] },
       ] },
     { title: '시간시나 탈환전', year: '850년', map: 'gateward', powers: ['attack'], allies: 6,
-      brief: '월 마리아를 되찾는 밤. 갑옷·짐승·초대형이 기다리고 있다.',
+      brief: '월 마리아를 되찾는 밤. 갑옷·초대형·짐승 거인이 기다리고 있다.',
       steps: [
-        { t: 'boss', kind: 'armored', at: [0, 90], pure: 3, text: '갑옷 거인 격파',
+        { t: 'boss', kind: 'armored', at: [0, 90], pure: 3, text: '갑옷 거인 격파 (뇌창으로 목덜미를 노려라)',
           say: [['엘빈 단장', '구멍을 막는다. 그리고 지하실로 간다.'], ['에렌', '이번엔 내가 끝낸다!']] },
+        { t: 'boss', kind: 'colossal', at: [-60, 120], drop: true, pure: 2, text: '하늘에서 떨어진 초대형 거인 격파',
+          say: [['아르민', '열기를 버티면… 목덜미까지 닿을 수 있어.']] },
         { t: 'boss', kind: 'beast', at: [80, 300], pure: 5, text: '바위를 던지는 짐승 거인 격파',
           say: [['리바이', '짐승은 내가 맡는다. 길만 열어 줘라.']] },
-        { t: 'boss', kind: 'colossal', at: [-60, 120], pure: 2, text: '성벽 위로 떨어진 초대형 거인 격파',
-          say: [['아르민', '열기를 버틸 수 있으면… 목덜미까지 닿을 수 있어.']] },
       ] },
     { title: '레벨리오 습격', year: '854년', map: 'ashward', powers: ['attack'], allies: 6,
       brief: '바다 건너 마레의 수용 구역. 에렌이 무대 위에서 전쟁을 시작한다.',
@@ -7689,19 +7693,35 @@ const Story = {
   initUI() {
     const css = document.createElement('style');
     css.textContent = `
-#modePick{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(4,6,12,.78);backdrop-filter:blur(3px)}
-#modePick .box{width:min(880px,94vw);max-height:88vh;overflow:auto;padding:26px;background:#0c1220;border:1px solid rgba(211,166,37,.45);border-radius:6px;color:#ebe0cc;font-family:inherit}
-#modePick h2{margin:0 0 4px;color:#e0c070;letter-spacing:2px}#modePick p.sub{margin:0 0 18px;color:#a99a7a;font-size:13px}
-#modePick .modes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-#modePick .card{text-align:left;padding:18px;background:rgba(255,255,255,.03);border:1px solid rgba(211,166,37,.35);border-radius:5px;color:inherit;cursor:pointer;font:inherit}
-#modePick .card:hover{border-color:#e0c070;background:rgba(224,192,112,.08)}#modePick .card b{display:block;font-size:18px;color:#f0d890;margin-bottom:6px}
-#modePick .card small{color:#a99a7a;line-height:1.5}
-#modePick .chs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
-#modePick .ch{position:relative;text-align:left;padding:12px;background:rgba(255,255,255,.03);border:1px solid rgba(211,166,37,.3);border-radius:4px;color:inherit;cursor:pointer;font:inherit;min-height:92px}
-#modePick .ch:disabled{opacity:.35;cursor:not-allowed}#modePick .ch b{display:block;color:#f0d890;margin:2px 0 4px}#modePick .ch i{font-style:normal;font-size:11px;color:#c8b27a}
-#modePick .ch small{font-size:11px;color:#a99a7a}#modePick .ch.done::after{content:'완료';position:absolute;right:8px;top:8px;font-size:10px;color:#9fe0b0}
-#modePick .row{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px}#modePick .back{background:none;border:1px solid rgba(255,255,255,.2);color:#ddd;padding:8px 14px;border-radius:4px;cursor:pointer;font:inherit}
+#modePick{position:fixed;inset:0;z-index:30;display:grid;place-items:center;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 120%,rgba(255,120,40,.22),transparent 55%),radial-gradient(ellipse at 50% -20%,rgba(80,110,180,.25),transparent 60%),rgba(3,4,9,.97)}
+#modePick::before{content:'';position:absolute;left:0;right:0;bottom:0;height:34vh;opacity:.5;pointer-events:none;
+  background:linear-gradient(transparent,rgba(0,0,0,.6)),repeating-linear-gradient(90deg,#1a1d26 0 70px,#14161d 70px 74px);clip-path:polygon(0 30%,4% 30%,4% 22%,7% 22%,7% 30%,96% 30%,96% 22%,99% 22%,99% 30%,100% 30%,100% 100%,0 100%)}
+#modePick .box{position:relative;width:min(1000px,94vw);max-height:92vh;overflow:auto;padding:30px 30px 24px;color:#ebe0cc;font-family:inherit;text-align:center}
+#modePick .eyebrow{font-size:12px;letter-spacing:6px;color:#c9a646}#modePick h2{margin:6px 0 4px;font-size:40px;letter-spacing:10px;color:#f3dc98;text-shadow:0 0 24px rgba(255,190,90,.35)}
+#modePick p.sub{margin:0 0 26px;color:#a99a7a;font-size:13px}
+#modePick .modes{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+#modePick .card,#modePick .ch{position:relative;overflow:hidden;text-align:left;color:inherit;cursor:pointer;font:inherit;border:1px solid rgba(211,166,37,.4);border-radius:8px;
+  background:linear-gradient(160deg,rgba(28,32,46,.95),rgba(10,12,20,.95));transition:transform .18s,border-color .18s,box-shadow .18s}
+#modePick .card{padding:0;min-height:300px;display:flex;flex-direction:column}
+#modePick .card:hover,#modePick .ch:hover:not(:disabled){transform:translateY(-4px);border-color:#f0d890;box-shadow:0 10px 40px rgba(255,170,80,.25)}
+#modePick .art{height:170px;position:relative;background:#0b0e16;border-bottom:1px solid rgba(211,166,37,.3)}
+#modePick .art svg{position:absolute;inset:0;width:100%;height:100%}
+#modePick .card .txt{padding:16px 18px 18px}#modePick .card b{display:block;font-size:22px;letter-spacing:3px;color:#f3dc98;margin-bottom:8px}
+#modePick .card small{color:#b9ab8c;line-height:1.6;font-size:13px}#modePick .tag{display:inline-block;margin-top:10px;padding:3px 9px;border:1px solid rgba(240,216,144,.4);border-radius:20px;font-size:11px;color:#f0d890}
+#modePick .chs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:4px;text-align:left}
+#modePick .ch{padding:14px 14px 12px;min-height:118px}#modePick .ch:disabled{opacity:.32;cursor:not-allowed;filter:grayscale(.7)}
+#modePick .ch .num{position:absolute;right:10px;bottom:-14px;font-size:64px;font-weight:900;color:rgba(240,216,144,.07)}
+#modePick .ch b{display:block;color:#f0d890;margin:3px 0 5px;font-size:16px}#modePick .ch i{font-style:normal;font-size:11px;color:#c8b27a;letter-spacing:1px}
+#modePick .ch small{font-size:12px;color:#a99a7a;line-height:1.5}#modePick .ch.done{border-color:rgba(159,224,176,.5)}#modePick .ch.done::after{content:'완료';position:absolute;right:10px;top:10px;font-size:10px;color:#9fe0b0;border:1px solid rgba(159,224,176,.5);border-radius:10px;padding:1px 7px}
+#modePick .row{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:12px}#modePick .back{background:none;border:1px solid rgba(255,255,255,.2);color:#ddd;padding:9px 16px;border-radius:5px;cursor:pointer;font:inherit}
 #modePick .bar{height:8px;flex:1;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}#modePick .bar>div{height:100%;background:linear-gradient(90deg,#c9a646,#ffdf8a)}
+#modePick.shake .box{animation:mpShake .45s}
+@keyframes mpShake{0%,100%{transform:none}15%{transform:translate(-14px,9px)}30%{transform:translate(12px,-8px)}45%{transform:translate(-9px,6px)}60%{transform:translate(6px,-4px)}80%{transform:translate(-3px,2px)}}
+.fistFx{position:fixed;z-index:40;pointer-events:none;width:340px;margin-left:-170px}
+.shard{position:fixed;z-index:39;pointer-events:none;background:linear-gradient(160deg,#2a3042,#0c0f18);border:1px solid rgba(240,216,144,.55)}
+.crackFx{position:fixed;z-index:38;pointer-events:none}
+.impactFx{position:fixed;inset:0;z-index:41;pointer-events:none;background:radial-gradient(circle at var(--x) var(--y),rgba(255,236,190,.95),rgba(255,150,60,.35) 18%,transparent 45%)}
 #storyHud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:6;min-width:340px;max-width:70vw;text-align:center;pointer-events:none;color:#f3e6cf;text-shadow:0 1px 3px #000}
 #storyHud .t{font-size:12px;letter-spacing:1px;color:#e0c070}#storyHud .pb{height:7px;margin:5px 0;background:rgba(0,0,0,.45);border:1px solid rgba(224,192,112,.5);border-radius:4px;overflow:hidden}
 #storyHud .pb>div{height:100%;background:linear-gradient(90deg,#c9a646,#ffe39a);transition:width .4s}#storyHud .o{font-size:14px;font-weight:bold}
@@ -7730,24 +7750,80 @@ const Story = {
     return m;
   },
   close() { const m = document.getElementById('modePick'); if (m) m.hidden = true; },
+  // 카드 그림 (직접 그린 단순한 실루엣)
+  ART: {
+    free: `<svg viewBox="0 0 400 170" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="skyF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3a5c"/><stop offset="1" stop-color="#d68a4c"/></linearGradient></defs>
+      <rect width="400" height="170" fill="url(#skyF)"/><circle cx="300" cy="120" r="34" fill="#ffd28a" opacity=".55"/>
+      <path d="M150 170 C150 110 170 70 205 62 C240 70 258 110 258 170Z" fill="#3a1f1a"/><circle cx="205" cy="52" r="24" fill="#3a1f1a"/>
+      <rect x="0" y="118" width="400" height="52" fill="#151821"/><g fill="#151821">${Array.from({ length: 20 }, (_, i) => `<rect x="${i * 20 + 3}" y="110" width="12" height="10"/>`).join('')}</g>
+      <path d="M40 60 L120 20 M40 60 L130 40" stroke="#dfeaf2" stroke-width="1.4" opacity=".8"/><path d="M40 60 l-8 6 l6 2z" fill="#dfeaf2"/>
+      <circle cx="40" cy="60" r="3" fill="#dfeaf2"/></svg>`,
+    story: `<svg viewBox="0 0 400 170" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="skyS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#101626"/><stop offset="1" stop-color="#3c2a2a"/></linearGradient></defs>
+      <rect width="400" height="170" fill="url(#skyS)"/><g fill="#ffe7b0" opacity=".7">${Array.from({ length: 26 }, (_, i) => `<circle cx="${(i * 73) % 400}" cy="${(i * 37) % 90}" r="${i % 3 ? 0.9 : 1.6}"/>`).join('')}</g>
+      <path d="M120 150 L120 60 Q200 40 200 58 Q200 40 280 60 L280 150 Q200 132 200 150 Q200 132 120 150Z" fill="#e9dfc6"/><path d="M200 58 L200 150" stroke="#9a8a68" stroke-width="2"/>
+      <g stroke="#8a7a5a" stroke-width="2" opacity=".7"><path d="M135 78 H188 M135 92 H188 M135 106 H180 M212 78 H265 M212 92 H265 M212 106 H258"/></g>
+      <path d="M250 40 L292 8 L296 12 L258 46Z" fill="#f2e8cf"/><path d="M258 46 l-6 8 l4 -10z" fill="#3a2a1a"/></svg>`,
+  },
   openModes() {
     const done = this.progress(), pct = Math.round(done / this.chapters.length * 100);
-    const m = this.modal(`<h2>모드 선택</h2><p class="sub">언제든 메인 메뉴에서 다시 고를 수 있습니다.</p>
+    const m = this.modal(`<div class="eyebrow">ASTRAEA</div><h2>모드 선택</h2><p class="sub">고르면 거인의 주먹이 내려칩니다</p>
       <div class="modes">
-        <button class="card" data-m="free"><b>자유 모드</b><small>지금 맵에서 끝없이 몰려오는 거인과 싸웁니다. 9거인 사용자를 먹어 힘을 계승하고, 마음대로 변신하고 날아다니세요.</small></button>
-        <button class="card" data-m="story"><b>스토리 모드</b><small>시간시나 함락부터 천지의 싸움까지, 애니 줄거리를 9장으로 따라갑니다. 장마다 목표가 있고 진행률이 화면 위에 표시됩니다.<br><br>진행 ${pct}% · ${done}/${this.chapters.length}장 완료</small></button>
+        <button class="card" data-m="free"><div class="art">${this.ART.free}</div><div class="txt"><b>자유 모드</b><small>끝없이 몰려오는 거인과 싸웁니다. 9거인 사용자를 먹어 힘을 계승하고, 마음껏 변신하고 날아다니세요.</small><br><span class="tag">맵 9곳 · 무한 출현</span></div></button>
+        <button class="card" data-m="story"><div class="art">${this.ART.story}</div><div class="txt"><b>스토리 모드</b><small>시간시나 함락부터 천지의 싸움까지 애니 줄거리를 9장으로 따라갑니다. 진행률이 화면 위에 표시됩니다.</small><br><span class="tag">진행 ${pct}% · ${done}/${this.chapters.length}장</span></div></button>
       </div>`);
-    m.querySelector('[data-m=free]').onclick = () => { this.close(); this.ready = true; try { sessionStorage.removeItem(this.KEY); } catch (_) {} requestPlay(); };
-    m.querySelector('[data-m=story]').onclick = () => this.openChapters();
+    m.querySelector('[data-m=free]').onclick = e => this.smash(e.currentTarget, () => { this.close(); this.ready = true; try { sessionStorage.removeItem(this.KEY); } catch (_) {} requestPlay(); });
+    m.querySelector('[data-m=story]').onclick = e => this.smash(e.currentTarget, () => this.openChapters());
   },
   openChapters() {
     const done = this.progress(), pct = Math.round(done / this.chapters.length * 100);
-    const m = this.modal(`<h2>스토리 모드</h2><p class="sub">완료한 장 다음까지 열립니다. 이미 끝낸 장은 다시 할 수 있어요.</p>
+    const m = this.modal(`<div class="eyebrow">STORY MODE</div><h2>장 선택</h2><p class="sub">완료한 장 다음까지 열립니다. 끝낸 장은 다시 할 수 있어요.</p>
       <div class="chs">${this.chapters.map((c, i) => `<button class="ch${i < done ? ' done' : ''}" data-ch="${i}" ${i > done ? 'disabled' : ''}>
-        <i>${i + 1}장 · ${c.year}</i><b>${c.title}</b><small>${c.brief}</small></button>`).join('')}</div>
+        <span class="num">${i + 1}</span><i>${i + 1}장 · ${c.year}</i><b>${c.title}</b><small>${c.brief}</small></button>`).join('')}</div>
       <div class="row"><button class="back">← 모드 선택</button><span style="font-size:12px;color:#c8b27a">전체 ${pct}%</span><div class="bar"><div style="width:${pct}%"></div></div></div>`);
     m.querySelector('.back').onclick = () => this.openModes();
-    m.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => this.choose(+b.dataset.ch));
+    m.querySelectorAll('[data-ch]').forEach(b => b.onclick = e => this.smash(e.currentTarget, () => this.choose(+b.dataset.ch)));
+  },
+  // 고른 카드 위로 거인 주먹(직접 그린 근육 팔)이 내려와 부숨 → 금·파편·섬광·흔들림·쿵 소리 → then()
+  smash(card, then) {
+    if (this.smashing) return;
+    this.smashing = true;
+    const r = card.getBoundingClientRect(), cx = r.left + r.width / 2, hitY = r.top + r.height * 0.55;
+    const fist = document.createElement('div'); fist.className = 'fistFx';
+    fist.innerHTML = `<svg viewBox="0 0 200 330"><defs><linearGradient id="arm" x1="0" x2="1"><stop offset="0" stop-color="#7a3a30"/><stop offset=".5" stop-color="#b8644f"/><stop offset="1" stop-color="#6a2f27"/></linearGradient></defs>
+      <path d="M62 0 L138 0 L146 170 L54 170Z" fill="url(#arm)"/><g stroke="#5a221c" stroke-width="2" opacity=".55" fill="none"><path d="M78 0 C74 60 82 110 76 170"/><path d="M100 0 C104 60 96 120 102 170"/><path d="M122 0 C126 70 118 120 124 170"/></g>
+      <rect x="40" y="160" width="120" height="110" rx="34" fill="#c87a5f"/><g fill="#b06650">${[0, 1, 2, 3].map(i => `<rect x="${44 + i * 29}" y="244" width="26" height="40" rx="12"/>`).join('')}</g>
+      <path d="M40 200 C18 210 20 250 46 258 L70 250 C60 236 58 216 66 206Z" fill="#b8664f"/><g stroke="#7a3a30" stroke-width="3" opacity=".6"><path d="M70 250 v28 M99 250 v30 M128 250 v28"/></g></svg>`;
+    fist.style.left = cx + 'px'; fist.style.top = (hitY - 300) + 'px';
+    document.body.appendChild(fist);
+    fist.animate([{ transform: 'translateY(-110vh) scale(1.25)' }, { transform: 'translateY(0) scale(1)' }], { duration: 300, easing: 'cubic-bezier(.55,0,1,.6)', fill: 'forwards' });
+    setTimeout(() => {
+      // 충격: 섬광 · 흔들림 · 소리
+      const fx = document.createElement('div'); fx.className = 'impactFx'; fx.style.setProperty('--x', cx + 'px'); fx.style.setProperty('--y', hitY + 'px'); document.body.appendChild(fx);
+      fx.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 450, fill: 'forwards' });
+      const m = document.getElementById('modePick'); m.classList.remove('shake'); void m.offsetWidth; m.classList.add('shake');
+      if (typeof Sound !== 'undefined') { Sound.init(); Sound.last = {}; Sound.play('punch', null, 1.2); Sound.play('boom', null, 0.8); }
+      // 금 가는 선
+      const ck = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); ck.setAttribute('class', 'crackFx');
+      Object.assign(ck.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+      ck.setAttribute('viewBox', `0 0 ${r.width} ${r.height}`);
+      let d = ''; const ox = r.width / 2, oy = r.height * 0.55;
+      for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2 + Math.random() * 0.4; let x = ox, y = oy; d += `M${x} ${y}`; for (let k = 0; k < 4; k++) { x += Math.cos(a + (Math.random() - .5) * .8) * r.width * .12; y += Math.sin(a + (Math.random() - .5) * .8) * r.height * .14; d += ` L${x.toFixed(1)} ${y.toFixed(1)}`; } }
+      ck.innerHTML = `<path d="${d}" stroke="#fff1d0" stroke-width="2.5" fill="none" opacity=".9"/>`;
+      document.body.appendChild(ck);
+      // 카드가 산산조각: 조각들이 튀어 흩어짐
+      card.style.visibility = 'hidden';
+      for (let i = 0; i < 16; i++) {
+        const s = document.createElement('div'); s.className = 'shard';
+        const w = r.width / 4, h = r.height / 4, x = r.left + (i % 4) * w, y = r.top + Math.floor(i / 4) * h;
+        Object.assign(s.style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px', clipPath: `polygon(${Math.random() * 30}% 0,100% ${Math.random() * 30}%,${70 + Math.random() * 30}% 100%,0 ${70 + Math.random() * 30}%)` });
+        document.body.appendChild(s);
+        const dx = (x + w / 2 - cx) * (1.5 + Math.random()), dy = (y + h / 2 - hitY) * 1.2 + 260 + Math.random() * 200;
+        s.animate([{ transform: 'translate(0,0) rotate(0)', opacity: 1 }, { transform: `translate(${dx}px,${dy}px) rotate(${(Math.random() - .5) * 720}deg)`, opacity: 0 }], { duration: 750 + Math.random() * 300, easing: 'cubic-bezier(.2,.6,.4,1)', fill: 'forwards' });
+        setTimeout(() => s.remove(), 1100);
+      }
+      fist.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(18px)' }, { transform: 'translateY(-110vh)' }], { duration: 650, delay: 120, easing: 'ease-in', fill: 'forwards' });
+      setTimeout(() => { fist.remove(); fx.remove(); ck.remove(); this.smashing = false; then(); }, 780);
+    }, 300);
   },
   // 장 고르기: 맵이 다르면 그 맵으로 다시 열고, 같으면 바로 시작
   choose(i) {
@@ -7777,23 +7853,47 @@ const Story = {
     this.step = k; this.stepT = 0; this.stepKills = Game.kills; this.boss = null;
     if (s.say) this.queue(s.say);
     if (s.t === 'transform' || s.t === 'rumble') Shifter.charge = 1;
-    const b = s.t === 'boss' ? { kind: s.kind, at: s.at } : s.boss;
-    if (b) this.boss = this.spawnBoss(b.kind, b.at);
-    if (s.t === 'boss' && !b.at && this.lastBoss && !this.lastBoss.dead) this.boss = this.lastBoss;   // 앞 단계에서 나온 보스를 그대로
+    const b = s.t === 'boss' ? { kind: s.kind, at: s.at, drop: s.drop } : s.boss;
+    if (b) this.boss = this.spawnBoss(b);
     if (s.t === 'reach') this.markT = 0;
   },
-  spawnBoss(kind, at) {
-    if (!at) {   // 앞에서 나온 같은 보스가 살아 있으면 그대로
-      const alive = Titans.list.find(t => t.boss && !t.dead && t.kind === kind);
-      if (alive) return (this.lastBoss = alive);
-      const f = Player.forward(); at = [Player.pos.x + f.x * 160, Player.pos.z + f.z * 160];
+  // 보스: at이 없으면 앞 단계에서 나온 같은 종류를 그대로 씀 (새 설정만 덧입힘)
+  spawnBoss(b) {
+    let t = !b.at ? Titans.list.find(x => x.boss && !x.dead && x.kind === b.kind) : null;
+    if (!t) {
+      let at = b.at;
+      if (!at) { const f = Player.forward(); at = [Player.pos.x + f.x * 160, Player.pos.z + f.z * 160]; }
+      t = new Titan(Titans.scene, at[0], at[1], Nine.defs[b.kind].height, false, b.kind);
+      t.boss = true; t.rallyT = 999;   // 보스는 처음부터 플레이어를 쫓음
+      if (b.at) t.root.rotation.y = Math.atan2(Player.pos.x - at[0], Player.pos.z - at[1]);   // 플레이어 쪽을 봄
+      Titans.list.push(t); Titans._hooksDirty = true;
+      if (b.drop) Effects.blast(t.pos.clone(), 140, 0xffa860, { life: 1.6, stop: 0.1 });   // 하늘에서 떨어지며 변신 폭발
+      Effects.lightning(t.pos.clone(), Math.min(t.height, 120));
+      Game.toast(`${Nine.defs[b.kind].name} 출현!`, '#ff9a6a');
     }
-    const t = new Titan(Titans.scene, at[0], at[1], Nine.defs[kind].height, false, kind);
-    t.boss = true; t.rallyT = 999;   // 보스는 처음부터 플레이어를 쫓음
-    Titans.list.push(t); Titans._hooksDirty = true;
-    Effects.lightning(t.pos.clone(), Math.min(t.height, 120));
-    Game.toast(`${Nine.defs[kind].name} 출현!`, '#ff9a6a');
-    return (this.lastBoss = t);
+    t.still = !!b.still; t.vanishT = b.vanish || 0; t.kickT = b.kick ? 1.8 : 0; t.kickAt = b.kick || null;
+    return t;
+  },
+  // 제자리 보스(성벽 너머 초대형·붙잡힌 여성형)와 사라지는 보스, 성문 차기 연출
+  updateBosses(dt) {
+    for (const t of Titans.list) {
+      if (!t.boss || t.dead) continue;
+      if (t.still) {   // 움직이지 않음: 걷기·공격 대신 제자리 숨쉬기 + 증기
+        if (!t._update) { t._update = t.update; t.update = function (d, p) { this.animateWalk(d, false, null); if (Math.random() < 0.3) Effects.steam.emit(this.pos.clone().setY(this.height * (0.4 + Math.random() * 0.5)), Effects._v.set(Effects.rand(3), 5, Effects.rand(3)), 1.6, this.scale * 0.8, this.scale * 2); }; }
+      } else if (t._update) { t.update = t._update; t._update = null; }
+      if (t.kickAt && (t.kickT -= dt) <= 0) {   // 성문 차기: 큰 폭발과 파편, 성문 쪽으로 다리를 휘두름
+        t.legR.rotation.x = -1.4;
+        Effects.blast(new THREE.Vector3(t.kickAt[0], 6, t.kickAt[1]), 46, 0xffc49a, { stop: 0.08 });
+        Effects.debris(new THREE.Vector3(t.kickAt[0], 2, t.kickAt[1]), 3, 80);
+        Game.toast('성문이 부서졌다!', '#ff9a6a');
+        t.kickAt = null;
+      }
+      if (t.vanishT > 0 && (t.vanishT -= dt) <= 0) {   // 증기 속에 사라짐 (쓰러뜨린 것이 아님)
+        for (let i = 0; i < 4; i++) Effects.corpseSteam(t.pos.clone().setY(t.height * (0.3 + i * 0.2)), t.scale);
+        t.dead = true; t.removed = true; t.scene.remove(t.root);
+        Game.toast(`${Nine.defs[t.kind].name}이(가) 증기 속에 사라졌다`, '#cfd8e6');
+      }
+    }
   },
   queue(lines) { this.lines.push(...lines); if (!this.lineT) this.nextLine(); },
   nextLine() {
@@ -7830,6 +7930,7 @@ const Story = {
     if (!this.active || this.done) return;
     const c = this.chapters[this.ch], s = c.steps[this.step];
     this.stepT += dt;
+    this.updateBosses(dt);
     if (this.lineT && (this.lineT -= dt) <= 0) this.nextLine();
     if (s.t === 'reach') {   // 목적지 빛 기둥
       if ((this.markT -= dt) <= 0) { this.markT = 1.4; Effects.pillar({ x: s.at[0], y: 0, z: s.at[1] }, 260, s.r * 0.5, 0xffe39a, 1.3); }
