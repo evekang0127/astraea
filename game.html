@@ -1012,7 +1012,10 @@ const World = {
     for (let i = 0; i < (openField ? 0 : 40); i++) {
       const a = i / 40 * Math.PI * 2 + rand(0.05);
       const r = 1300 + Math.random() * 500, h = 140 + Math.random() * 260;
-      const m = new THREE.Mesh(new THREE.ConeGeometry(160 + Math.random() * 180, h, 5), mountMat);
+      const cg = new THREE.ConeGeometry(160 + Math.random() * 180, h, 11, 5), cp = cg.attributes.position;   // 36차: 피라미드 대신 울퉁불퉁한 산
+      for (let k = 0; k < cp.count; k++) { const y = cp.getY(k); if (y < h / 2 - 1) { const f = 1 + (Math.sin(k * 7.13) * 0.5 + Math.sin(k * 2.9) * 0.3) * 0.22; cp.setX(k, cp.getX(k) * f); cp.setZ(k, cp.getZ(k) * f); cp.setY(k, y + Math.sin(k * 5.1) * h * 0.04); } }
+      cg.computeVertexNormals();
+      const m = new THREE.Mesh(cg, mountMat);
       m.position.set(Math.cos(a) * r, h / 2 - 10, Math.sin(a) * r);
       m.rotation.y = Math.random() * 6;
       m.userData.merge = true;
@@ -1574,7 +1577,7 @@ const World = {
 
   // ---------- 물 (바다 맵): map.water = { level: 수면 높이, at(x, z): 물인 곳인지 } ----------
   waterLevel(x, z) {
-    if (this.open && Field.sea(x, z)) return 0.15;   // 3단계: 섬 밖 바다
+    if (this.open && Field.sea(x, z)) return 0.15 - (Field.h0 || 0);   // 바다 수면 (지형 기준 높이 반영)
     const w = this.map && this.map.water;
     if (w) return w.at(x, z) ? w.level : null;
     for (const p of this.pools) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.level;
@@ -1592,7 +1595,7 @@ const World = {
   // 작은 거인은 목덜미가 수면 위로 나오게 떠서 헤엄침 (이때는 음수 = 땅보다 위)
   wadeDepth(x, z, height, napeFrac = 0.74) {
     const lv = this.waterLevel(x, z);
-    if (lv === null) return 0;
+    if (lv === null) return this.open ? -Field.height(x, z) : 0;   // 36차: 거인도 지형 위를 걸음
     return -Math.max(lv - this.waterDepth(x, z), lv + 1.5 - height * napeFrac);
   },
   // 사람이 물에서 설 수 있는 가장 낮은 높이: 수면 아래 1.4m에서 머리를 내놓고 헤엄 (얕으면 바닥)
@@ -1604,7 +1607,7 @@ const World = {
   collide(pos, vel, r, h) {
     let grounded = false;
     let floor = this.waterLevel(pos.x, pos.z) !== null ? this.swimFloor(pos.x, pos.z) : 0;   // 물에서는 헤엄 높이가 바닥
-    if (this.open) floor = Math.max(floor, Field.height(pos.x, pos.z));                       // 3단계: 산비탈
+    if (this.open && this.waterLevel(pos.x, pos.z) === null) floor = Field.height(pos.x, pos.z);   // 36차: 굴곡 지형 + 산비탈
     if (this.map.groundAt) { const g = this.map.groundAt(pos.x, pos.z, pos.y); if (g !== null) floor = Math.max(floor, g); }   // 29차: 맵 전용 바닥(스라토아 나선 경사로)
     if (pos.y <= floor) { pos.y = floor; if (vel.y < 0) vel.y = 0; grounded = true; }
 
@@ -2974,7 +2977,7 @@ Object.assign(Maps, {
       return Math.random() < 0.5 ? [rand(8), rand(140)] : [rand(140), rand(8)];   // 구역 안 큰길 (십자)
     },
     build(W) {
-      W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+      W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
       const wallMat = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#8f8a82', '#5c5852') });
       const dirt = W.groundTexture('#7b766c', ['#6d685f', '#8a857a', '#5f5a52']);
       dirt.repeat.set(140, 140);
@@ -3027,7 +3030,7 @@ Object.assign(Maps, {
       return [Math.cos(a) * r, Math.sin(a) * r];
     },
     build(W) {
-      W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+      W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
       const sand = W.groundTexture('#b7a37e', ['#a8946f', '#c4b28b', '#9c8a68']);
       sand.repeat.set(150, 150);
       W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
@@ -3081,7 +3084,7 @@ Object.assign(Maps, {
       return [rand(40), -60 - Math.random() * 120];                                                      // 관문을 뚫고 들어온 거인
     },
     build(W) {
-      W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+      W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
       const grass = W.groundTexture('#6f8f4a', ['#61803f', '#7d9b55', '#56733a']);
       grass.repeat.set(160, 160);
       W.addGround(1400, new THREE.MeshLambertMaterial({ map: grass }), 0);
@@ -3304,7 +3307,7 @@ Maps.saltmere = {
     return [Math.cos(a) * r, Math.sin(a) * r];
   },
   build(W) {
-    W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+    W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
     Kit3.prep(W);
     const cob = W.cobbleTexture('#8f8478'); cob.repeat.set(140, 140);
     W.addGround(1400, new THREE.MeshLambertMaterial({ map: cob }), 0);
@@ -3364,7 +3367,7 @@ Maps.slatoa = {
     return best;
   },
   build(W) {
-    W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+    W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
     Kit3.prep(W);
     const sand = W.groundTexture('#c2a878', ['#b49a6a', '#cdb486', '#a88e60']); sand.repeat.set(140, 140);
     W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
@@ -3426,7 +3429,7 @@ Maps.mourning = {
   water: { level: 2.4, depth: (x, z) => 6 + Math.min(14, Math.max(0, z - 40) * 0.04), at: (x, z) => z > 36 && !(x > 470) },
   spawn() { if (Math.random() < 0.7) return [rand(420), 300 + Math.random() * 280]; return [rand(480), -150 - Math.random() * 400]; },
   build(W) {
-    W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+    W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
     Kit3.prep(W);
     const sand = W.groundTexture('#d6bd88', ['#c9ae78', '#e0c894', '#bda26c']); sand.repeat.set(150, 150);
     W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
@@ -3468,7 +3471,7 @@ const Kit4 = {
   mats(W) {
     if (W.k4) return W.k4;
     Kit3.prep(W);
-    W.darkIron = W.darkIron || new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+    W.darkIron = W.darkIron || new THREE.MeshLambertMaterial({ color: 0x55595f });
     return (W.k4 = {
       wall: new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b5ab98', '#77705f') }),
       marble: new THREE.MeshLambertMaterial({ map: W.stoneTexture('#ece8de', '#c8c2b4') }),
@@ -3785,13 +3788,13 @@ const Polish = {
     m.build = function (W) {
       base.call(this, W);
       // 쇠 재질은 맵마다 있을 수도 없을 수도 있음 → 없으면 만들어 둠 (없는 재질로 묶으면 맵 전체 불러오기가 멈췄음)
-      W.darkIron = W.darkIron || new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+      W.darkIron = W.darkIron || new THREE.MeshLambertMaterial({ color: 0x55595f });
       try { fn(W); } catch (e) { console.warn('polish', id, e); }
     };
   },
   // 성문 권양 장치: 성벽 위 권양실 + 큰 도르래 2개 + 쇠창살까지 내려오는 쇠사슬
   winch(W, x, z, top, gateY, dz) {
-    const iron = W.darkIron || (W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 }));
+    const iron = W.darkIron || (W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f }));
     W.batch('winchHouse', W.unitBox, W.stoneMat, x, top + 4, z, 22, 8, 10, 0, null, 0, 0, { solid: true, hook: true });
     W.batch('winchRoof', W.unitBox, W.roofMats[2], x, top + 9, z, 24, 2, 12, 0, null, 0, 0, { hook: true });
     for (const s of [-1, 1]) {
@@ -3942,6 +3945,29 @@ Object.assign(Maps.paths, {
     }
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); sg.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     sky.add(new THREE.Points(sg, new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, vertexColors: true, fog: false, transparent: true, opacity: 0.95, depthWrite: false })));
+    // 36차: 하늘 전체를 두르는 거대한 오로라 커튼 (세로로 흐르는 청록·초록 빛띠, 가산 혼합)
+    const aur = W.canvasTex(256, (c, s2) => {
+      const gr = c.createLinearGradient(0, s2, 0, 0); gr.addColorStop(0, 'rgba(120,255,200,0)'); gr.addColorStop(0.08, 'rgba(140,255,210,.9)'); gr.addColorStop(0.45, 'rgba(90,230,220,.45)'); gr.addColorStop(1, 'rgba(80,140,255,0)');
+      c.fillStyle = gr; c.fillRect(0, 0, s2, s2);
+      c.globalCompositeOperation = 'destination-in';
+      for (let x = 0; x < s2; x += 2) { c.fillStyle = `rgba(0,0,0,${0.35 + 0.65 * Math.abs(Math.sin(x * 0.11) * Math.sin(x * 0.037 + 1))})`; c.fillRect(x, 0, 2, s2); }
+    });
+    const aurMats = [];
+    for (let k = 0; k < 10; k++) {
+      const a0 = k / 10 * Math.PI * 2 + rand(0.3), span = 1.8 + Math.random() * 0.9, R = 1700 + Math.random() * 300, segs = 60;
+      const pos = [], uv = [], idx = [];
+      for (let i = 0; i <= segs; i++) {
+        const t = i / segs, a = a0 + t * span, rr = R + Math.sin(t * 9 + k) * 120, x = Math.cos(a) * rr, z = Math.sin(a) * rr, y0 = 150 + Math.sin(t * 5 + k) * 80, y1 = y0 + 1700 + Math.sin(t * 7 + k * 2) * 300;   // 37차: 하늘 전체를 덮게 더 높고 넓게
+        pos.push(x, y0, z, x, y1, z); uv.push(t * 4, 0, t * 4, 1);
+        if (i < segs) { const b = i * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+      }
+      const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); gg.setIndex(idx);
+      aur.wrapS = THREE.RepeatWrapping;
+      const am = new THREE.MeshBasicMaterial({ map: aur, color: new THREE.Color().setHSL(0.42 + Math.random() * 0.1, 0.9, 0.6), transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      aurMats.push(am); sky.add(new THREE.Mesh(gg, am));
+    }
+    // 오로라가 천천히 일렁임
+    let tA = 0; W.animated.push(dt => { tA += dt; aurMats.forEach((m, i) => { m.opacity = 0.85 + 0.15 * Math.sin(tA * 0.6 + i * 1.7); if (m.map) m.map.offset.x = tA * 0.01 * (i % 2 ? 1 : -1); }); });
     // 떠다니는 빛 알갱이
     // (점 묶음 하나로 그림 — 스프라이트 120개를 따로 그리면 그리기 횟수가 120번 늘었음)
     const M2 = 160, mp = new Float32Array(M2 * 3);
@@ -4135,6 +4161,9 @@ Atlas.applyNames();
 // ===== 34차: 세계 지도 다시 배치 — 가로 전체 화면(왼쪽 큰 지도 + 오른쪽 장소 목록·정보·이동 버튼) =====
 // 지도에는 장소 점과 짧은 이름만(겹치던 구역 이름·바다 건너 목록은 오른쪽 목록으로 옮김). 시작 화면 오른쪽 작은 칸도 같은 함수를 씀(좁으면 목록이 지도 아래로).
 Object.assign(Atlas, {
+  // 36차: 마레 대륙 대략 윤곽(km) — 해외 장소 둘레를 땅으로 (들판이 바다로만 나오지 않게)
+  MARLEY: [[-2450, -1150], [-1300, -1150], [-1240, -520], [-1340, 180], [-1250, 900], [-1520, 1150], [-2450, 1150]],
+  inMarley(x, y) { const O = this.MARLEY; let ins = false; for (let i = 0, j = O.length - 1; i < O.length; j = i++) { const [xi, yi] = O[i], [xj, yj] = O[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) ins = !ins; } return ins; },
   short(n) { return n.replace(/ 구$/, '').replace(/^왕도 /, '').replace(' 수용 구역', '').replace('레이스 가 ', ''); },
   svg(cur) {
     const O = this.outline(), pts = O.map(([x, y]) => `${x.toFixed(0)},${(-y).toFixed(0)}`).join(' ');
@@ -4174,7 +4203,7 @@ Object.assign(Atlas, {
 .atlas-wrap{display:grid;gap:12px;height:100%;min-height:0}
 .atlas-wrap.wide{grid-template-columns:minmax(0,1fr) minmax(280px,360px)}
 .atlas-wrap .map{min-height:0;border:1px solid #797977;display:flex}
-.atlas-wrap .side{display:flex;flex-direction:column;gap:10px;min-height:0}
+.atlas-wrap .side{display:flex;flex-direction:column;gap:10px;min-height:0}.atlas-wrap .side .atlas-info{flex:0 0 auto}.atlas-wrap .side .list{flex:1 1 auto;min-height:0}   /* 정보 칸이 눌려 이동 버튼이 목록 뒤로 숨던 문제 */
 .atlas-wrap .list{overflow:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px}
 .atlas-wrap h4{margin:8px 0 2px;font:700 11px 'Cinzel',serif;letter-spacing:3px;color:#898989}
 .atlas-wrap .it{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;cursor:pointer;font:600 13px 'Noto Serif KR',serif;color:#FFFFFF;background:#1a1a1a;border:1px solid #333;padding:7px 10px;border-radius:3px}
@@ -4184,6 +4213,7 @@ Object.assign(Atlas, {
 .atlas-info .go{margin-top:8px;width:100%;cursor:pointer;font:700 14px 'Noto Serif KR',serif;letter-spacing:2px;padding:10px 16px;color:#FFFFFF;border:1px solid #D71A1C;background:#D71A1C}
 .atlas-info .go:hover{filter:brightness(1.15)}
 .atlas-wrap.compact .list{flex-direction:row;flex-wrap:wrap;max-height:90px}.atlas-wrap.compact .it{padding:4px 8px;font-size:11px}.atlas-wrap.compact .it small{display:none}.atlas-wrap.compact h4{display:none}.atlas-wrap.compact .map{height:320px}
+html.title .fields-list{display:none!important}   /* 37차: 메인 화면을 깔끔하게 — 지도는 게임 안에서(M키) */
 #atlasModal{position:fixed;inset:0;z-index:40;display:flex;background:rgba(0,0,0,.92);padding:2vh 2vw}#atlasModal[hidden]{display:none}
 #atlasModal .box{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;border:1px solid #D71A1C;background:#000;padding:12px 14px}
 #atlasModal .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
@@ -4257,7 +4287,7 @@ addEventListener('keydown', e => {
 // 자바스크립트 계산은 64비트라 수백 km 떨어져도 정밀하고, 그릴 때는 카메라 기준으로 바뀌어 떨림이 없음(따로 원점 이동 없음).
 // 스토리 진행 중에는 장소 경계를 그대로 둠(스토리 목표가 장소 안이라서).
 const Field = {
-  OPEN: { gateward: 1, embergate: 1, ironhold: 1, skyroot: 1, moonfall: 1, wild: 1, orvud: 1, ragako: 1, dauper: 1, mitras: 1 },
+  OPEN: { gateward: 1, embergate: 1, ironhold: 1, skyroot: 1, moonfall: 1, wild: 1, orvud: 1, ragako: 1, dauper: 1, mitras: 1, karanes: 1 },
   WILD_KEY: 'astraea-wild',   // 3단계: 세계 지도에서 고른 임의 지점(km). 그 지점을 원점으로 하는 빈 장소 'wild'
   CH: 400, RAD: 4,          // 칸 크기(m), 플레이어 주변 몇 칸까지 (9x9 = 약 3.6km 사방)
   FOG: [500, 3400],         // 들판에서는 안개를 멀리 (50m 성벽이 멀리서도 보이게). 장소 안에서는 맵 원래 안개
@@ -4278,7 +4308,10 @@ const Field = {
     // 땅: 9km 판 하나가 플레이어를 따라감 (텍스처는 180m 단위로 맞춰 움직여 미끄러져 보이지 않음)
     const tex = W.groundTexture('#728f4c', ['#65823f', '#7f9b57', '#5b7539', '#8a9a5a']);
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1000, 1000);
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
+    tex.repeat.set(600, 600);   // 타일 10m → 600m 단위 이동과 딱 맞아 무늬가 미끄러지지 않음
+    // 36차: 굴곡 지형 — 6km 격자(60m 간격)가 플레이어를 따라가며 높이를 다시 계산
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000, 100, 100), new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
+    this.initTerrain(W);
     this.ground.rotation.x = -Math.PI / 2; this.ground.position.y = -0.05; this.ground.receiveShadow = true;
     scene.add(this.ground); W.hookables.push(this.ground);
     this.ground.userData.moving = true;                                   // 따라 움직이는 땅: 와이어는 고정 기준점(anchor)에 박음
@@ -4392,8 +4425,9 @@ const Field = {
   seaW(X, Y) {
     const k = Math.floor(X / 100) * 100003 + Math.floor(Y / 100), c = this.sea0.get(k);
     if (c !== undefined) return c;
-    const O = Atlas.outline(), x = X / 1000, y = Y / 1000;
-    let inside = false;
+    const x = X / 1000, y = Y / 1000;
+    let inside = Atlas.inMarley ? Atlas.inMarley(x, y) : false;
+    const O = Atlas.outline();
     for (let i = 0, j = O.length - 1; i < O.length; j = i++) {
       const [xi, yi] = O[i], [xj, yj] = O[j];
       if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
@@ -4406,9 +4440,61 @@ const Field = {
   peakAt(peaks, x, y) { return peaks.some(([px, py, r]) => Math.hypot(x - px, y - py) < r); },
   // 산 위 땅 높이 (원뿔): 플레이어가 산비탈을 딛고 오를 수 있게
   height(x, z) {
+    const t = this.tl(x, z);
     let h = 0;
     if (this.peaks) for (const [px, pz, r, ph] of this.peaks) { const d = Math.hypot(x - px, z - pz); if (d < r) h = Math.max(h, ph * (1 - d / r)); }
+    return t + h;
+  },
+  // ---------- 36차 지형 ----------
+  // 절대 높이(m, 세계 좌표): 벽 안쪽으로 갈수록 한 단씩 높아지는 단구 + 큰 언덕 + 작은 기복 + 북쪽 산기슭. 섬 밖 바다는 -8m
+  rawTerr(X, Y) {
+    const r = Math.hypot(X, Y) / 1000, sm = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+    let h = 10;
+    for (const R of [480, 380, 250]) h += 12 * sm((R - r) / 2.5);
+    h += (this.noise(X / 3500 + 11, Y / 3500 + 5) - 0.5) * 90 + (this.noise(X / 900 + 7, Y / 900 + 3) - 0.5) * 28 + (this.noise(X / 260 + 1, Y / 260 + 9) - 0.5) * 5;
+    const yk = Y / 1000; if (yk > 520) h += sm((yk - 520) / 80) * 80 * this.noise(X / 2500 + 3, Y / 2500 + 1);
     return h;
+  },
+  terrW(X, Y) {
+    if (this.seaW(X, Y)) return -8;
+    let h = this.rawTerr(X, Y);
+    for (const f of this.flat) { const d = Math.hypot(X - f.X, Y - f.Y); if (d < f.r1) { const q = Math.max(0, (d - f.r0) / (f.r1 - f.r0)), k = q * q * (3 - 2 * q); h = f.hc + (h - f.hc) * k; } }
+    return h;
+  },
+  tl(x, z) { if (!this.flat) return 0; const [X, Y] = this.toWorld(x, z); return this.terrW(X, Y) - this.h0; },   // 지금 장소 기준 상대 높이
+  initTerrain(W) {
+    this.flat = [];
+    for (const id in Atlas.PLACES) { const q = Atlas.PLACES[id], m = Maps[id]; if (!m) continue; const X = q.pos[0] * 1000, Y = q.pos[1] * 1000, r0 = Math.max((m.bound || 600) + 60, 720); this.flat.push({ X, Y, r0, r1: r0 + 500, hc: this.rawTerr(X, Y) }); }
+    if (W.mapId === 'wild') { const X = this.ox, Y = this.oy; this.flat.push({ X, Y, r0: 40, r1: 140, hc: this.rawTerr(X, Y) }); }
+    this.h0 = this.terrW(this.ox, this.oy);
+    this.shaped = false;
+  },
+  // budget: 이번 프레임에 계산할 꼭짓점 수. 결과는 job 배열에 모았다가 다 끝나면 한 번에 반영
+  reshape(gx, gz, budget) {
+    const g = this.ground.geometry, pa = g.attributes.position;
+    const J = this.job && this.job.gx === gx && this.job.gz === gz && this.job.zs ? this.job : (this.job = { gx, gz, i: 0, zs: new Float32Array(pa.count), cs: new Float32Array(pa.count * 3) });
+    let ca = g.attributes.color;
+    if (!ca) { ca = new THREE.Float32BufferAttribute(new Float32Array(pa.count * 3), 3); g.setAttribute('color', ca); this.ground.material.vertexColors = true; this.ground.material.needsUpdate = true; }
+    const crop = [[1, 0.9, 0.52], [0.84, 1, 0.66], [0.96, 0.78, 0.58], [1, 0.95, 0.7]];
+    const end = Math.min(pa.count, J.i + budget);
+    for (let i = J.i; i < end; i++) {
+      const x = gx + pa.getX(i), z = gz - pa.getY(i), [X, Y] = this.toWorld(x, z);
+      J.zs[i] = this.tl(x, z) + 0.05;
+      // 밭 조각보: 벽 안(반지름 480km)의 숲이 아닌 곳은 140x110m 칸마다 밀·초록·갈색 밭, 나머지는 풀빛 그대로
+      let c = [1, 1, 1];
+      const inW = Math.hypot(X, Y) < 480000, fo = this.noise(X / 3200, Y / 3200);
+      if (inW && fo < 0.6 && Y < 560000) { const hh = this.hash(Math.floor(X / 140), Math.floor(Y / 110)); if (hh < 0.62) c = crop[Math.floor(hh * 6.4) % 4]; }
+      if (this.seaW(X, Y)) c = [0.95, 0.9, 0.75];
+      J.cs[i * 3] = c[0]; J.cs[i * 3 + 1] = c[1]; J.cs[i * 3 + 2] = c[2];
+    }
+    J.i = end;
+    if (J.i < pa.count) return;
+    for (let i = 0; i < pa.count; i++) pa.setZ(i, J.zs[i]);
+    ca.array.set(J.cs); this.job = null;
+    this.ground.position.set(gx, -0.05, gz);
+    ca.needsUpdate = true;
+    pa.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
+    this.shaped = true;
   },
   wildPos() {
     try { const p = JSON.parse(sessionStorage.getItem(this.WILD_KEY)); if (Array.isArray(p) && p.length === 2) return p; } catch (_) {}
@@ -4443,6 +4529,7 @@ const Field = {
     const W = this.W, g = this.gen(ix, iy), boxes = [], tris = [];
     const pr = this.placeR + 40, keep = (X, Y) => { const [x, z] = this.toLocal(X, Y); return Math.hypot(x, z) > pr ? [x, z] : null; };
     const addBox = (x0, y0, z0, x1, y1, z1) => {
+      const tt = this.tl((x0 + x1) / 2, (z0 + z1) / 2); y0 += tt; y1 += tt;   // 36차: 지형 위 충돌 상자
       const b = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1)); boxes.push(b);
       const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
       for (const f of [[0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6], [0, 4, 5], [0, 5, 1], [3, 2, 6], [3, 6, 7], [0, 3, 7], [0, 7, 4], [1, 5, 6], [1, 6, 2]]) for (const i of f) tris.push(...v[i]);
@@ -4478,6 +4565,7 @@ const Field = {
   bake(ch) {
     const o = this._o || (this._o = new THREE.Object3D()), col = new THREE.Color(), greens = [0x4f7a3a, 0x5d8a44, 0x3f6b33, 0x6b9450];
     const B = {}, put = (k, c) => {
+      o.position.y += this.tl(o.position.x, o.position.z);   // 36차: 지형 위에
       o.updateMatrix(); const b = B[k] || (B[k] = { m: [], c: [] });
       for (let i = 0; i < 16; i++) b.m.push(o.matrix.elements[i]);
       if (c !== undefined) { col.setHex(c); b.c.push(col.r, col.g, col.b); }
@@ -4512,14 +4600,14 @@ const Field = {
       for (let t = -w / 2; t <= w / 2; t += 8) for (const sz of [-1, 1]) { const lx = t, lz = sz * d / 2; o.rotation.set(0, rot, 0); o.position.set(x + lx * cs + lz * sn, 0.7, z - lx * sn + lz * cs); o.scale.set(0.18, 1.4, 0.18); put('post'); }
       for (let t = -d / 2; t <= d / 2; t += 8) for (const sx of [-1, 1]) { const lx = sx * w / 2, lz = t; o.rotation.set(0, rot, 0); o.position.set(x + lx * cs + lz * sn, 0.7, z - lx * sn + lz * cs); o.scale.set(0.18, 1.4, 0.18); put('post'); }
     }
-    for (const [x, z, w, d, rot, c] of ch.crops) { o.rotation.set(0, rot, 0); o.position.set(x, 0.03, z); o.scale.set(w, 0.06, d); put('crop', c); }
+    // 36차: 밭은 평평한 상자 대신 지형 색으로 칠함(reshape) — 굴곡진 땅 위에 상자가 떠서 땅을 가렸음
     for (const [x, z] of ch.water) { o.rotation.set(0, 0, 0); o.position.set(x, 0.1, z); o.scale.set(100.5, 0.1, 100.5); put('sea'); }
     for (const [x, z] of ch.sand) { o.rotation.set(0, 0, 0); o.position.set(x, 0.02, z); o.scale.set(100.5, 0.04, 100.5); put('sand'); }
     for (const [x, z, r, h] of ch.peaks) {
       o.rotation.set(0, x % 3, 0); o.position.set(x, h / 2, z); o.scale.set(r, h, r); put('rock');
       o.position.set(x, h * 0.86, z); o.scale.set(r * 0.29, h * 0.28, r * 0.29); put('snow');
     }
-    for (const [x, z, len, a] of ch.roads) { o.rotation.set(0, a, 0); o.position.set(x, 0.04, z); o.scale.set(len, 0.05, 8); put('road'); }
+    for (const [x, z, len, a] of ch.roads) for (let k = -1.5; k <= 1.5; k++) { o.rotation.set(0, a, 0); o.position.set(x + Math.cos(a) * k * len / 4, 0.3, z - Math.sin(a) * k * len / 4); o.scale.set(len / 4 + 1, 0.6, 8); put('road'); }   // 길은 100m 토막으로 지형을 따라
     ch.buf = {};
     for (const k in B) ch.buf[k] = { m: new Float32Array(B[k].m), c: B[k].c.length ? new Float32Array(B[k].c) : null, n: B[k].m.length / 16 };
   },
@@ -4565,24 +4653,25 @@ const Field = {
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
       if (Math.hypot(cx, cz) < this.placeR + 20) continue;     // 장소 자체 성벽이 있는 곳은 비움
       const len = Math.hypot(x1 - x0, z1 - z0) + 0.5, tx = (x1 - x0) / len, tz = (z1 - z0) / len;
-      o.position.set(cx, H / 2, cz); o.rotation.set(0, -Math.atan2(tz, tx), 0); o.scale.set(len, H, T); o.updateMatrix(); I.setMatrixAt(I.count++, o.matrix);
+      const t0 = this.tl(x0, z0), t1 = this.tl(x1, z1), base = Math.min(t0, t1) - 4, top = Math.max(t0, t1) + H;   // 36차: 지형 위 성벽
+      o.position.set(cx, (base + top) / 2, cz); o.rotation.set(0, -Math.atan2(tz, tx), 0); o.scale.set(len, top - base, T); o.updateMatrix(); I.setMatrixAt(I.count++, o.matrix);
       // 꼭대기: 갓돌 띠 + 바깥쪽 레일 2줄 + 50m마다 고정포 (포신은 바깥=섬 중심 반대쪽을 향함)
       const ry = -Math.atan2(tz, tx), put = (m, x, y, z, sx, sy, sz, rx = 0) => { o.position.set(x, y, z); o.rotation.set(rx, ry, 0, 'YXZ'); o.scale.set(sx, sy, sz); o.updateMatrix(); m.setMatrixAt(m.count++, o.matrix); o.rotation.order = 'XYZ'; };
       const [wx, wy] = this.toWorld(cx, cz), ox = wx / Math.hypot(wx, wy), oy = wy / Math.hypot(wx, wy), onx = ox, onz = -oy;   // 바깥 방향(게임 좌표)
       const side = (-tz * onx + tx * onz) >= 0 ? 1 : -1, nX = -tz * side, nZ = tx * side;
-      put(D.wcap, cx, H + 0.4, cz, len, 0.8, T + 1.2);
-      for (const off of [T / 2 - 4, T / 2 - 7]) put(D.wrail, cx + nX * off, H + 0.95, cz + nZ * off, len, 0.15, 0.35);
+      put(D.wcap, cx, top + 0.4, cz, len, 0.8, T + 1.2);
+      for (const off of [T / 2 - 4, T / 2 - 7]) put(D.wrail, cx + nX * off, top + 0.95, cz + nZ * off, len, 0.15, 0.35);
       for (let t = -len / 2 + 25; t < len / 2; t += 50) {
         const px = cx + tx * t + nX * (T / 2 - 5.5), pz = cz + tz * t + nZ * (T / 2 - 5.5);
-        put(D.wcar, px, H + 1.6, pz, 2.6, 1.3, 3.4);
-        o.position.set(px + nX * 2.4, H + 2.4, pz + nZ * 2.4); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(nX, 0.12, nZ).normalize()); o.scale.set(0.5, 5, 0.5); o.updateMatrix(); D.wgun.setMatrixAt(D.wgun.count++, o.matrix);
+        put(D.wcar, px, top + 1.6, pz, 2.6, 1.3, 3.4);
+        o.position.set(px + nX * 2.4, top + 2.4, pz + nZ * 2.4); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(nX, 0.12, nZ).normalize()); o.scale.set(0.5, 5, 0.5); o.updateMatrix(); D.wgun.setMatrixAt(D.wgun.count++, o.matrix);
       }
-      W.walls.push({ cx, cz, tx, tz, half: len / 2, thick: T / 2, h: H, y0: 0, field: true });
+      W.walls.push({ cx, cz, tx, tz, half: len / 2, thick: T / 2, h: top, y0: base, field: true });
       // 와이어 판정 사본 (성벽 양면·윗면)
       const nx = -tz * T / 2, nz = tx * T / 2;
       const q = [[x0 + nx, z0 + nz], [x1 + nx, z1 + nz], [x1 - nx, z1 - nz], [x0 - nx, z0 - nz]];
-      for (const [a, b] of [[0, 1], [2, 3]]) tris.push(q[a][0], 0, q[a][1], q[b][0], 0, q[b][1], q[b][0], H, q[b][1], q[a][0], 0, q[a][1], q[b][0], H, q[b][1], q[a][0], H, q[a][1]);
-      tris.push(q[0][0], H, q[0][1], q[1][0], H, q[1][1], q[2][0], H, q[2][1], q[0][0], H, q[0][1], q[2][0], H, q[2][1], q[3][0], H, q[3][1]);
+      for (const [a, b] of [[0, 1], [2, 3]]) tris.push(q[a][0], base, q[a][1], q[b][0], base, q[b][1], q[b][0], top, q[b][1], q[a][0], base, q[a][1], q[b][0], top, q[b][1], q[a][0], top, q[a][1]);
+      tris.push(q[0][0], top, q[0][1], q[1][0], top, q[1][1], q[2][0], top, q[2][1], q[0][0], top, q[0][1], q[2][0], top, q[2][1], q[3][0], top, q[3][1]);
     }
     I.instanceMatrix.needsUpdate = true; fin();
     if (tris.length) {
@@ -4593,12 +4682,16 @@ const Field = {
 
   // ---------- 매 프레임 ----------
   update(dt) {
-    if (!this.on) return;
+    if (!this.on) { this.exitCheck(); return; }
     const W = this.W, p = Player.pos, en = this.enabled();
     W.open = en;
     if (W.sky) W.sky.position.set(camera.position.x, 0, camera.position.z);   // 하늘은 늘 머리 위
     if (!en) return;
-    const S = 180; this.ground.position.set(Math.round(p.x / S) * S, -0.05, Math.round(p.z / S) * S);
+    // 땅 모양: 600m 단위로 따라감. 처음엔 바로, 그 뒤엔 여러 프레임에 나눠 뒤에서 계산하고 다 되면 바꿈(멈칫 방지)
+    const S = 600, gx = Math.round(p.x / S) * S, gz = Math.round(p.z / S) * S;
+    if (!this.shaped) { this.reshape(gx, gz, Infinity); }
+    else if ((gx !== this.ground.position.x || gz !== this.ground.position.z) && (!this.job || this.job.gx !== gx || this.job.gz !== gz)) this.job = { gx, gz, i: 0 };
+    if (this.job) this.reshape(this.job.gx, this.job.gz, 1800);
     const [X, Y] = this.toWorld(p.x, p.z), C = this.CH, cx = Math.floor(X / C), cy = Math.floor(Y / C), key = cx + ',' + cy;
     if (key !== this.lastChunk) {
       this.lastChunk = key;
@@ -4649,6 +4742,20 @@ html.title #fieldHud,html.cutting #fieldHud,html.dying #fieldHud{display:none}`;
     e.innerHTML = this.out || this.near ? `<b>${zone}</b>${best === this.W.mapId && bd < this.placeR ? q.name : `${q.name}까지 ${(bd / 1000).toFixed(1)}km`}${this.near ? `<br><span class="go">G · ${q.name} 들어가기</span>` : ''}` : '';
   },
   enter() { if (this.near) this.handoff(this.near); },
+  // 36차: 들판이 없는 장소(동굴·해외 등)도 경계에 닿으면 그 바깥 지점의 들판으로 이어서 나감 → 섬·대륙 어디든 발로 이어짐
+  exitCheck() {
+    const W = this.W; if (!W || !Game.running || Game.over || W.mapId === 'paths' || (typeof Story !== 'undefined' && Story.active) || this.leaving) return;
+    const q = Atlas.PLACES[W.mapId], p = Player.pos, d = Math.hypot(p.x, p.z);
+    if (!q || d < W.BOUND - 4) return;
+    this.leaving = true;
+    const k = (d + 60) / d, X = q.pos[0] + p.x * k / 1000, Y = q.pos[1] - p.z * k / 1000;
+    try {
+      sessionStorage.setItem('astraea-handoff', JSON.stringify({ id: 'wild', x: 0, z: 0, yaw: Player.yaw, riding: typeof Horse !== 'undefined' && Horse.riding }));
+      sessionStorage.setItem('astraea-story-pending', JSON.stringify({ free: true }));
+    } catch (_) {}
+    Game.toast(`${q.name} 밖으로 · 들판으로 나가는 중…`, '#FFFFFF');
+    setTimeout(() => Atlas.warp([X, Y]), 250);
+  },
   // 27차: 걸어서(말·입체기동으로) 다른 장소 경계 안에 들어서면 G 없이 그 장소를 불러오고, 들어선 바로 그 자리·방향에서 이어짐
   autoEnter(X, Y) {
     if (!this.near || Game.over) return;
@@ -4734,6 +4841,7 @@ const Horse = {
       sp = Math.hypot(p.vel.x, p.vel.z);
       if (sp > 0.5) this.yaw = Math.atan2(p.vel.x, p.vel.z); else this.yaw = Math.atan2(-Math.sin(p.yaw), -Math.cos(p.yaw));
     }
+    if (World.open) this.pos.y = Field.height(this.pos.x, this.pos.z);   // 36차: 지형 위
     this.mesh.position.copy(this.pos); this.mesh.rotation.y = this.yaw;
     // 걸음: 속도에 따라 다리 흔들기(질주는 크게), 머리·꼬리 출렁임
     this.gait += dt * (2 + sp * 0.55);
@@ -6853,7 +6961,8 @@ const Allies = {
       if (a.state === 'down') {               // 쓰러짐: 떨어진 뒤 잠시 후 사라짐
         a.vel.y -= 22 * dt;
         a.pos.addScaledVector(a.vel, dt);
-        if (a.pos.y <= 0) { a.pos.y = 0; a.vel.set(0, 0, 0); }
+        const fl = World.open ? Field.height(a.pos.x, a.pos.z) : 0;   // 36차: 지형 위
+        if (a.pos.y <= fl) { a.pos.y = fl; a.vel.set(0, 0, 0); }
         a.root.position.copy(a.pos);
         a.root.rotation.x = Math.min(a.root.rotation.x + dt * 3, Math.PI / 2);
         if ((a.downT += dt) > 4) this.remove(a);
