@@ -7785,6 +7785,7 @@ const Story = {
 #modePick .ch small{font-size:12px;color:#a99a7a;line-height:1.5}#modePick .ch.done{border-color:rgba(159,224,176,.5)}#modePick .ch.done::after{content:'완료';position:absolute;right:10px;top:10px;font-size:10px;color:#9fe0b0;border:1px solid rgba(159,224,176,.5);border-radius:10px;padding:1px 7px}
 #modePick .row{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:12px}#modePick .back{background:none;border:1px solid rgba(255,255,255,.2);color:#ddd;padding:9px 16px;border-radius:5px;cursor:pointer;font:inherit}
 #modePick .bar{height:8px;flex:1;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}#modePick .bar>div{height:100%;background:linear-gradient(90deg,#c9a646,#ffdf8a)}
+#modePick[hidden],#cutFx[hidden]{display:none}   /* display:grid가 hidden을 덮어써 닫아도 화면에 남던 문제 */
 #modePick.shake .box{animation:mpShake .45s}
 @keyframes mpShake{0%,100%{transform:none}15%{transform:translate(-14px,9px)}30%{transform:translate(12px,-8px)}45%{transform:translate(-9px,6px)}60%{transform:translate(6px,-4px)}80%{transform:translate(-3px,2px)}}
 .fistFx{position:fixed;z-index:40;pointer-events:none;width:340px;margin-left:-170px}
@@ -8235,10 +8236,10 @@ html.cutting #storyHud,html.cutting #storySay,html.cutting #crosshair,html.cutti
 // 스토리 6~7장 = 악마의 아이, 스토리 8~9장(땅울림·천지의 싸움) = 2천 년... 곡이 없으면 넣은 다른 곡으로. 효과음보다 작게(기본 30%), 일시정지 중엔 더 작게
 const Music = {
   SLOTS: [
-    { id: 'silence', title: 'Call of Silence', artist: 'Hiroyuki Sawano', use: '시작 화면 · 장 완료' },
-    { id: 'attack', title: 'ətˈæk 0N tάɪtn', artist: 'Hiroyuki Sawano', use: '자유 모드 · 스토리 1~5장' },
-    { id: 'devil', title: '악마의 아이', artist: 'Ai Higuchi', use: '스토리 6~7장' },
-    { id: 'twothousand', title: '2천 년... 혹은... 2만 년 후의 너에게...', artist: 'Linked Horizon', use: '스토리 8~9장' },
+    { id: 'silence', title: 'Call of Silence', artist: 'Hiroyuki Sawano', use: '시작 화면 · 장 완료', keys: ['silence'] },
+    { id: 'attack', title: 'ətˈæk 0N tάɪtn', artist: 'Hiroyuki Sawano', use: '자유 모드 · 스토리 1~5장', keys: ['attack', 'titan', 'tάɪtn', 'ətˈæk', 'ataku'] },
+    { id: 'devil', title: '악마의 아이', artist: 'Ai Higuchi', use: '스토리 6~7장', keys: ['악마', 'devil', '悪魔', 'akuma'] },
+    { id: 'twothousand', title: '2천 년... 혹은... 2만 년 후의 너에게...', artist: 'Linked Horizon', use: '스토리 8~9장', keys: ['2천', '2만', '2000', '二千', 'nisen', 'linked'] },
   ],
   LEVELS: [['0', '끄기'], ['0.15', '아주 작게'], ['0.3', '작게'], ['0.5', '보통']],
   vol: 0.3, tracks: {}, cur: null, level: 0, el: null,
@@ -8267,6 +8268,17 @@ const Music = {
     this.tracks[id] = { name: file.name, url: URL.createObjectURL(file) };
     if (this.cur === id) this.cur = null;   // 지금 곡이면 새 파일로 다시 틀기
     this.refreshUI(); this.unlock();
+  },
+  // 한 번에 넣기: 여러 파일을 고르면 파일 이름으로 곡 칸을 찾아 넣고, 이름으로 못 찾은 파일은 빈 칸에 차례로
+  async putMany(files) {
+    const left = [...files], used = new Set();
+    // 'Attack on Titan - 악마의 아이'처럼 이름에 attack이 같이 있어도 다른 곡이 먼저 찾게 ətˈæk 칸은 마지막에
+    for (const s of [...this.SLOTS].sort((a, b) => (a.id === 'attack') - (b.id === 'attack'))) {
+      const f = left.find(f => s.keys.some(k => f.name.toLowerCase().includes(k.toLowerCase())));
+      if (f) { left.splice(left.indexOf(f), 1); used.add(s.id); await this.put(s.id, f); }
+    }
+    for (const s of this.SLOTS) if (left.length && !used.has(s.id) && !this.tracks[s.id]) await this.put(s.id, left.shift());
+    Game.toast(`배경 음악 ${files.length - left.length}곡 넣음`, '#9fe0b0');
   },
   async remove(id) {
     try { await this.tx('readwrite', st => st.delete(id)); } catch (_) {}
@@ -8308,14 +8320,17 @@ const Music = {
 .music .mrow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,.06);font-size:12px}
 .music .mrow i{display:block;font-style:normal;font-size:10px;color:#a99a7a}.music .st{font-size:11px;color:#8a8a8a;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.music .st.on{color:#9fe0b0}
 .music .pick,.music .del{cursor:pointer;font:inherit;font-size:11px;padding:5px 10px;border-radius:4px;border:1px solid rgba(240,216,144,.45);background:none;color:#f0d890}.music .del{border-color:rgba(255,255,255,.2);color:#bbb}
+.music .all{display:flex;gap:10px;align-items:center;margin-bottom:6px}.music .all small{color:#a99a7a;font-size:11px}.music .pick.big{font-size:13px;padding:8px 14px;background:rgba(201,166,70,.18)}
 .music .vol{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px}`;
     document.head.appendChild(css);
     const box = document.createElement('div'); box.className = 'music';
     box.innerHTML = `<div class="hd"><b>배경 음악</b><small>내 컴퓨터의 음악 파일을 넣으면 이 브라우저에만 저장됩니다</small></div>
+      <div class="all"><label class="pick big">♪ 4곡 한 번에 넣기<input type="file" accept="audio/*" multiple hidden></label><small>파일 4개를 같이 고르면 이름을 보고 알맞은 칸에 넣어요</small></div>
       ${this.SLOTS.map(s => `<div class="mrow" data-id="${s.id}"><span>${s.artist} - ${s.title}<i>${s.use}</i></span>
         <span class="st">없음</span><span><label class="pick">파일 넣기<input type="file" accept="audio/*" hidden></label> <button type="button" class="del" hidden>빼기</button></span></div>`).join('')}
       <div class="vol">음악 볼륨<select id="musicVol"></select></div>`;
     document.querySelector('#panel-setup .fields').appendChild(box);
+    box.querySelector('.all input').addEventListener('change', e => { if (e.target.files.length) this.putMany(e.target.files); e.target.value = ''; });
     box.querySelectorAll('.mrow').forEach(r => {
       const id = r.dataset.id;
       r.querySelector('input').addEventListener('change', e => { const f = e.target.files[0]; if (f) this.put(id, f); e.target.value = ''; });
