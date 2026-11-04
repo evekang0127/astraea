@@ -1820,7 +1820,7 @@ const Maps = {
       W.scene.add(city);
 
       MapParts.plaza(W);
-      W.fillBuildings((x, z) => { const r = Math.hypot(x, z); return r > 62 && r < CITY - 22; }, 38, 3, 6, 4, 11);
+      W.fillBuildings((x, z) => { const r = Math.hypot(x, z); return r > 62 && r < CITY - 22; }, 26, 3, 5, 3, 7, 0.05);   // 37차: 더 빽빽하게
       // 골목 교차로마다 가로등 (건물 칸 사이 = 칸 크기의 절반만큼 비낀 자리)
       for (let x = -W.BOUND + 19; x < W.BOUND; x += 38) {
         for (let z = -W.BOUND + 19; z < W.BOUND; z += 38) {
@@ -3134,7 +3134,9 @@ Object.assign(Maps, {
         W.batch('flagtrim', W.unitBox, trimG, x, H - 4.5, z * 1.01, 9.6, 1, 0.3, 0, null, 0, 0, { noShadow: true });
       }
       // 남쪽 도시 (성벽 안), 북쪽 들판의 폐허와 숲
-      W.fillBuildings((x, z) => z < -50 && Math.hypot(x, z) < 590 && !(Math.abs(x) < 26 && z > -220), 38, 3, 6, 4, 10, 0.15);
+      // 37차: 원작 전경처럼 지붕이 빽빽한 도시 — 돌길 바닥 + 촘촘한 칸(24m), 공원 적게
+      { const cob = W.cobbleTexture('#9a8a76'); cob.repeat.set(160, 160); const disc = new THREE.Mesh(new THREE.CircleGeometry(600, 72, Math.PI, Math.PI), new THREE.MeshLambertMaterial({ map: cob })); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.1; disc.receiveShadow = true; W.scene.add(disc); }
+      W.fillBuildings((x, z) => z < -50 && Math.hypot(x, z) < 590 && !(Math.abs(x) < 14 && z > -250), 24, 3, 5, 3, 6, 0.03);
       for (let i = 0; i < 18; i++) { const x = rand(520), z = 140 + Math.random() * 400; W.addBuilding(x, z, 8 + Math.random() * 8, 8 + Math.random() * 8, 4 + Math.floor(Math.random() * 3) * 4, { roofChance: 0.3, crates: 0.6 }); }
       for (let i = 0; i < 160; i++) W.addTree(rand(600), 80 + Math.random() * 520, 1.5);
       W.addRingWall(0, 0, 615, 12, 50, W.stoneMat, [], Math.PI, Math.PI * 2);
@@ -4377,6 +4379,58 @@ Polish.add('ashward', W => {
   }
 });
 
+// ===== 37차(3): 구역 한가운데의 성 — 원작 시간시나 구 전경(가운데 언덕 위 석조 성)을 참고한 게임용 모형 =====
+// 돌 기단(언덕) → 네모 성벽(톱니 흉벽) + 모서리 원탑·원뿔 지붕 → 본관(박공 지붕) → 가운데 여러 단 원형 큰 탑. 모두 와이어가 걸리고 위에 설 수 있음.
+Polish.castle = function (W, X, Z, S = 1) {
+  if (!W.unitCone) Kit3.prep(W);
+  const B = W.unitBox, C = W.unitCyl;
+  const st = W._castleMat || (W._castleMat = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#cdbfa2', '#8a7e68') }));
+  const roof = W._castleRoof || (W._castleRoof = new THREE.MeshLambertMaterial({ map: W.tileTexture('#7a6a5a') }));
+  const dark = W._castleWin || (W._castleWin = new THREE.MeshLambertMaterial({ color: 0x2a2420 }));
+  const box = (x, y, z, w, h, d, m = st) => { W.batch('csBox', B, m, X + x * S, (y + h / 2) * S, Z + z * S, w * S, h * S, d * S, 0, null, 0, 0, { hook: true }); W.solid(X + (x - w / 2) * S, y * S, Z + (z - d / 2) * S, X + (x + w / 2) * S, (y + h) * S, Z + (z + d / 2) * S); };
+  const tower = (x, z, r, y0, h, cone) => {
+    W.batch('csTower', C, st, X + x * S, (y0 + h / 2) * S, Z + z * S, r * S, h * S, r * S, 0, null, 0, 0, { hook: true });
+    W.solid(X + (x - r * 0.75) * S, y0 * S, Z + (z - r * 0.75) * S, X + (x + r * 0.75) * S, (y0 + h) * S, Z + (z + r * 0.75) * S);
+    if (cone) W.batch('csCone', W.unitCone, roof, X + x * S, (y0 + h + cone / 2) * S, Z + z * S, r * 1.25 * S, cone * S, r * 1.25 * S, 0, null, 0, 0, { hook: true });
+    for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; W.batch('csWin', B, dark, X + (x + Math.cos(a) * r * 1.0) * S, (y0 + h * 0.62) * S, Z + (z + Math.sin(a) * r * 1.0) * S, 1.2 * S, 3 * S, 1.2 * S, -a, null, 0, 0, { noShadow: true }); }
+  };
+  const crenel = (x0, z0, x1, z1, y) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.floor(L / 4); for (let i = 0; i <= n; i += 1) { const t = i / n; W.batch('csMerlon', B, st, X + (x0 + (x1 - x0) * t) * S, (y + 1) * S, Z + (z0 + (z1 - z0) * t) * S, 1.8 * S, 2 * S, 1.8 * S, 0, null, 0, 0, { noShadow: true }); } };
+  // 1) 언덕 기단 2단 + 앞 계단
+  box(0, 0, 0, 110, 5, 110); box(0, 5, 0, 92, 4, 92);
+  for (let i = 0; i < 9; i++) box(0, i, 55 + 12 - i * 1.3, 14, 1, 1.4);
+  // 2) 네모 성벽(높이 14) + 흉벽 + 모서리 원탑(원뿔 지붕)
+  const Y = 9, Hw = 14, hw = 40;
+  for (const [x0, z0, x1, z1] of [[-hw, -hw, hw, -hw], [-hw, hw, hw, hw], [-hw, -hw, -hw, hw], [hw, -hw, hw, hw]]) {
+    const w = Math.abs(x1 - x0) + 3, d = Math.abs(z1 - z0) + 3;
+    if (z0 === z1 && z0 > 0) { box(-23, Y, z0, w / 2 - 6, Hw, 3); box(23, Y, z0, w / 2 - 6, Hw, 3); box(0, Y + 9, z0, 12, 5, 3); }   // 앞문(아치 위만 막힘)
+    else box((x0 + x1) / 2, Y, (z0 + z1) / 2, w, Hw, d);
+    crenel(x0, z0, x1, z1, Y + Hw);
+  }
+  for (const [x, z] of [[-hw, -hw], [hw, -hw], [-hw, hw], [hw, hw]]) tower(x, z, 6.5, Y, Hw + 12, 13);
+  tower(-12, hw, 4, Y, Hw + 8, 9); tower(12, hw, 4, Y, Hw + 8, 9);   // 문 양옆 작은 탑
+  // 3) 본관: 3층 석조 + 박공 지붕 + 창 줄
+  box(0, Y, -6, 52, 20, 34);
+  const rg = W.gableRoofGeo(34, 52, 11, 0.8), rm = W.mesh(rg, [st, roof], X, (Y + 20) * S, Z - 6 * S); rm.scale.setScalar(S); rm.rotation.y = Math.PI / 2;
+  for (let f = 0; f < 3; f++) for (let i = -5; i <= 5; i++) W.batch('csWin', B, dark, X + i * 4.4 * S, (Y + 4 + f * 6) * S, Z + 11.1 * S, 1.6 * S, 3 * S, 0.3 * S, 0, null, 0, 0, { noShadow: true });
+  // 4) 가운데 큰 원형 탑: 여러 단(아래 넓고 위로 좁아짐) + 단마다 흉벽 + 꼭대기 원뿔 첨탑
+  let y = Y + 20, r = 13;
+  for (const [h, nr] of [[16, 13], [12, 10.5], [10, 8], [8, 5.5]]) {
+    tower(0, -6, nr, y, h, 0);
+    for (let k = 0; k < 18; k++) { const a = k / 18 * Math.PI * 2; W.batch('csMerlon', B, st, X + Math.cos(a) * (nr + 0.4) * S, (y + h + 1) * S, Z + (-6 + Math.sin(a) * (nr + 0.4)) * S, 1.8 * S, 2 * S, 1.8 * S, -a, null, 0, 0, { noShadow: true }); }
+    y += h; r = nr;
+  }
+  W.batch('csCone', W.unitCone, roof, X, (y + 7) * S, Z - 6 * S, 6.5 * S, 14 * S, 6.5 * S, 0, null, 0, 0, { hook: true });
+  W.batch('csFlag', B, new THREE.MeshLambertMaterial({ color: 0x7a1d1d }), X + 2.4 * S, (y + 17) * S, Z - 6 * S, 4.5 * S, 2.8 * S, 0.15 * S, 0, null, 0, 0, { noShadow: true });
+  // 5) 성벽 안 뾰족 지붕 부속 탑 2개 (그림처럼 본관 양옆)
+  tower(-30, -24, 5, Y, 30, 12); tower(30, -24, 5, Y, 30, 12);
+};
+// 시간시나 구: 도시 한가운데 언덕 위 성 (원작 1화 전경 참고)
+Polish.pre('gateward', [[-75, -405, 75, -255]]);
+Polish.add('gateward', W => { Polish.castle(W, 0, -330, 1); W.batch('gwAvenue', W.unitBox, W._castleMat, 0, 0.06, -152, 22, 0.1, 210, 0, null, 0, 0, { noShadow: true }); });   // 관문→성 큰길 돌바닥
+// 트로스트 구: 운하와 안쪽 성벽 사이 성 (원작 전경 참고 — 정확한 위치는 확인 필요)
+Polish.pre('embergate', [[-235, -142, -105, -12]]);
+Polish.add('embergate', W => Polish.castle(W, -170, -77, 0.85));
+
 </script>
 <script>
 // ===== 세계 지도 (22차): 맵 9개를 하나의 1:1 세계 안 "장소"로 =====
@@ -4705,7 +4759,7 @@ addEventListener('keydown', e => {
   // 작은 섬들(장식)과 동쪽 먼 바다의 히즈루 열도(방향만 대략)
   const ISLES = [[[-900, -1250], 55], [[-1080, -1380], 35], [[-760, 1250], 45], [[1150, -900], 40], [[1250, 1150], 50]].map(([[x, y], r], i) => rough([[x - r, y], [x, y + r * 0.8], [x + r, y], [x, y - r * 0.8]], 77 + i, 0.25));
   const HIZURU = [[[1500, 420], 120], [[1400, 160], 70], [[1610, 690], 60]].map(([[x, y], r], i) => rough([[x - r * 0.6, y - r], [x + r * 0.6, y - r * 0.7], [x + r * 0.5, y + r], [x - r * 0.5, y + r * 0.8]], 311 + i, 0.2));
-  const BORDER = 820;   // 마레 / 중동 연합 경계(게임 배치)
+  const BORDER = 1450;   // 마레 / 중동 연합 경계(게임 배치) — 슬라바 요새(북쪽 해안 전선) 바로 남쪽
   const ptsOf = O => O.map(([x, y]) => `${x.toFixed(0)},${(-y).toFixed(0)}`).join(' ');
   Object.assign(Atlas, {
     MARLEY, BORDER,
@@ -4726,7 +4780,7 @@ addEventListener('keydown', e => {
       const dist = this.DISTRICTS.map(([, w, a]) => { const r = this.WALLS.find(v => v.id === w).r; return `<circle cx="${Math.cos(a * Math.PI / 180) * r}" cy="${-Math.sin(a * Math.PI / 180) * r}" r="16" class="dist"/>`; }).join('');
       const hide = { underground: 1 };
       const marks = Object.entries(this.PLACES).map(([id, p]) => {
-        const [x, y] = p.pos, below = !p.overseas && y < -350 && Math.abs(x) < 60, star = id === 'paths';
+        const [x, y] = p.pos, below = (!p.overseas && y < -350 && Math.abs(x) < 60) || id === 'saltmere' || id === 'ashward', star = id === 'paths';   // 가까운 두 장소 이름이 겹치지 않게 하나는 아래로
         return `<g class="pl${p.overseas ? ' ov' : ''}${id === cur ? ' cur' : ''}" data-place="${id}" transform="translate(${x} ${-y})"><g class="s"><circle r="40" class="hit"/>${star ? '<path class="dot star" d="M0 -30 L8 -9 L30 -9 L12 5 L19 27 L0 14 L-19 27 L-12 5 L-30 -9 L-8 -9Z"/>' : '<circle r="20" class="dot"/>'}${id === cur ? '<circle r="34" class="here"/>' : ''}${hide[id] ? '' : `<text y="${below ? 70 : -32}" class="pn">${this.short(p.name)}</text>`}</g></g>`;
       }).join('');
       const cont = ptsOf(MARLEY);
@@ -4761,7 +4815,7 @@ addEventListener('keydown', e => {
       <text x="0" y="-505" class="wn">MARIA</text><text x="0" y="-405" class="wn">ROSE</text><text x="0" y="-275" class="wn">SINA</text>
       <text x="40" y="-1120" class="cn">PARADIS ISLAND · 파라디 섬</text>
       <text x="-2150" y="120" class="cn big">MARLEY · 마레</text>
-      <text x="-2350" y="${-BORDER - 380}" class="cn">MID-EAST ALLIED FORCES · 중동 연합</text>
+      <text x="-2400" y="${-BORDER - 120}" class="cn">MID-EAST ALLIED FORCES · 중동 연합</text>
       <text x="1500" y="-880" class="cn sm">HIZURU · 히즈루</text>
       <text x="-850" y="-120" class="sea">바 다</text>
       <text x="-1660" y="-560" class="cn tiny">철도</text>
@@ -4866,6 +4920,21 @@ addEventListener('keydown', e => {
     const key = e => { if (e.code === 'Enter' || e.code === 'Space') go(e); };
     d.onclick = go; addEventListener('keydown', key, true);
   });
+})();
+
+// ===== 37차(3): 해외 장소를 설명과 맞게 해안선 위로 — 맵 안 바다 방향에 맞춤 =====
+// 카리파·오디하: 맵의 바다가 남쪽(+z) → 대륙 남쪽 해안, 도시 가운데가 물가에서 수십 m. 슬라바: 바다가 북쪽(-z) → 북쪽 해안(중동 연합과의 경계 전선)
+(() => {
+  const A = Atlas, edge = (x, from, to) => {   // from(바다) → to(땅) 방향으로 첫 땅 지점(km), 0.5km 간격 뒤 이분 탐색
+    const s = Math.sign(to - from); let y = from;
+    while ((to - y) * s > 0 && !A.inMarley(x, y)) y += 0.5 * s;
+    let a = y - 0.5 * s, b = y; for (let i = 0; i < 24; i++) { const m = (a + b) / 2; if (A.inMarley(x, m)) b = m; else a = m; }
+    return b;
+  };
+  const P = A.PLACES;
+  P.saltmere.pos = [-1950, edge(-1950, -1700, 0) + 0.07]; P.saltmere.where = '마레 대륙 남쪽 해안 · 세계 연합 함대 집결지 (게임 배치)';
+  P.odiha.pos = [-1420, edge(-1420, -1700, 0) + 0.09]; P.odiha.where = '마레 대륙 남동쪽 해안 · 아즈마비토 격납고·히즈루 저택 (게임 배치)';
+  P.slava.pos = [-1620, edge(-1620, 1800, 0) - 0.4]; P.slava.where = '마레 대륙 북쪽 해안 · 중동 연합과의 경계 전선 (게임 배치)';
 })();
 
 </script>
