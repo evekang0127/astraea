@@ -3411,6 +3411,7 @@ const Field = {
 
   init(W) {
     this.W = W;
+    this.applyHandoff(W);   // 27차: 걸어서 들어온 자리
     this.on = !!this.OPEN[W.mapId] && typeof Atlas !== 'undefined';
     if (!this.on) return;
     const P = W.mapId === 'wild' ? { pos: this.wildPos() } : Atlas.PLACES[W.mapId];
@@ -3721,6 +3722,7 @@ const Field = {
     Titans.list = Titans.list.filter(t => !t.removed || t.dead); Titans._hooksDirty = true;
     this.hud(X, Y);
     this.farPeaks(X, Y);
+    this.autoEnter(X, Y);
   },
   // 위치 표시: 어느 벽 영역인지 + 가까운 장소와 거리. 1.5km 안이면 G로 들어가기
   hud(X, Y) {
@@ -3741,7 +3743,33 @@ html.title #fieldHud,html.cutting #fieldHud,html.dying #fieldHud{display:none}`;
     const q = Atlas.PLACES[best];
     e.innerHTML = this.out || this.near ? `<b>${zone}</b>${best === this.W.mapId && bd < this.placeR ? q.name : `${q.name}까지 ${(bd / 1000).toFixed(1)}km`}${this.near ? `<br><span class="go">G · ${q.name} 들어가기</span>` : ''}` : '';
   },
-  enter() { if (this.near) Atlas.travelTo(this.near); },
+  enter() { if (this.near) this.handoff(this.near); },
+  // 27차: 걸어서(말·입체기동으로) 다른 장소 경계 안에 들어서면 G 없이 그 장소를 불러오고, 들어선 바로 그 자리·방향에서 이어짐
+  autoEnter(X, Y) {
+    if (!this.near || Game.over) return;
+    const q = Atlas.PLACES[this.near], m = Maps[this.near], x = X - q.pos[0] * 1000, z = -(Y - q.pos[1] * 1000);
+    if (m && Math.hypot(x, z) < m.bound - 8) this.handoff(this.near);
+  },
+  handoff(id) {
+    const q = Atlas.PLACES[id], [X, Y] = this.toWorld(Player.pos.x, Player.pos.z), m = Maps[id];
+    let x = X - q.pos[0] * 1000, z = -(Y - q.pos[1] * 1000);
+    const d = Math.hypot(x, z), lim = (m ? m.bound : 600) - 20;
+    if (d > lim) { x *= lim / d; z *= lim / d; }   // G로 1.5km 밖에서 들어가면 장소 가장자리에서 시작
+    try {
+      sessionStorage.setItem('astraea-handoff', JSON.stringify({ id, x, z, yaw: Player.yaw, riding: typeof Horse !== 'undefined' && Horse.riding }));
+      sessionStorage.setItem('astraea-story-pending', JSON.stringify({ free: true }));   // 시작 화면 '자유 모드 시작' 한 번 클릭으로 이어감
+    } catch (_) {}
+    Game.toast(`${q.name} 도착 · 불러오는 중…`, '#FFFFFF');
+    setTimeout(() => Atlas.travelTo(id), 250);
+  },
+  // 장소를 불러올 때 이어 들어온 자리에서 시작 (World.init 안에서, Player.pos = START 전에 호출됨)
+  applyHandoff(W) {
+    let h = null;
+    try { h = JSON.parse(sessionStorage.getItem('astraea-handoff')); sessionStorage.removeItem('astraea-handoff'); } catch (_) {}
+    if (!h || h.id !== W.mapId) return;
+    W.START.set(h.x, 0, h.z); W.START_YAW = h.yaw;
+    if (h.riding) this.rideOnStart = true;
+  },
 };
 
 // ===== 말 (22차 2단계): H로 부르고 타고 내림. 탄 채 와이어를 쏘거나 높이 뛰면 내림 =====
@@ -3787,6 +3815,7 @@ const Horse = {
   mount() { this.riding = true; this.state = 'ridden'; Player.releaseHook && Player.releaseHook(); Game.toast('말에 탐 · Shift 질주 · H 내리기', '#f0d890'); },
   dismount() { this.riding = false; this.state = 'idle'; Player.vel.y = 5; Player.onGround = false; },
   update(dt) {
+    if (Field.rideOnStart && Game.running) { Field.rideOnStart = false; if (!this.mesh) this.build(); this.pos.copy(Player.pos); this.pos.y = 0; this.mesh.visible = true; this.mount(); }
     if (!this.mesh || this.state === 'gone') return;
     const p = Player;
     if (this.riding && (p.isHooked() || Shifter.active || p.pos.y > 3 || Game.over)) this.dismount();
