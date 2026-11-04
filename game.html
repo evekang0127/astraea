@@ -261,8 +261,8 @@
       <p id="loading" role="status">도시를 준비하고 있습니다…</p><p id="startText"></p>
       <nav class="links" aria-label="시작 메뉴"><button type="button" data-panel="archive">거인 도감</button><button type="button" data-panel="setup">전투 설정</button><button type="button" data-panel="controls">조작법</button></nav>
     </div>
-    <aside class="gold-panel fields-list" aria-label="전장 선택">
-      <div class="eyebrow"><span>BATTLEFIELD · 전장 선택</span><span id="mapCount"></span></div>
+    <aside class="gold-panel fields-list" aria-label="세계 지도">
+      <div class="eyebrow"><span>WORLD MAP · 파라디 섬 1:1</span><span id="mapCount"></span></div>
       <div id="maps"></div>
     </aside>
   </div>
@@ -3217,6 +3217,146 @@ Object.assign(Maps, {
     },
   },
 });
+
+</script>
+<script>
+// ===== 세계 지도 (22차): 맵 9개를 하나의 1:1 세계 안 "장소"로 =====
+// 좌표는 km, 미트라스(왕도) = (0,0), x = 동쪽, y = 북쪽.
+// 성벽 반지름은 팬 설정 자료(사용자 제공)의 면적에서: 월 시나 내부 약 19만 km² → 250km, 월 로제 약 45만 km² → 380km, 월 마리아 약 72만 km² → 480km. 성벽 높이 50m.
+// 섬 윤곽은 'Paradis Island v.3f' 지도(성벽 실제 비율)를 따라 그림: 남북 약 2,000km, 동서 약 1,400km.
+// 1단계: 장소 사이는 이 지도에서 골라 빠른 이동(새로 불러옴). 2단계에서 장소 사이 땅을 이어 붙일 예정.
+const Atlas = {
+  WALLS: [
+    { id: 'sina', name: '월 시나', r: 250 },
+    { id: 'rose', name: '월 로제', r: 380 },
+    { id: 'maria', name: '월 마리아', r: 480 },
+  ],
+  // 성벽마다 동서남북 네 곳의 돌출 구역
+  DISTRICTS: [
+    ['오르브드', 'sina', 90], ['스토헤스', 'sina', 0], ['에르미하', 'sina', 270], ['야르켈', 'sina', 180],
+    ['우토피아', 'rose', 90], ['카라네스', 'rose', 0], ['트로스트', 'rose', 270], ['클로르바', 'rose', 180],
+    ['(북쪽 구)', 'maria', 90], ['홀스트', 'maria', 0], ['시간시나', 'maria', 270], ['퀸타', 'maria', 180],
+  ],
+  // 게임의 장소 = 지금까지의 맵. pos = km
+  PLACES: {
+    gateward:   { name: '시간시나 구', en: 'SHIGANSHINA DISTRICT', where: '월 마리아 남쪽 돌출 구역', pos: [0, -480] },
+    embergate:  { name: '트로스트 구', en: 'TROST DISTRICT', where: '월 로제 남쪽 돌출 구역', pos: [0, -380] },
+    ironhold:   { name: '스토헤스 구', en: 'STOHESS DISTRICT', where: '월 시나 동쪽 돌출 구역', pos: [250, 0] },
+    skyroot:    { name: '거대수의 숲', en: 'FOREST OF GIANT TREES', where: '월 로제 밖 동쪽 · 월 마리아 영역', pos: [425, -80] },
+    moonfall:   { name: '우트가르드 성', en: 'CASTLE UTGARD', where: '월 로제 안 서남쪽 옛 성', pos: [-290, -110] },
+    undercrypt: { name: '레이스 가 예배당 지하', en: 'REISS CHAPEL CAVERN', where: '월 시나 북쪽 · 지하 결정 동굴', pos: [55, 300] },
+    mourning:   { name: '파라디 섬 남쪽 바다', en: 'PARADIS SHORE', where: '벽 밖 남쪽 해안 · 처음 본 바다', pos: [-90, -815] },
+    ashward:    { name: '레벨리오 수용 구역', en: 'LIBERIO INTERNMENT ZONE', where: '바다 건너 마레 대륙', pos: [-1750, 260], overseas: true },
+    saltmere:   { name: '마레 군항', en: 'MARLEY NAVAL PORT', where: '바다 건너 마레 대륙 해안', pos: [-1950, -260], overseas: true },
+  },
+  // 섬 윤곽: v3f 지도 위 픽셀 좌표 → km (2.7km/px, 월 마리아 중심 315,395)
+  OUTLINE_PX: [[150, 18], [240, 12], [330, 12], [400, 40], [450, 90], [495, 150], [530, 210], [560, 280], [580, 350], [592, 430], [590, 510], [575, 580], [550, 640], [510, 700], [470, 745], [420, 735], [370, 700], [320, 690], [270, 722], [230, 760], [190, 735], [150, 690], [110, 650], [80, 590], [62, 520], [70, 440], [85, 370], [95, 300], [100, 230], [88, 160], [95, 90], [120, 40]],
+  outline() { return this._o || (this._o = this.OUTLINE_PX.map(([x, y]) => [(x - 315) * 2.7, (395 - y) * 2.7])); },
+  km(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); },
+  // 이동 시간 어림: 말 하루 약 60km(원작 벽외조사 기준 어림), 입체기동 초속 30m
+  travel(km) {
+    const h = km / 108, days = km / 60;
+    return km < 1 ? '' : `입체기동으로 약 ${h < 1 ? Math.round(h * 60) + '분' : Math.round(h) + '시간'} · 말로 약 ${days < 1 ? Math.max(1, Math.round(days * 24)) + '시간' : Math.round(days) + '일'}`;
+  },
+
+  // 장소 이름을 맵에 덮어씀 (시작 화면·불러오기 글자에 원작 지명이 나오게)
+  applyNames() {
+    for (const id in this.PLACES) if (Maps[id]) { const p = this.PLACES[id]; Maps[id].name = p.en; Maps[id].sub = p.name; }
+  },
+
+  // ----- 양피지 지도 (SVG). 시작 화면 오른쪽 + 일시정지 '세계 지도' 창에서 같이 씀 -----
+  svg(cur) {
+    const O = this.outline(), pts = O.map(([x, y]) => `${x.toFixed(0)},${(-y).toFixed(0)}`).join(' ');
+    const rings = this.WALLS.map(w => `<circle r="${w.r}" class="wall"/>`).join('');
+    const dist = this.DISTRICTS.map(([n, w, a]) => {
+      const r = this.WALLS.find(v => v.id === w).r, x = Math.cos(a * Math.PI / 180) * r, y = -Math.sin(a * Math.PI / 180) * r;
+      const taken = ['트로스트', '시간시나', '스토헤스'].includes(n);   // 장소 이름이 같은 자리에 나오므로 구역 이름은 생략
+      return `<circle cx="${x}" cy="${y}" r="18" class="dist"/>${taken ? '' : `<text x="${x + (a === 180 ? -24 : 24)}" y="${y + (a === 90 ? -22 : a === 270 ? 40 : 10)}" class="dn" text-anchor="${a === 180 ? 'end' : a === 0 ? 'start' : 'middle'}">${n}</text>`}`;
+    }).join('');
+    const marks = Object.entries(this.PLACES).filter(([, p]) => !p.overseas).map(([id, p]) => {
+      const [x, y] = p.pos;
+      return `<g class="pl${id === cur ? ' cur' : ''}" data-place="${id}" transform="translate(${x} ${-y})" tabindex="0"><circle r="34" class="hit"/><circle r="22" class="dot"/>${id === cur ? '<circle r="36" class="here"/>' : ''}<text y="${p.pos[1] < -350 && p.pos[1] > -500 && p.pos[0] === 0 && p.pos[1] < -420 ? 90 : -36}" class="pn">${p.name}</text></g>`;
+    }).join('');
+    const sea = Array.from({ length: 4 }, (_, i) => `<polygon points="${pts}" class="contour" transform="scale(${1.04 + i * 0.045})"/>`).join('');
+    const grid = Array.from({ length: 9 }, (_, i) => `<path d="M${-1000 + i * 250} -1200 V1200 M-1000 ${-1200 + i * 300} H1000" class="grid"/>`).join('');
+    const over = Object.entries(this.PLACES).filter(([, p]) => p.overseas).map(([id, p], i) => `<g class="pl ov${id === cur ? ' cur' : ''}" data-place="${id}" transform="translate(-850 ${-120 + i * 120})" tabindex="0"><circle r="34" class="hit"/><circle r="17" class="dot"/>${id === cur ? '<circle r="30" class="here"/>' : ''}<text x="30" y="10" class="pn" text-anchor="start">${p.name}</text></g>`).join('');
+    return `<svg class="atlas" viewBox="-1000 -1150 2000 2300" xmlns="http://www.w3.org/2000/svg">
+      <defs><filter id="atlasPaper"><feTurbulence type="fractalNoise" baseFrequency=".006" numOctaves="3" seed="4"/><feColorMatrix values="0 0 0 0 .32  0 0 0 0 .24  0 0 0 0 .13  0 0 0 .55 0"/><feComposite in2="SourceGraphic" operator="in"/></filter>
+        <radialGradient id="atlasSea" cx=".5" cy=".5" r=".7"><stop offset="0" stop-color="#8aa596"/><stop offset="1" stop-color="#4f6b62"/></radialGradient></defs>
+      <rect x="-1000" y="-1150" width="2000" height="2300" fill="url(#atlasSea)"/>${grid}${sea}
+      <polygon points="${pts}" class="land"/><polygon points="${pts}" class="land" filter="url(#atlasPaper)"/>
+      <g class="mtn">${[[-150, -820], [40, -860], [220, -760], [-260, -700], [120, -680]].map(([x, y]) => `<path d="M${x - 40} ${y + 26} L${x} ${y - 30} L${x + 40} ${y + 26}"/>`).join('')}</g>
+      ${rings}${dist}<circle r="20" class="mitras"/><text y="-30" class="dn cap" text-anchor="middle">미트라스</text>
+      <text x="0" y="-520" class="wn" text-anchor="middle">월 마리아</text><text x="0" y="-418" class="wn" text-anchor="middle">월 로제</text><text x="0" y="-288" class="wn" text-anchor="middle">월 시나</text>
+      <path d="M-905 -260 L-960 -260 M-940 -280 L-960 -260 L-940 -240" class="arrow"/><text x="-905" y="-275" class="ovt">바다 건너 마레 대륙 →</text>
+      ${marks}${over}
+      <text x="960" y="1110" class="sc" text-anchor="end">파라디 섬 · 1:1 · 눈금 한 칸 250km</text></svg>`;
+  },
+  css() {
+    if (document.getElementById('atlasCss')) return;
+    const s = document.createElement('style'); s.id = 'atlasCss';
+    s.textContent = `.atlas{display:block;width:100%;height:auto;font-family:'Noto Serif KR',serif;border:1px solid rgba(201,166,70,.5);box-shadow:inset 0 0 40px rgba(0,0,0,.5)}
+.atlas .grid{stroke:#2f2418;stroke-width:2;opacity:.25;fill:none}.atlas .contour{fill:none;stroke:#2f4a42;stroke-width:3;opacity:.35}
+.atlas .land{fill:#b8986a;stroke:#3a2a18;stroke-width:6}.atlas .mtn path{fill:none;stroke:#5a4228;stroke-width:6;opacity:.7}
+.atlas .wall{fill:none;stroke:#3b2a1a;stroke-width:9}.atlas .dist{fill:#b8986a;stroke:#3b2a1a;stroke-width:7}.atlas .mitras{fill:#7a1515;stroke:#2a0a0a;stroke-width:5}
+.atlas .dn{font-size:44px;fill:#2a1d10;font-weight:700}.atlas .dn.cap{font-size:52px}.atlas .wn{font-size:40px;fill:#4a3420;font-style:italic;letter-spacing:4px}
+.atlas .pl{cursor:pointer}.atlas .pl .hit{fill:transparent}.atlas .pl .dot{fill:#a3171a;stroke:#f6e6c0;stroke-width:6}.atlas .pl .pn{font-size:60px;font-weight:900;fill:#1a1008;text-anchor:middle;paint-order:stroke;stroke:#e8d6a8;stroke-width:12px}
+.atlas .pl:hover .dot,.atlas .pl:focus .dot,.atlas .pl.sel .dot{fill:#e0a020;r:22}.atlas .pl.sel .pn{fill:#7a1515}
+.atlas .here{fill:none;stroke:#f0d890;stroke-width:6;stroke-dasharray:10 8;animation:atlasSpin 6s linear infinite}@keyframes atlasSpin{to{transform:rotate(360deg)}}
+.atlas .ov .pn{text-anchor:start;font-size:54px;fill:#f2e6c8;stroke:#1d2a26}.atlas .arrow{stroke:#e8dcc0;stroke-width:6;fill:none}.atlas .ovt{font-size:44px;fill:#efe2c2;font-style:italic}
+.atlas .sc{font-size:40px;fill:#efe2c2;opacity:.8}
+.atlas-info{margin-top:10px;padding:10px 12px;border:1px solid rgba(201,166,70,.4);background:rgba(20,13,8,.6);font-size:12px;line-height:1.6;color:#d8c9a8;min-height:62px}
+.atlas-info b{display:block;color:#f0d890;font-size:14px}.atlas-info i{font-style:normal;color:#a99a7a}.atlas-info .go{margin-top:8px;cursor:pointer;font:700 12px 'Noto Serif KR',serif;letter-spacing:2px;padding:7px 16px;color:#1b0d04;border:1px solid #f0d890;background:linear-gradient(180deg,#f0d890,#b8902e)}
+#atlasModal{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(6,4,2,.82);padding:16px}#atlasModal[hidden]{display:none}
+#atlasModal .box{width:min(560px,100%);max-height:96vh;overflow:auto;padding:14px;border:1px solid #c9a646;background:linear-gradient(180deg,#2a1d12,#140d08)}
+#atlasModal h3{margin:0 0 8px;color:#f0d890;font:700 15px 'Noto Serif KR',serif;letter-spacing:3px;display:flex;justify-content:space-between}#atlasModal h3 button{cursor:pointer;background:none;border:1px solid rgba(232,217,184,.4);color:#e8d9b8;font:inherit;font-size:12px;padding:2px 10px}`;
+    document.head.appendChild(s);
+  },
+  // 지도 + 아래 안내칸. 장소를 누르면 정보, '이곳으로 이동'을 누르면 그 장소로 새로 불러옴
+  mount(box, cur) {
+    this.css();
+    box.innerHTML = this.svg(cur) + '<div class="atlas-info"></div>';
+    const info = box.querySelector('.atlas-info'), here = this.PLACES[cur];
+    const show = id => {
+      const p = this.PLACES[id], km = here ? Math.round(this.km(here.pos, p.pos)) : 0;
+      const chs = typeof Story !== 'undefined' ? Story.chapters.map((c, i) => c.map === id ? `${i + 1}장 「${c.title}」` : '').filter(Boolean).join(', ') : '';
+      box.querySelectorAll('.pl').forEach(g => g.classList.toggle('sel', g.dataset.place === id));
+      info.innerHTML = `<b>${p.name}</b><i>${p.en} · ${p.where} · 미트라스에서 ${Math.round(Math.hypot(...p.pos))}km</i><br>${id === cur ? '지금 있는 곳' : `여기서 ${km.toLocaleString()}km · ${this.travel(km)}${p.overseas ? ' (배로 건너감)' : ''}`}${chs ? `<br>스토리: ${chs}` : ''}
+        ${id === cur ? '' : '<br><button type="button" class="go">이곳으로 빠른 이동</button>'}`;
+      const go = info.querySelector('.go');
+      if (go) go.onclick = e => { e.stopPropagation(); this.travelTo(id); };
+    };
+    box.querySelectorAll('.pl').forEach(g => {
+      g.addEventListener('click', e => { e.stopPropagation(); show(g.dataset.place); });
+      g.addEventListener('keydown', e => { if (e.key === 'Enter') show(g.dataset.place); });
+    });
+    show(cur);
+  },
+  travelTo(id) {
+    try { sessionStorage.setItem('map', id); } catch (_) {}
+    location.hash = id; location.reload();
+  },
+  // 게임 중(일시정지) 세계 지도 창
+  openModal() {
+    this.css();
+    let m = document.getElementById('atlasModal');
+    if (!m) { m = document.createElement('div'); m.id = 'atlasModal'; document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) m.hidden = true; }); }
+    m.innerHTML = `<div class="box"><h3>세계 지도 · 빠른 이동 <button type="button">닫기</button></h3><div class="host"></div><small style="color:#8a7c62;font-size:11px">다른 장소로 이동하면 그곳에서 새로 시작합니다</small></div>`;
+    m.querySelector('h3 button').onclick = () => { m.hidden = true; };
+    this.mount(m.querySelector('.host'), World.mapId);
+    m.hidden = false;
+  },
+};
+Atlas.applyNames();
+{
+  const pa = document.querySelector('.pause-actions');
+  if (pa) {
+    const b = Object.assign(document.createElement('button'), { type: 'button', id: 'atlasBtn', textContent: '세계 지도 · 빠른 이동' });
+    b.style.cssText = 'margin-top:8px;width:100%';
+    b.onclick = () => Atlas.openModal();
+    pa.before(b);
+  }
+}
 
 </script>
 <script>
@@ -6976,7 +7116,7 @@ const Menu = {
     picks.forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();pick(b.dataset.viewpick);}));
     let saved=null;try{saved=sessionStorage.getItem('view');}catch(_){}
     if(saved==='1'||saved==='3')pick(saved);
-    const mc=document.getElementById('mapCount');if(mc)mc.textContent=Object.keys(Maps).length+'곳';
+    const mc=document.getElementById('mapCount');if(mc)mc.textContent='장소 '+Object.keys(Atlas.PLACES).length+'곳';
     this.embers=Array.from({length:70},()=>({x:Math.random(),y:Math.random(),v:.02+Math.random()*.05,r:.6+Math.random()*1.8,a:Math.random()*6.28}));
   },
   drawEmbers(now){
@@ -7322,7 +7462,7 @@ scene.add(camera);   // 카메라에 붙인 1인칭 칼이 그려지려면 카�
 function chosenMap() {
   let id = location.hash.slice(1);
   if (!Maps[id]) { try { id = sessionStorage.getItem('map'); } catch (e) { id = null; } }
-  return Maps[id] ? id : 'ironhold';
+  return Maps[id] ? id : 'gateward';   // 처음엔 시간시나 구
 }
 
 // 무거운 맵 생성은 시작 메뉴를 먼저 화면에 그린 뒤에 함 (맵을 고를 때 화면이 멈춘 것처럼 보이지 않게)
@@ -7352,26 +7492,8 @@ TitanRenderer.init(scene);
 Allies.init(scene);
 Shifter.init(scene);
 
-// 시작 화면의 맵 선택 카드. 다른 맵을 고르면 그 맵으로 새로 불러옴
-{
-  const box = document.getElementById('maps');
-  for (const id in Maps) {
-    const m = Maps[id];
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'mapcard' + (id === World.mapId ? ' on' : '');
-    card.innerHTML = `<b>${m.name}</b><span>${m.sub}</span><small>${m.desc}</small>`;
-    card.addEventListener('click', e => {
-      e.stopPropagation();
-      if (id === World.mapId) return;               // 지금 맵이면 그대로 시작
-      e.stopPropagation();
-      try { sessionStorage.setItem('map', id); } catch (err) { /* 저장이 막혀도 주소로 전달 */ }
-      location.hash = id;
-      location.reload();
-    });
-    box.appendChild(card);
-  }
-}
+// 22차: 시작 화면 오른쪽 = 맵 선택 카드 대신 1:1 세계 지도 (장소를 눌러 빠른 이동, atlas.js)
+Atlas.mount(document.getElementById('maps'), World.mapId);
 
 }
 
