@@ -306,6 +306,7 @@
         <span><kbd>좌클릭</kbd></span><span>베기 · 목덜미 근처면 돌진</span>
         <span><kbd>F</kbd><kbd>T</kbd><kbd>1~9</kbd><kbd>E</kbd></span><span>9거인 사용자 먹기(계승) · 거인화 · 스킬(사람일 때는 변신할 거인 고르기) · 해제</span>
         <span><kbd>V</kbd><kbd>휠</kbd></span><span>1인칭 · 3인칭 전환</span>
+        <span><kbd>H</kbd><kbd>G</kbd></span><span>말 부르기·타기·내리기 (Shift 질주) · 들판에서 가까운 장소로 들어가기</span>
         <span><kbd>M</kbd><kbd>Esc</kbd><kbd>F3</kbd></span><span>미니맵 · 일시정지 · 성능 표시</span>
       </div>
       <div class="guide-grid">
@@ -768,6 +769,7 @@ const World = {
 
   init(scene, mapId) {
     this.scene = scene;
+    this._before = new Set(scene.children);   // 22차: 장소가 만든 물체를 구분 (Field가 멀리서 숨김)
     this.mapId = Maps[mapId] ? mapId : 'ironhold';
     const map = this.map = Maps[this.mapId];
     this.pools = [];                     // 바다가 아닌 맵의 호수·운하·분수 (addWater가 채움)
@@ -802,6 +804,7 @@ const World = {
     this.mergeStatic();
     this.buildRayProxies();
     this.buildGrid();
+    if (typeof Field !== 'undefined') Field.init(this);   // 22차: 장소 밖 1:1 들판
   },
 
   // ---------- 충돌 상자 격자: 소품까지 충돌 상자가 수천 개라 전부 검사하지 않고 주변 칸에 든 것만 검사 ----------
@@ -1005,7 +1008,9 @@ const World = {
 
     // 먼 산맥 (지평선)
     const mountMat = new THREE.MeshStandardMaterial({ color: env.mountain || 0x7d93a8, flatShading: true, roughness: 1 });
-    for (let i = 0; i < 40; i++) {
+    // 22차: 들판이 이어지는 장소는 가짜 지평선 산을 두지 않음 (걸어가면 산에 부딪혀서). 진짜 산맥은 3단계에서
+    const openField = typeof Field !== 'undefined' && Field.OPEN[this.mapId];
+    for (let i = 0; i < (openField ? 0 : 40); i++) {
       const a = i / 40 * Math.PI * 2 + rand(0.05);
       const r = 1300 + Math.random() * 500, h = 140 + Math.random() * 260;
       const m = new THREE.Mesh(new THREE.ConeGeometry(160 + Math.random() * 180, h, 5), mountMat);
@@ -1654,9 +1659,9 @@ const World = {
       if (vn < 0) { vel.x -= nx * vn; vel.z -= nz * vn; }
     }
 
-    // 맵 경계 (바깥으로 향하는 속도 제거)
+    // 맵 경계 (바깥으로 향하는 속도 제거). 들판이 열려 있으면(Field) 경계 없음
     const dist = Math.hypot(pos.x, pos.z), lim = this.BOUND - r;
-    if (dist > lim) {
+    if (dist > lim && !this.open) {
       const nx = pos.x / dist, nz = pos.z / dist;
       pos.x = nx * lim; pos.z = nz * lim;
       const out = vel.x * nx + vel.z * nz;
@@ -1689,12 +1694,12 @@ const World = {
       pos.x = c.x + dx / d * rr; pos.z = c.z + dz / d * rr;
     }
     const dist = Math.hypot(pos.x, pos.z), lim = this.BOUND - r - 4;
-    if (dist > lim) { pos.x *= lim / dist; pos.z *= lim / dist; }
+    if (dist > lim && !this.open) { pos.x *= lim / dist; pos.z *= lim / dist; }
   },
 
   // (x,z) 주변 margin 안에 건물·벽·원기둥이 없으면 true (거인 생성 위치 고르기용)
   isFree(x, z, margin) {
-    if (Math.hypot(x, z) > this.BOUND - margin) return false;
+    if (!this.open && Math.hypot(x, z) > this.BOUND - margin) return false;
     if (this.near(x - margin, z - margin, x + margin, z + margin).some(b => x > b.min.x - margin && x < b.max.x + margin && z > b.min.z - margin && z < b.max.z + margin)) return false;
     if (this.cylinders.some(c => Math.hypot(x - c.x, z - c.z) < c.r + margin)) return false;
     return !this.walls.some(w => {
@@ -3240,7 +3245,7 @@ const Atlas = {
   // 게임의 장소 = 지금까지의 맵. pos = km
   PLACES: {
     gateward:   { name: '시간시나 구', en: 'SHIGANSHINA DISTRICT', where: '월 마리아 남쪽 돌출 구역', pos: [0, -480] },
-    embergate:  { name: '트로스트 구', en: 'TROST DISTRICT', where: '월 로제 남쪽 돌출 구역', pos: [0, -380] },
+    embergate:  { name: '트로스트 구', en: 'TROST DISTRICT', where: '월 로제 남쪽 돌출 구역', pos: [0, -380.15] },   // 이 맵의 큰 성벽이 z=-150에 있어 월 로제 링과 맞춤
     ironhold:   { name: '스토헤스 구', en: 'STOHESS DISTRICT', where: '월 시나 동쪽 돌출 구역', pos: [250, 0] },
     skyroot:    { name: '거대수의 숲', en: 'FOREST OF GIANT TREES', where: '월 로제 밖 동쪽 · 월 마리아 영역', pos: [425, -80] },
     moonfall:   { name: '우트가르드 성', en: 'CASTLE UTGARD', where: '월 로제 안 서남쪽 옛 성', pos: [-290, -110] },
@@ -3357,6 +3362,311 @@ Atlas.applyNames();
     pa.before(b);
   }
 }
+
+</script>
+<script>
+// ===== 1:1 들판 (22차 2단계): 장소 밖으로 나가면 섬의 땅이 이어짐 =====
+// 장소(기존 맵)는 Atlas 좌표의 제자리에 있고, 경계 밖은 400m 칸 단위로 플레이어 주변만 만들어 붙임(스트리밍).
+// 칸 내용(숲·밭·마을·길)은 세계 좌표(m)로 정해진 난수라 같은 곳은 늘 같은 모습. 성벽(시나·로제·마리아)은 가까이 가면 실제 반지름 위에 50m 높이로 세움.
+// 좌표: 게임 x = 동쪽(m), 게임 z = 남쪽(m), 원점 = 지금 장소의 중심. 세계(m) X = 동, Y = 북.
+// 자바스크립트 계산은 64비트라 수백 km 떨어져도 정밀하고, 그릴 때는 카메라 기준으로 바뀌어 떨림이 없음(따로 원점 이동 없음).
+// 스토리 진행 중에는 장소 경계를 그대로 둠(스토리 목표가 장소 안이라서).
+const Field = {
+  OPEN: { gateward: 1, embergate: 1, ironhold: 1, skyroot: 1, moonfall: 1 },
+  CH: 400, RAD: 4,          // 칸 크기(m), 플레이어 주변 몇 칸까지 (9x9 = 약 3.6km 사방)
+  FOG: [500, 3400],         // 들판에서는 안개를 멀리 (50m 성벽이 멀리서도 보이게). 장소 안에서는 맵 원래 안개
+  on: false, chunks: new Map(),
+
+  init(W) {
+    this.W = W;
+    this.on = !!this.OPEN[W.mapId] && typeof Atlas !== 'undefined';
+    if (!this.on) return;
+    const P = Atlas.PLACES[W.mapId];
+    this.ox = P.pos[0] * 1000; this.oy = P.pos[1] * 1000;
+    this.placeR = W.BOUND;
+    // 장소에서 만든 물체 (멀리 가면 숨김. 하늘·빛은 제외)
+    this.placeObjs = W.scene.children.filter(o => !W._before.has(o) && o !== W.sky && !o.isLight && o !== (W.sun && W.sun.target));
+    const scene = W.scene;
+    // 땅: 9km 판 하나가 플레이어를 따라감 (텍스처는 180m 단위로 맞춰 움직여 미끄러져 보이지 않음)
+    const tex = W.groundTexture('#728f4c', ['#65823f', '#7f9b57', '#5b7539', '#8a9a5a']);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1000, 1000);
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
+    this.ground.rotation.x = -Math.PI / 2; this.ground.position.y = -0.05; this.ground.receiveShadow = true;
+    scene.add(this.ground); W.hookables.push(this.ground);
+    // 칸 물체: 종류마다 InstancedMesh 하나 (칸이 바뀔 때 다시 채움). 그림자는 끔(성능)
+    const inst = (geo, mat, cap) => { const m = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    this.I = {
+      trunk: inst(new THREE.CylinderGeometry(0.28, 0.42, 1, 6), new THREE.MeshLambertMaterial({ color: 0x5a3e2b }), 5000),
+      leaf: inst(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), 15000),
+      house: inst(box, new THREE.MeshLambertMaterial({ color: 0xffffff, map: W.stoneTexture ? W.stoneTexture('#d8ccb4', '#a89a80') : null }), 900),
+      roof: inst(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), 900),
+      crop: inst(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), 900),
+      road: inst(box, new THREE.MeshLambertMaterial({ color: 0x9a8462 }), 400),
+      wall: inst(box, new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b5ab98', '#77705f') }), 120),
+    };
+    for (const k of ['leaf', 'house', 'roof', 'crop']) this.I[k].instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.I[k].count === 0 ? this.I[k].instanceMatrix.count * 3 : 0), 3);
+    this.wallWin = null; this.lastChunk = ''; this.t = 0; this.out = false;
+    W.open = false;
+    // 들판에서는 거인이 플레이어 주변 300~700m에서 나타남 (장소 안에서는 원래대로)
+    const map = W.map, base = map.spawn.bind(map);
+    map.spawn = () => {
+      if (!W.open || Math.hypot(Player.pos.x, Player.pos.z) < this.placeR - 60) return base();
+      const a = Math.random() * Math.PI * 2, r = 300 + Math.random() * 400;
+      return [Player.pos.x + Math.cos(a) * r, Player.pos.z + Math.sin(a) * r];
+    };
+  },
+  enabled() { return this.on && !(typeof Story !== 'undefined' && Story.active); },
+  // 세계 m ↔ 게임 좌표
+  toLocal(X, Y) { return [X - this.ox, -(Y - this.oy)]; },
+  toWorld(x, z) { return [this.ox + x, this.oy - z]; },
+
+  // ---------- 난수·노이즈 (세계 좌표로 정해짐) ----------
+  hash(a, b) { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; },
+  rng(a, b) { let s = Math.floor(this.hash(a, b) * 4294967296) || 1; return () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; },
+  noise(x, y) {
+    const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy, s = t => t * t * (3 - 2 * t);
+    const a = this.hash(ix, iy), b = this.hash(ix + 1, iy), c = this.hash(ix, iy + 1), d = this.hash(ix + 1, iy + 1);
+    return a + (b - a) * s(fx) + (c - a) * s(fy) + (a - b - c + d) * s(fx) * s(fy);
+  },
+
+  // ---------- 칸 하나의 내용 (세계 m 좌표) ----------
+  gen(ix, iy) {
+    const C = this.CH, X0 = ix * C, Y0 = iy * C, R = this.rng(ix, iy), r = Math.hypot(X0 + C / 2, Y0 + C / 2) / 1000;   // 미트라스에서 km
+    const inWalls = r < 480, forest = this.noise((X0 + C / 2) / 3200, (Y0 + C / 2) / 3200);
+    const out = { trees: [], houses: [], crops: [], roads: [] };
+    // 숲: 노이즈가 높은 곳은 빽빽한 숲(나무 10~18m), 아니면 드문드문
+    const nT = forest > 0.66 ? 40 + Math.floor(R() * 25) : forest > 0.5 ? 8 + Math.floor(R() * 8) : Math.floor(R() * 4);
+    for (let i = 0; i < nT; i++) out.trees.push([X0 + R() * C, Y0 + R() * C, 0.8 + R() * 0.6]);
+    // 밭: 벽 안은 거의 다 밭(밀·초록·갈색 띠), 벽 밖(월 마리아 함락 뒤)은 버려져 드묾
+    if (forest < 0.6 && R() < (inWalls ? 0.9 : 0.15)) {
+      const n = 2 + Math.floor(R() * 3), rot = Math.floor(R() * 4) * Math.PI / 2 + (R() - 0.5) * 0.2;
+      for (let i = 0; i < n; i++) out.crops.push([X0 + 60 + R() * (C - 120), Y0 + 60 + R() * (C - 120), 60 + R() * 90, 40 + R() * 70, rot, [0xc8b060, 0x8aa050, 0x9a7a52, 0xb8a868][Math.floor(R() * 4)]]);
+    }
+    // 마을: 벽 안 8%, 벽 밖 3%(폐촌)
+    if (forest < 0.62 && R() < (inWalls ? 0.08 : 0.03)) {
+      const cx = X0 + 100 + R() * (C - 200), cy = Y0 + 100 + R() * (C - 200), n = 6 + Math.floor(R() * 8);
+      for (let i = 0; i < n; i++) {
+        const a = R() * Math.PI * 2, d = 12 + R() * 55;
+        out.houses.push([cx + Math.cos(a) * d, cy + Math.sin(a) * d, 6 + R() * 5, 7 + R() * 6, 4.5 + R() * 3, R() * Math.PI, [0xa8513a, 0x8a4630, 0x5a5c66, 0x9a6040][Math.floor(R() * 4)]]);
+      }
+    }
+    // 길: 미트라스에서 동서남북 구역으로 곧게 뻗은 큰길 (폭 8m)
+    for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+      const dx = Math.cos(a), dy = Math.sin(a), mx = X0 + C / 2, my = Y0 + C / 2;
+      const along = mx * dx + my * dy, perp = -mx * dy + my * dx;
+      if (along > 0 && Math.abs(perp) < C * 0.71) out.roads.push([dx * along - dy * 0, dy * along, C * 1.02, a, perp]);
+    }
+    return out;
+  },
+
+  // ---------- 칸 불러오기/버리기: 충돌 상자(격자)와 와이어 판정 사본까지 ----------
+  load(ix, iy) {
+    const W = this.W, g = this.gen(ix, iy), boxes = [], tris = [];
+    const pr = this.placeR + 40, keep = (X, Y) => { const [x, z] = this.toLocal(X, Y); return Math.hypot(x, z) > pr ? [x, z] : null; };
+    const addBox = (x0, y0, z0, x1, y1, z1) => {
+      const b = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1)); boxes.push(b);
+      const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+      for (const f of [[0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6], [0, 4, 5], [0, 5, 1], [3, 2, 6], [3, 6, 7], [0, 3, 7], [0, 7, 4], [1, 5, 6], [1, 6, 2]]) for (const i of f) tris.push(...v[i]);
+    };
+    const ch = { trees: [], houses: [], crops: [], roads: [] };
+    for (const [X, Y, s] of g.trees) { const p = keep(X, Y); if (!p) continue; const h = 12 * s; ch.trees.push([p[0], p[1], s]); addBox(p[0] - 0.45, 0, p[1] - 0.45, p[0] + 0.45, h * 0.62, p[1] + 0.45); }
+    for (const [X, Y, w, d, h, rot, col] of g.houses) { const p = keep(X, Y); if (!p) continue; ch.houses.push([p[0], p[1], w, d, h, rot, col]); const e = Math.max(w, d) * 0.5 * 0.8; addBox(p[0] - e, 0, p[1] - e, p[0] + e, h, p[1] + e); }
+    for (const c of g.crops) { const p = keep(c[0], c[1]); if (p) ch.crops.push([p[0], p[1], ...c.slice(2)]); }
+    for (const rd of g.roads) { const [x, z] = this.toLocal(rd[0], rd[1]); ch.roads.push([x, z, rd[2], rd[3]]); }
+    // 충돌 격자에 넣기
+    const G = W.GRID; ch.cells = [];
+    for (const b of boxes) for (let gx = Math.floor(b.min.x / G); gx <= Math.floor(b.max.x / G); gx++) for (let gz = Math.floor(b.min.z / G); gz <= Math.floor(b.max.z / G); gz++) {
+      const k = gx * 4096 + gz; let cell = W.grid.get(k); if (!cell) W.grid.set(k, cell = []); cell.push(b); ch.cells.push([cell, b]);
+    }
+    if (tris.length) {
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(tris, 3)); geo.computeBoundingSphere(); geo.computeBoundingBox();
+      ch.proxy = new THREE.Mesh(geo, this.proxyMat || (this.proxyMat = new THREE.MeshBasicMaterial())); ch.proxy.updateMatrixWorld(); W.hookables.push(ch.proxy);
+    }
+    return ch;
+  },
+  unload(ch) {
+    for (const [cell, b] of ch.cells) { const i = cell.indexOf(b); if (i >= 0) cell.splice(i, 1); }
+    if (ch.proxy) { const i = this.W.hookables.indexOf(ch.proxy); if (i >= 0) this.W.hookables.splice(i, 1); ch.proxy.geometry.dispose(); }
+  },
+  // 활성 칸의 물체를 InstancedMesh에 다시 채움
+  fill() {
+    const I = this.I, o = new THREE.Object3D(), col = new THREE.Color(), greens = [0x4f7a3a, 0x5d8a44, 0x3f6b33, 0x6b9450];
+    const put = (m, i, c) => { o.updateMatrix(); m.setMatrixAt(i, o.matrix); if (c !== undefined && m.instanceColor) m.setColorAt(i, col.setHex(c)); };
+    const n = { trunk: 0, leaf: 0, house: 0, roof: 0, crop: 0, road: 0 };
+    for (const ch of this.chunks.values()) {
+      for (const [x, z, s] of ch.trees) {
+        if (n.trunk >= 5000 || n.leaf + 3 > 15000) break;
+        const h = 12 * s; o.rotation.set(0, 0, 0); o.position.set(x, h * 0.3, z); o.scale.set(s, h * 0.6, s); put(I.trunk, n.trunk++);
+        for (let j = 0; j < 3; j++) { const k = s * (3.6 - j * 0.8); o.position.set(x + Math.sin(x + j) * 0.8, h * (0.55 + j * 0.16), z + Math.cos(z + j) * 0.8); o.rotation.set(j, x % 6, 0); o.scale.set(k, k * 0.9, k); put(I.leaf, n.leaf++, greens[Math.abs(Math.floor(x * 7 + j)) % 4]); }
+      }
+      for (const [x, z, w, d, h, rot, c] of ch.houses) {
+        if (n.house >= 900) break;
+        o.rotation.set(0, rot, 0); o.position.set(x, h / 2, z); o.scale.set(w, h, d); put(I.house, n.house++, 0xe8dcc4);
+        o.rotation.set(Math.PI / 4, rot, 0, 'YXZ'); o.position.set(x, h, z); o.scale.set(w + 0.8, d * 0.72, d * 0.72); put(I.roof, n.roof++, c); o.rotation.order = 'XYZ';
+      }
+      for (const [x, z, w, d, rot, c] of ch.crops) { if (n.crop >= 900) break; o.rotation.set(0, rot, 0); o.position.set(x, 0.03, z); o.scale.set(w, 0.06, d); put(I.crop, n.crop++, c); }
+      for (const [x, z, len, a] of ch.roads) { if (n.road >= 400) break; o.rotation.set(0, a, 0); o.position.set(x, 0.04, z); o.scale.set(len, 0.05, 8); put(I.road, n.road++); }
+    }
+    for (const k in n) { const m = I[k]; m.count = n[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  },
+
+  // ---------- 성벽: 플레이어가 링에서 2.5km 안이면 가까운 6km 구간을 300m 토막으로 세움 ----------
+  updateWalls(X, Y) {
+    const W = this.W, d = Math.hypot(X, Y), th = Math.atan2(Y, X);
+    const ring = Atlas.WALLS.find(w => Math.abs(d - w.r * 1000) < 2500);
+    const key = ring ? ring.id + Math.round(th * ring.r * 1000 / 600) : '';
+    if (key === this.wallKey) return;
+    this.wallKey = key;
+    if (this.wallWin) { W.walls = W.walls.filter(w => !w.field); const i = W.hookables.indexOf(this.wallWin); if (i >= 0) W.hookables.splice(i, 1); this.wallWin = null; }
+    const I = this.I.wall; I.count = 0;
+    if (!ring) { I.instanceMatrix.needsUpdate = true; return; }
+    const R = ring.r * 1000, SEG = 300, H = 50, T = 30, o = new THREE.Object3D(), tris = [];
+    const n = Math.ceil(6000 / SEG);
+    for (let i = -n; i < n; i++) {
+      const a0 = th + i * SEG / R, a1 = a0 + SEG / R;
+      const [x0, z0] = this.toLocal(Math.cos(a0) * R, Math.sin(a0) * R), [x1, z1] = this.toLocal(Math.cos(a1) * R, Math.sin(a1) * R);
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      if (Math.hypot(cx, cz) < this.placeR + 20) continue;     // 장소 자체 성벽이 있는 곳은 비움
+      const len = Math.hypot(x1 - x0, z1 - z0) + 0.5, tx = (x1 - x0) / len, tz = (z1 - z0) / len;
+      o.position.set(cx, H / 2, cz); o.rotation.set(0, -Math.atan2(tz, tx), 0); o.scale.set(len, H, T); o.updateMatrix(); I.setMatrixAt(I.count++, o.matrix);
+      W.walls.push({ cx, cz, tx, tz, half: len / 2, thick: T / 2, h: H, y0: 0, field: true });
+      // 와이어 판정 사본 (성벽 양면·윗면)
+      const nx = -tz * T / 2, nz = tx * T / 2;
+      const q = [[x0 + nx, z0 + nz], [x1 + nx, z1 + nz], [x1 - nx, z1 - nz], [x0 - nx, z0 - nz]];
+      for (const [a, b] of [[0, 1], [2, 3]]) tris.push(q[a][0], 0, q[a][1], q[b][0], 0, q[b][1], q[b][0], H, q[b][1], q[a][0], 0, q[a][1], q[b][0], H, q[b][1], q[a][0], H, q[a][1]);
+      tris.push(q[0][0], H, q[0][1], q[1][0], H, q[1][1], q[2][0], H, q[2][1], q[0][0], H, q[0][1], q[2][0], H, q[2][1], q[3][0], H, q[3][1]);
+    }
+    I.instanceMatrix.needsUpdate = true;
+    if (tris.length) {
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(tris, 3)); geo.computeBoundingSphere(); geo.computeBoundingBox();
+      this.wallWin = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })); this.wallWin.userData.wall = true; this.wallWin.updateMatrixWorld(); W.hookables.push(this.wallWin);
+    }
+  },
+
+  // ---------- 매 프레임 ----------
+  update(dt) {
+    if (!this.on) return;
+    const W = this.W, p = Player.pos, en = this.enabled();
+    W.open = en;
+    if (W.sky) W.sky.position.set(camera.position.x, 0, camera.position.z);   // 하늘은 늘 머리 위
+    if (!en) return;
+    const S = 180; this.ground.position.set(Math.round(p.x / S) * S, -0.05, Math.round(p.z / S) * S);
+    const [X, Y] = this.toWorld(p.x, p.z), C = this.CH, cx = Math.floor(X / C), cy = Math.floor(Y / C), key = cx + ',' + cy;
+    if (key !== this.lastChunk) {
+      this.lastChunk = key;
+      const want = new Set();
+      for (let i = -this.RAD; i <= this.RAD; i++) for (let j = -this.RAD; j <= this.RAD; j++) want.add((cx + i) + ',' + (cy + j));
+      for (const [k, ch] of this.chunks) if (!want.has(k)) { this.unload(ch); this.chunks.delete(k); }
+      for (const k of want) if (!this.chunks.has(k)) { const [a, b] = k.split(',').map(Number); this.chunks.set(k, this.load(a, b)); }
+      this.fill();
+    }
+    this.updateWalls(X, Y);
+    // 0.5초마다: 장소 숨기기, 먼 거인 정리, 위치 표시, 다른 장소 도착
+    if ((this.t -= dt) > 0) return;
+    this.t = 0.5;
+    const dp = Math.hypot(p.x, p.z), outside = dp > this.placeR - 5;
+    for (const o of this.placeObjs) o.visible = dp < this.placeR + 3800;
+    if (!this.fog0) this.fog0 = [scene.fog.near, scene.fog.far];
+    const f = outside ? this.FOG : this.fog0; scene.fog.near = f[0]; scene.fog.far = f[1];
+    if (outside && !this.out) Game.toast('장소 밖 들판 · 1:1 파라디 섬 · H 말 부르기', '#f0d890');
+    this.out = outside;
+    for (const t of Titans.list) if (!t.removed && !t.dead && (typeof Shifter === 'undefined' || t !== Shifter.titan) && Math.hypot(t.pos.x - p.x, t.pos.z - p.z) > 3600) { W.scene.remove(t.root); t.removed = true; }
+    Titans.list = Titans.list.filter(t => !t.removed || t.dead); Titans._hooksDirty = true;
+    this.hud(X, Y);
+  },
+  // 위치 표시: 어느 벽 영역인지 + 가까운 장소와 거리. 1.5km 안이면 G로 들어가기
+  hud(X, Y) {
+    let e = document.getElementById('fieldHud');
+    if (!e) {
+      e = document.createElement('div'); e.id = 'fieldHud'; document.body.appendChild(e);
+      const s = document.createElement('style');
+      s.textContent = `#fieldHud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:6;pointer-events:none;text-align:center;font:600 12px 'Noto Serif KR',serif;color:#f0e2c0;text-shadow:0 1px 3px #000;letter-spacing:1px}
+#fieldHud b{display:block;font-size:14px;color:#f0d890}#fieldHud .go{display:inline-block;margin-top:6px;padding:4px 12px;background:rgba(20,13,8,.75);border:1px solid #c9a646;color:#f0d890}
+html.title #fieldHud,html.cutting #fieldHud,html.dying #fieldHud{display:none}`;
+      document.head.appendChild(s);
+    }
+    const r = Math.hypot(X, Y) / 1000;
+    const zone = r < 250 ? '월 시나 안' : r < 380 ? '월 로제 영역' : r < 480 ? '월 마리아 영역' : '벽 밖';
+    let best = null, bd = 1e9;
+    for (const id in Atlas.PLACES) { const q = Atlas.PLACES[id]; if (q.overseas) continue; const d = Math.hypot(q.pos[0] * 1000 - X, q.pos[1] * 1000 - Y); if (d < bd) { bd = d; best = id; } }
+    this.near = best !== this.W.mapId && bd < 1500 ? best : null;
+    const q = Atlas.PLACES[best];
+    e.innerHTML = this.out || this.near ? `<b>${zone}</b>${best === this.W.mapId && bd < this.placeR ? q.name : `${q.name}까지 ${(bd / 1000).toFixed(1)}km`}${this.near ? `<br><span class="go">G · ${q.name} 들어가기</span>` : ''}` : '';
+  },
+  enter() { if (this.near) Atlas.travelTo(this.near); },
+};
+
+// ===== 말 (22차 2단계): H로 부르고 타고 내림. 탄 채 와이어를 쏘거나 높이 뛰면 내림 =====
+const Horse = {
+  riding: false, mesh: null, pos: new THREE.Vector3(), yaw: 0, state: 'gone', gait: 0,
+  build() {
+    const g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c });
+    const coat = M(0x6a4428), dark = M(0x2a1a10), tack = M(0x3a2618), metal = M(0x9a9a92);
+    const part = (geo, mat, x, y, z, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.x = rx; m.castShadow = true; g.add(m); return m; };
+    const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    part(B(0.62, 0.7, 1.7), coat, 0, 1.35, 0);                       // 몸통
+    part(new THREE.SphereGeometry(0.42, 10, 8), coat, 0, 1.38, 0.72).scale.set(0.9, 1, 1);   // 가슴
+    part(new THREE.SphereGeometry(0.42, 10, 8), coat, 0, 1.4, -0.72).scale.set(0.95, 1, 1);   // 엉덩이
+    const neck = part(B(0.3, 0.9, 0.42), coat, 0, 1.85, 0.95, -0.6);
+    const head = part(B(0.26, 0.3, 0.62), coat, 0, 2.2, 1.35, 0.35); this.head = head;
+    part(B(0.06, 0.6, 0.1), dark, 0, 2.0, 0.85, -0.6);                // 갈기
+    part(B(0.08, 0.12, 0.08), dark, -0.09, 2.42, 1.12); part(B(0.08, 0.12, 0.08), dark, 0.09, 2.42, 1.12);   // 귀
+    const tail = part(B(0.12, 0.7, 0.12), dark, 0, 1.25, -1.0, 0.5); this.tail = tail;
+    part(B(0.66, 0.08, 0.7), tack, 0, 1.72, 0);                       // 안장
+    part(B(0.5, 0.06, 0.22), M(0x7a1d1d), 0, 1.73, -0.3);              // 안장 뒤 담요
+    part(B(0.02, 0.4, 0.02), metal, 0.34, 1.45, 0.05); part(B(0.02, 0.4, 0.02), metal, -0.34, 1.45, 0.05);   // 등자 끈
+    this.legs = [[0.2, 0.7], [-0.2, 0.7], [0.2, -0.7], [-0.2, -0.7]].map(([x, z]) => {
+      const hip = new THREE.Group(); hip.position.set(x, 1.1, z); g.add(hip);
+      const up = new THREE.Mesh(B(0.16, 0.55, 0.18), coat); up.position.y = -0.27; hip.add(up);
+      const knee = new THREE.Group(); knee.position.y = -0.55; hip.add(knee);
+      const low = new THREE.Mesh(B(0.11, 0.5, 0.12), coat); low.position.y = -0.25; knee.add(low);
+      const hoof = new THREE.Mesh(B(0.14, 0.08, 0.16), dark); hoof.position.y = -0.52; knee.add(hoof);
+      return { hip, knee };
+    });
+    g.visible = false; scene.add(g); this.mesh = g;
+  },
+  key() {
+    if (!this.mesh) this.build();
+    if (Shifter.active) return;
+    if (this.riding) { this.dismount(); return; }
+    if (this.state !== 'gone' && this.pos.distanceTo(Player.pos) < 6) { this.mount(); return; }
+    // 휘파람: 뒤쪽 70m에서 달려옴
+    const f = Player.forward();
+    this.pos.copy(Player.pos).addScaledVector(f, -70); this.pos.y = 0;
+    this.state = 'coming'; this.mesh.visible = true;
+    Game.toast('휘파람 · 말이 달려온다', '#f0d890');
+  },
+  mount() { this.riding = true; this.state = 'ridden'; Player.releaseHook && Player.releaseHook(); Game.toast('말에 탐 · Shift 질주 · H 내리기', '#f0d890'); },
+  dismount() { this.riding = false; this.state = 'idle'; Player.vel.y = 5; Player.onGround = false; },
+  update(dt) {
+    if (!this.mesh || this.state === 'gone') return;
+    const p = Player;
+    if (this.riding && (p.isHooked() || Shifter.active || p.pos.y > 3 || Game.over)) this.dismount();
+    let sp = 0;
+    if (this.state === 'coming') {
+      const d = new THREE.Vector3(p.pos.x - this.pos.x, 0, p.pos.z - this.pos.z), L = d.length();
+      if (L < 3.5) { this.state = 'idle'; if (p.onGround && !p.isHooked()) this.mount(); }
+      else { sp = Math.min(18, L * 2); this.pos.addScaledVector(d.divideScalar(L), sp * dt); this.yaw = Math.atan2(d.x, d.z); }
+    } else if (this.riding) {
+      this.pos.set(p.pos.x, 0, p.pos.z);
+      sp = Math.hypot(p.vel.x, p.vel.z);
+      if (sp > 0.5) this.yaw = Math.atan2(p.vel.x, p.vel.z); else this.yaw = Math.atan2(-Math.sin(p.yaw), -Math.cos(p.yaw));
+    }
+    this.mesh.position.copy(this.pos); this.mesh.rotation.y = this.yaw;
+    // 걸음: 속도에 따라 다리 흔들기(질주는 크게), 머리·꼬리 출렁임
+    this.gait += dt * (2 + sp * 0.55);
+    const amp = Math.min(0.9, sp * 0.06);
+    this.legs.forEach((l, i) => { const ph = this.gait + (i % 2 ? Math.PI : 0) + (i > 1 ? 0.6 : 0); l.hip.rotation.x = Math.sin(ph) * amp; l.knee.rotation.x = Math.max(0, -Math.cos(ph)) * amp * 1.3 * (i > 1 ? -1 : 1); });
+    this.head.rotation.x = 0.35 + Math.sin(this.gait * 2) * 0.08 * (amp + 0.2);
+    this.tail.rotation.x = 0.5 + Math.sin(this.gait * 2) * 0.2 * (amp + 0.1);
+    // 탄 사람: 안장 높이로 올리고 다리를 벌림
+    if (this.riding && p.rig) {
+      p.model.position.y = p.pos.y + 1.05 + Math.abs(Math.sin(this.gait)) * 0.08 * amp;
+      p.rig.legs.forEach((l, i) => { l.thigh.rotation.x = -1.15; l.thigh.rotation.z = (i ? 1 : -1) * 0.45; l.knee.rotation.x = 1.3; });
+    }
+  },
+};
 
 </script>
 <script>
@@ -3731,12 +4041,13 @@ const Player = {
       // 땅: 목표 속도로 맞춤. 빠르게 착지하면 조금 미끄러지며 감속
       // (피드백 2026-10-30: 지붕·좁은 곳에서 너무 미끄러짐 → 감속 2.5에서 7로, 방향키를 놓으면 16으로 바로 멈춤)
       const water = World.waterLevel(this.pos.x, this.pos.z), wading = water !== null && this.pos.y < water;
-      const speed = (shift ? 16 : 9) * (this.landT > 0 ? 0.3 : 1) * (wading ? 0.55 : 1);   // 물을 헤치면 느림
+      const riding = typeof Horse !== 'undefined' && Horse.riding;   // 22차 말: 보통 14m/s, Shift 질주 22m/s (약 80km/h)
+      const speed = (riding ? (shift ? 22 : 14) : (shift ? 16 : 9)) * (this.landT > 0 ? 0.3 : 1) * (wading ? 0.55 : 1);   // 물을 헤치면 느림
       if (wading && wish.lengthSq() > 0 && Math.random() < 0.3) Effects.gasPuff(this.pos.clone().setY(water), new THREE.Vector3(0, 1, 0), 0.6);
       const t = Math.min(1, (wish.lengthSq() === 0 ? 16 : Math.hypot(this.vel.x, this.vel.z) > 19 ? 7 : 12) * dt);
       this.vel.x += (wish.x * speed - this.vel.x) * t;
       this.vel.z += (wish.z * speed - this.vel.z) * t;
-      if (k.Space) { this.vel.y = 9; this.onGround = false; }
+      if (k.Space && !riding) { this.vel.y = 9; this.onGround = false; }
     } else {
       // 공중 방향 전환: 수평으로 날아가는 방향만 시선 쪽으로 휘어짐 (수평 속력 유지).
       // 위아래 속도는 건드리지 않음 → 위를 본다고 떨어지던 속도가 상승으로 바뀌지 않음
@@ -7688,7 +7999,9 @@ document.addEventListener('keydown', e => {
   if (!e.repeat) {
     if (e.code === 'KeyT') Shifter.transform();                    // 거인화 (게이지가 찼을 때)
     if (e.code === 'KeyQ') { if (Shifter.active) Shifter.dash(); else Player.dodge(); }   // Q: 회피(사람) · 대시(거인)
-    if (e.code === 'KeyF') Shifter.tryEat();                       // F: 쓰러진 9거인 사용자를 먹어 계승
+    if (e.code === 'KeyF') Shifter.tryEat();
+    if (e.code === 'KeyH' && typeof Horse !== 'undefined') Horse.key();          // 22차: 말 부르기·타기·내리기
+    if (e.code === 'KeyG' && typeof Field !== 'undefined') Field.enter();        // 22차: 가까운 장소로 들어가기                       // F: 쓰러진 9거인 사용자를 먹어 계승
     const num = /^(Digit|Numpad)([1-9])$/.exec(e.code);
     if (num) { if (Shifter.active) Shifter.useSkill(+num[2]); else Shifter.pickHeir(+num[2]); }   // 거인: 스킬 · 사람: 변신할 거인 고르기
     if (e.code === 'KeyE' && Shifter.active) Shifter.exit();       // 해제
@@ -7760,6 +8073,7 @@ function loop(now = performance.now()) {
     Sound.update();                                          // 바람·가스·땅울림 소리
     Game.update(dt);
     Effects.update(dt);
+    if (typeof Field !== 'undefined') { Field.update(dt); Horse.update(dt); }   // 22차: 1:1 들판 스트리밍 · 말
   }
   if (Game.dying) { Death.update(realDt); Effects.update(realDt); }   // 전사 연출: 거인에게 잡아먹히는 장면 (death.js)
   if (Game.dying) Death.camera(camera); else if (Shifter.active) Shifter.updateCamera(camera); else Player.updateCamera(camera);
