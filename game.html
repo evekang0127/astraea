@@ -1008,7 +1008,7 @@ const World = {
     // 먼 산맥 (지평선)
     const mountMat = new THREE.MeshStandardMaterial({ color: env.mountain || 0x7d93a8, flatShading: true, roughness: 1 });
     // 22차: 들판이 이어지는 장소는 가짜 지평선 산을 두지 않음 (걸어가면 산에 부딪혀서). 진짜 산맥은 3단계에서
-    const openField = typeof Field !== 'undefined' && Field.OPEN[this.mapId];
+    const openField = (typeof Field !== 'undefined' && Field.OPEN[this.mapId]) || (this.map && this.map.noMountains);   // 35차: 길의 세계는 산 없이 우주
     for (let i = 0; i < (openField ? 0 : 40); i++) {
       const a = i / 40 * Math.PI * 2 + rand(0.05);
       const r = 1300 + Math.random() * 500, h = 140 + Math.random() * 260;
@@ -3878,6 +3878,79 @@ Polish.add('mourning', W => {
   W.batch('railTop', W.unitBox, W.darkIron, -70, H + 2.4, 7.6, 1060, 0.12, 0.12, 0, null, 0, 0, { noShadow: true });
 });
 
+// ===== 35차: '길'의 세계 다시 만들기 (사용자 참고 이미지) =====
+// 두껍고 웅장한 흰 빛 줄기 → 위에서 우산처럼 넓게 퍼지는 청록·하늘색 빛 가지 수백 갈래, 줄기·가지 둘레 글로우(가산 혼합 스프라이트),
+// 하늘은 우주: 청록 은하수 띠(성운 덩어리) + 빽빽한 별. 가짜 지평선 산은 없앰
+Object.assign(Maps.paths, {
+  noMountains: true,
+  env: { fog: 0x0a1028, fogNear: 400, fogFar: 2600, skyTop: 0x02040e, skyHorizon: 0x14204a, sunGlow: 0xbfe8ff, discPow: 90, stars: true,
+         sunDir: [0.15, 0.85, -0.5], sunColor: 0xb8d8ff, sunI: 0.8, hemiSky: 0x8ab0e8, hemiGround: 0xd8d4c8, hemiI: 1.1, clouds: 0, exposure: 1.25 },
+  build(W) {
+    Kit3.prep(W);
+    const g = W.groundTexture('#e8e6f0', ['#dcdbe6', '#f2f1f8', '#c8cce0']); g.repeat.set(100, 100);
+    W.addGround(1400, new THREE.MeshLambertMaterial({ map: g }), 0);
+    const sand = new THREE.MeshLambertMaterial({ color: 0xe6e6f0 });
+    for (let k = 0; k < 40; k++) W.batch('pDune', W.unitSphere, sand, rand(600), 0, rand(600), 30 + Math.random() * 50, 2 + Math.random() * 4, 20 + Math.random() * 40, Math.random() * 6, null, 0, 0, { noShadow: true });
+    // 빛 번짐 텍스처 (가운데 하얗고 바깥으로 투명)
+    const glowTex = W.canvasTex(128, (c, s) => { const gr = c.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(200,245,255,.6)'); gr.addColorStop(1, 'rgba(120,220,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, s, s); });
+    const halo = (x, y, z, size, color, op) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); sp.position.set(x, y, z); sp.scale.set(size, size, 1); W.scene.add(sp); return sp; };
+    const TX = 0, TZ = -160, TH = 260;
+    // 줄기: 아래가 넓게 퍼진 두꺼운 흰 빛 기둥 (바닥 반지름 34m → 위 20m) + 겹친 옅은 바깥 껍질
+    const core = new THREE.MeshBasicMaterial({ color: 0xf4fdff });
+    const trunk = W.mesh(new THREE.CylinderGeometry(20, 34, TH, 24), core, TX, TH / 2, TZ);
+    const shell = new THREE.Mesh(new THREE.CylinderGeometry(26, 44, TH, 24), new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
+    shell.position.set(TX, TH / 2, TZ); W.scene.add(shell);
+    W.cylinders.push({ x: TX, z: TZ, r: 34, h: TH, block: true }); W.hookables.push(trunk);
+    for (let y = 10; y < TH; y += 22) halo(TX, y, TZ, 150 - y * 0.15, 0xbff0ff, 0.35);
+    // 줄기 밑동의 뿌리 빛줄기 (땅을 따라 퍼짐)
+    const lines = [];
+    for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2 + rand(0.2); lines.push([TX, 3, TZ, Math.cos(a), -0.05, Math.sin(a), 90 + Math.random() * 60, 3.5, 1]); }
+    // 가지: 꼭대기에서 수평으로 넓게 퍼지며 갈라짐 (8줄기 × 4갈래 × 3단계)
+    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + rand(0.25); lines.push([TX, TH - 10, TZ, Math.cos(a) * 0.9, 0.42, Math.sin(a) * 0.9, 150, 9, 3]); }
+    const branches = [], V = THREE.Vector3;
+    while (lines.length) {
+      const [x, y, z, dx, dy, dz, len, r, depth] = lines.pop();
+      const d = new V(dx, dy, dz).normalize(), ex = x + d.x * len, ey = y + d.y * len, ez = z + d.z * len;
+      branches.push([x, y, z, ex, ey, ez, r, depth]);
+      if (depth > 0) for (let k = 0; k < 4; k++) { const nd = new V(d.x + rand(1.1), d.y + rand(0.6) + 0.05, d.z + rand(1.1)).normalize(); lines.push([ex, ey, ez, nd.x, nd.y, nd.z, len * (0.62 + Math.random() * 0.15), r * 0.55, depth - 1]); }
+    }
+    const geo = new THREE.CylinderGeometry(0.6, 1, 1, 6), mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    const im = new THREE.InstancedMesh(geo, mat, branches.length); im.frustumCulled = false;
+    const o = new THREE.Object3D(), col = new THREE.Color(), up = new V(0, 1, 0);
+    branches.forEach(([x, y, z, ex, ey, ez, r, depth], i) => {
+      const v = new V(ex - x, ey - y, ez - z), L = v.length();
+      o.position.set((x + ex) / 2, (y + ey) / 2, (z + ez) / 2); o.quaternion.setFromUnitVectors(up, v.normalize()); o.scale.set(r, L, r); o.updateMatrix(); im.setMatrixAt(i, o.matrix);
+      im.setColorAt(i, col.setHex(depth >= 3 ? 0xf0fcff : depth === 2 ? 0xbff4ff : depth === 1 ? 0x7fe8e0 : 0x5fd8b8));   // 줄기 쪽은 흰색, 끝으로 갈수록 청록
+      if (depth >= 2 && i % 2 === 0) halo(ex, ey, ez, 60 + depth * 25, 0xa8f0ff, 0.22);
+    });
+    W.scene.add(im);
+    halo(TX, TH + 30, TZ, 520, 0xe8fbff, 0.55);                        // 꼭대기 큰 빛 덩어리
+    halo(TX, TH + 30, TZ, 900, 0x7fdcff, 0.25);
+    // 우주: 하늘 그룹(카메라 따라감)에 은하수 띠(청록 성운 덩어리)와 빽빽한 별
+    const sky = W.sky || W.scene;
+    const neb = W.canvasTex(128, (c, s) => { for (let k = 0; k < 10; k++) { const x = s * (0.25 + Math.random() * 0.5), y = s * (0.25 + Math.random() * 0.5), rr = s * (0.12 + Math.random() * 0.18); const gr = c.createRadialGradient(x, y, 0, x, y, rr); gr.addColorStop(0, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, s, s); } });
+    for (let k = 0; k < 70; k++) {
+      const t = k / 70, a = -1.1 + t * 2.4, el = 0.35 + Math.sin(t * Math.PI) * 0.75, R = 2000;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: neb, color: new THREE.Color().setHSL(0.45 + Math.random() * 0.08, 0.7, 0.55), transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      sp.position.set(Math.cos(a) * Math.cos(el) * R + rand(120), Math.sin(el) * R + rand(120), Math.sin(a) * Math.cos(el) * R * 0.6 - 900); sp.scale.set(420 + Math.random() * 380, 260 + Math.random() * 240, 1); sky.add(sp);
+    }
+    const N = 4000, pos = new Float32Array(N * 3), cols = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, r = 2100, y = Math.abs(u);
+      pos[i * 3] = Math.sqrt(1 - u * u) * Math.cos(th) * r; pos[i * 3 + 1] = y * r; pos[i * 3 + 2] = Math.sqrt(1 - u * u) * Math.sin(th) * r;
+      const b = 0.6 + Math.random() * 0.4; cols[i * 3] = b * (0.8 + Math.random() * 0.2); cols[i * 3 + 1] = b * 0.95; cols[i * 3 + 2] = b;
+    }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); sg.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    sky.add(new THREE.Points(sg, new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, vertexColors: true, fog: false, transparent: true, opacity: 0.95, depthWrite: false })));
+    // 떠다니는 빛 알갱이
+    // (점 묶음 하나로 그림 — 스프라이트 120개를 따로 그리면 그리기 횟수가 120번 늘었음)
+    const M2 = 160, mp = new Float32Array(M2 * 3);
+    for (let i = 0; i < M2; i++) { mp[i * 3] = rand(420); mp[i * 3 + 1] = 10 + Math.random() * 280; mp[i * 3 + 2] = TZ + rand(420); }
+    const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(mp, 3));
+    W.scene.add(new THREE.Points(mg, new THREE.PointsMaterial({ map: glowTex, size: 7, color: 0xc8f4ff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })));
+  },
+});
+
 </script>
 <script>
 // ===== 세계 지도 (22차): 맵 9개를 하나의 1:1 세계 안 "장소"로 =====
@@ -4056,6 +4129,124 @@ Atlas.applyNames();
     pa.before(b);
   }
 }
+
+</script>
+<script>
+// ===== 34차: 세계 지도 다시 배치 — 가로 전체 화면(왼쪽 큰 지도 + 오른쪽 장소 목록·정보·이동 버튼) =====
+// 지도에는 장소 점과 짧은 이름만(겹치던 구역 이름·바다 건너 목록은 오른쪽 목록으로 옮김). 시작 화면 오른쪽 작은 칸도 같은 함수를 씀(좁으면 목록이 지도 아래로).
+Object.assign(Atlas, {
+  short(n) { return n.replace(/ 구$/, '').replace(/^왕도 /, '').replace(' 수용 구역', '').replace('레이스 가 ', ''); },
+  svg(cur) {
+    const O = this.outline(), pts = O.map(([x, y]) => `${x.toFixed(0)},${(-y).toFixed(0)}`).join(' ');
+    const rings = this.WALLS.map(w => `<circle r="${w.r}" class="wall"/>`).join('');
+    const dist = this.DISTRICTS.map(([, w, a]) => { const r = this.WALLS.find(v => v.id === w).r; return `<circle cx="${Math.cos(a * Math.PI / 180) * r}" cy="${-Math.sin(a * Math.PI / 180) * r}" r="16" class="dist"/>`; }).join('');
+    const hide = { underground: 1 };                           // 미트라스와 같은 자리 → 이름은 목록에서
+    const marks = Object.entries(this.PLACES).filter(([, p]) => !p.overseas).map(([id, p]) => {
+      const [x, y] = p.pos, below = y < -350 && Math.abs(x) < 60;
+      return `<g class="pl${id === cur ? ' cur' : ''}" data-place="${id}" transform="translate(${x} ${-y})"><circle r="40" class="hit"/><circle r="20" class="dot"/>${id === cur ? '<circle r="34" class="here"/>' : ''}${hide[id] ? '' : `<text y="${below ? 70 : -32}" class="pn">${this.short(p.name)}</text>`}</g>`;
+    }).join('');
+    const sea = Array.from({ length: 3 }, (_, i) => `<polygon points="${pts}" class="contour" transform="scale(${1.05 + i * 0.05})"/>`).join('');
+    const grid = Array.from({ length: 9 }, (_, i) => `<path d="M${-1000 + i * 250} -1200 V1200 M-1000 ${-1200 + i * 300} H1000" class="grid"/>`).join('');
+    const wild = cur === 'wild' ? (() => { const [x, y] = this.wildPos(); return `<g transform="translate(${x} ${-y})"><circle r="34" class="here"/><circle r="12" fill="#FFFFFF" stroke="#000" stroke-width="4"/></g>`; })() : '';
+    return `<svg class="atlas" viewBox="-760 -1080 1520 2160" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      <defs><filter id="atlasPaper"><feTurbulence type="fractalNoise" baseFrequency=".006" numOctaves="3" seed="4"/><feColorMatrix values="0 0 0 0 .3  0 0 0 0 .3  0 0 0 0 .3  0 0 0 .5 0"/><feComposite in2="SourceGraphic" operator="in"/></filter></defs>
+      <rect x="-1000" y="-1200" width="2000" height="2400" fill="#141414"/>${grid}${sea}
+      <polygon points="${pts}" class="land"/><polygon points="${pts}" class="land" filter="url(#atlasPaper)"/>
+      <g class="mtn">${[[-150, -820], [40, -860], [220, -760], [-260, -700], [120, -680]].map(([x, y]) => `<path d="M${x - 40} ${y + 26} L${x} ${y - 30} L${x + 40} ${y + 26}"/>`).join('')}</g>
+      ${rings}${dist}<circle r="16" class="mitras"/>
+      <text x="0" y="-505" class="wn">MARIA</text><text x="0" y="-405" class="wn">ROSE</text><text x="0" y="-275" class="wn">SINA</text>
+      ${marks}${wild}<g class="pick" style="display:none"><circle r="22" fill="none" stroke="#D71A1C" stroke-width="8"/><path d="M-36 0 H36 M0 -36 V36" stroke="#D71A1C" stroke-width="6"/></g>
+      <text x="740" y="1060" class="sc">1:1 · 눈금 250km</text></svg>`;
+  },
+  css() {
+    if (document.getElementById('atlasCss2')) return;
+    const s = document.createElement('style'); s.id = 'atlasCss2';
+    s.textContent = `.atlas{display:block;width:100%;height:100%;max-height:100%;font-family:'Noto Serif KR',serif;cursor:crosshair;background:#141414}
+.atlas .grid{stroke:#333;stroke-width:2;fill:none}.atlas .contour{fill:none;stroke:#555;stroke-width:3;opacity:.6}
+.atlas .land{fill:#898989;stroke:#000;stroke-width:6}.atlas .mtn path{fill:none;stroke:#1a1a1a;stroke-width:6;opacity:.7}
+.atlas .wall{fill:none;stroke:#000;stroke-width:9}.atlas .dist{fill:#898989;stroke:#000;stroke-width:6}.atlas .mitras{fill:#D71A1C;stroke:#000;stroke-width:5}
+.atlas .wn{font:700 34px 'Cinzel',serif;fill:#1a1a1a;letter-spacing:6px;text-anchor:middle;opacity:.75}
+.atlas .pl{cursor:pointer}.atlas .pl .hit{fill:transparent}.atlas .pl .dot{fill:#D71A1C;stroke:#FFFFFF;stroke-width:6;transition:r .15s}
+.atlas .pl .pn{font-size:50px;font-weight:900;fill:#000;text-anchor:middle;paint-order:stroke;stroke:#FFFFFF;stroke-width:11px;pointer-events:none}
+.atlas .pl:hover .dot,.atlas .pl.sel .dot{fill:#FFFFFF;stroke:#D71A1C;r:26}.atlas .pl.sel .pn{fill:#D71A1C}
+.atlas .here{fill:none;stroke:#FFFFFF;stroke-width:6;stroke-dasharray:10 8;animation:atlasSpin 6s linear infinite}@keyframes atlasSpin{to{transform:rotate(360deg)}}
+.atlas .sc{font-size:34px;fill:#898989;text-anchor:end}
+.atlas-wrap{display:grid;gap:12px;height:100%;min-height:0}
+.atlas-wrap.wide{grid-template-columns:minmax(0,1fr) minmax(280px,360px)}
+.atlas-wrap .map{min-height:0;border:1px solid #797977;display:flex}
+.atlas-wrap .side{display:flex;flex-direction:column;gap:10px;min-height:0}
+.atlas-wrap .list{overflow:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px}
+.atlas-wrap h4{margin:8px 0 2px;font:700 11px 'Cinzel',serif;letter-spacing:3px;color:#898989}
+.atlas-wrap .it{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;cursor:pointer;font:600 13px 'Noto Serif KR',serif;color:#FFFFFF;background:#1a1a1a;border:1px solid #333;padding:7px 10px;border-radius:3px}
+.atlas-wrap .it small{color:#898989;font-size:11px;font-weight:400}.atlas-wrap .it:hover{border-color:#D71A1C}.atlas-wrap .it.sel{border-color:#D71A1C;background:#2a0a0a}.atlas-wrap .it.cur::after{content:'지금';font-size:10px;color:#000;background:#FFFFFF;padding:1px 6px;border-radius:8px}
+.atlas-info{padding:10px 12px;border:1px solid #797977;background:#000;font-size:12px;line-height:1.6;color:#FFFFFF;min-height:70px}
+.atlas-info b{display:block;color:#FFFFFF;font-size:15px}.atlas-info i{font-style:normal;color:#898989}
+.atlas-info .go{margin-top:8px;width:100%;cursor:pointer;font:700 14px 'Noto Serif KR',serif;letter-spacing:2px;padding:10px 16px;color:#FFFFFF;border:1px solid #D71A1C;background:#D71A1C}
+.atlas-info .go:hover{filter:brightness(1.15)}
+.atlas-wrap.compact .list{flex-direction:row;flex-wrap:wrap;max-height:90px}.atlas-wrap.compact .it{padding:4px 8px;font-size:11px}.atlas-wrap.compact .it small{display:none}.atlas-wrap.compact h4{display:none}.atlas-wrap.compact .map{height:320px}
+#atlasModal{position:fixed;inset:0;z-index:40;display:flex;background:rgba(0,0,0,.92);padding:2vh 2vw}#atlasModal[hidden]{display:none}
+#atlasModal .box{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0;border:1px solid #D71A1C;background:#000;padding:12px 14px}
+#atlasModal .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#atlasModal .top h3{margin:0;color:#FFFFFF;font:700 16px 'Noto Serif KR',serif;letter-spacing:3px}#atlasModal .top small{color:#898989;font-size:12px}
+#atlasModal .x{cursor:pointer;font:700 13px 'Noto Serif KR',serif;color:#FFFFFF;background:#1a1a1a;border:1px solid #797977;padding:8px 16px}#atlasModal .x:hover{border-color:#D71A1C}
+#atlasModal .host{flex:1;min-height:0}
+@media (max-width:760px){.atlas-wrap.wide{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}.atlas-wrap.wide .list{max-height:22vh}}`;
+    document.head.appendChild(s);
+    const old = document.getElementById('atlasCss'); if (old) old.remove();
+  },
+  // box: 넣을 곳, cur: 지금 장소, wide: 큰 창(오른쪽 목록) / 아니면 작은 칸(목록이 지도 아래)
+  mount(box, cur, wide = false) {
+    this.css();
+    const item = ([id, p]) => `<button type="button" class="it${id === cur ? ' cur' : ''}" data-place="${id}"><span>${p.name}${wide ? `<br><small>${p.where}</small>` : ''}</span></button>`;
+    const home = Object.entries(this.PLACES).filter(([, p]) => !p.overseas), over = Object.entries(this.PLACES).filter(([, p]) => p.overseas);
+    box.innerHTML = `<div class="atlas-wrap ${wide ? 'wide' : 'compact'}"><div class="map">${this.svg(cur)}</div>
+      <div class="side"><div class="atlas-info"></div><div class="list"><h4>PARADIS · 파라디 섬</h4>${home.map(item).join('')}<h4>BEYOND THE SEA · 바다 건너</h4>${over.map(item).join('')}</div></div></div>`;
+    const info = box.querySelector('.atlas-info'), here = cur === 'wild' ? { pos: this.wildPos() } : this.PLACES[cur], svg = box.querySelector('svg'), pick = box.querySelector('.pick');
+    const sel = id => box.querySelectorAll('[data-place]').forEach(g => g.classList.toggle('sel', g.dataset.place === id));
+    const show = id => {
+      const p = this.PLACES[id], km = here ? Math.round(this.km(here.pos, p.pos)) : 0;
+      const chs = typeof Story !== 'undefined' ? Story.chapters.map((c, i) => c.map === id ? `${i + 1}장 「${c.title}」` : '').filter(Boolean).join(', ') : '';
+      sel(id); pick.style.display = 'none';
+      info.innerHTML = `<b>${p.name}</b><i>${p.en} · ${p.where}</i><br>${id === cur ? '지금 있는 곳' : `여기서 ${km.toLocaleString()}km · ${this.travel(km)}${p.overseas ? ' (배로 건너감)' : ''}`}${chs ? `<br>스토리: ${chs}` : ''}${id === cur ? '' : '<button type="button" class="go">이곳으로 빠른 이동</button>'}`;
+      const go = info.querySelector('.go'); if (go) go.onclick = e => { e.stopPropagation(); this.travelTo(id); };
+    };
+    box.querySelectorAll('[data-place]').forEach(g => g.addEventListener('click', e => { e.stopPropagation(); show(g.dataset.place); }));
+    svg.addEventListener('click', e => {
+      if (e.target.closest('.pl')) return;
+      e.stopPropagation();
+      const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const q = pt.matrixTransform(svg.getScreenCTM().inverse()), p = [q.x, -q.y];
+      sel(null);
+      if (!this.inIsland(p[0], p[1])) { pick.style.display = 'none'; info.innerHTML = '<b>바다</b><i>섬 안쪽을 누르거나 오른쪽 목록에서 고르세요</i>'; return; }
+      pick.style.display = ''; pick.setAttribute('transform', `translate(${q.x} ${q.y})`);
+      const km = here ? Math.round(this.km(here.pos, p)) : 0;
+      info.innerHTML = `<b>선택한 지점 · ${this.zone(p)}</b><i>미트라스에서 ${Math.round(Math.hypot(p[0], p[1]))}km${p[1] > 560 ? ' · 북쪽 산맥' : ''}</i><br>여기서 ${km.toLocaleString()}km · ${this.travel(km)}<button type="button" class="go">이 지점으로 빠른 이동</button>`;
+      info.querySelector('.go').onclick = ev => { ev.stopPropagation(); this.warp(p); };
+    });
+    if (cur === 'wild') { const p = this.wildPos(); info.innerHTML = `<b>들판 · ${this.zone(p)}</b><i>미트라스에서 ${Math.round(Math.hypot(p[0], p[1]))}km · 지금 있는 곳</i><br>지도나 목록에서 갈 곳을 고르세요`; }
+    else if (this.PLACES[cur]) show(cur);
+  },
+  // 큰 세계 지도 창 (게임 중: 일시정지 버튼·M키 마지막 단계)
+  openModal() {
+    this.css();
+    let m = document.getElementById('atlasModal');
+    if (!m) { m = document.createElement('div'); m.id = 'atlasModal'; document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) this.closeModal(); }); }
+    m.innerHTML = `<div class="box"><div class="top"><h3>세계 지도 · 빠른 이동</h3><small>지도의 점·섬 아무 곳 또는 오른쪽 목록 → 이동 · M / Esc 닫기</small><button type="button" class="x">✕ 닫기</button></div><div class="host"></div></div>`;
+    m.querySelector('.x').onclick = () => this.closeModal();
+    this.mount(m.querySelector('.host'), World.mapId, true);
+    m.hidden = false;
+  },
+  isOpen() { const m = document.getElementById('atlasModal'); return !!(m && !m.hidden); },
+  closeModal(resume = false) {
+    const m = document.getElementById('atlasModal'); if (m) m.hidden = true;
+    if (resume && typeof requestPlay === 'function' && Game.started && !Game.over) requestPlay();
+  },
+});
+// 지도 창이 열려 있을 때: M·Esc로 닫고 게임으로 돌아감 (M은 미니맵 마지막 단계에서 열었으니 다시 누르면 닫힘)
+addEventListener('keydown', e => {
+  if (!Atlas.isOpen()) return;
+  if (e.code === 'KeyM' || e.code === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); Atlas.closeModal(true); if (typeof Minimap !== 'undefined') { Minimap.level = 0; Minimap.apply(); } }
+}, true);
 
 </script>
 <script>
@@ -8179,15 +8370,21 @@ const Minimap = {
     this.canvas = document.getElementById('minimap');
     this.ctx = this.canvas.getContext('2d');
     this.size = this.canvas.width;
-    try { const l = +localStorage.getItem('astraea-minimap'); if (l >= 0 && l < this.LEVELS.length) this.level = l; } catch (_) {}
+    try { const l = +localStorage.getItem('astraea-minimap'); if (l >= 0 && l < this.LEVELS.length - 1) this.level = l; } catch (_) {}
     this.apply();
   },
   // M: 다음 단계 (마지막 다음은 다시 근거리)
   toggle() {
     this.level = (this.level + 1) % this.LEVELS.length;
+    // 34차: 마지막 단계(섬 전체)는 작은 원 대신 큰 세계 지도 창을 열어 바로 빠른 이동 (다시 M·Esc = 닫고 게임으로)
+    if (this.LEVELS[this.level].world && typeof Atlas !== 'undefined' && Atlas.openModal) {
+      try { document.exitPointerLock(); } catch (_) {}
+      if (typeof setPaused === 'function') setPaused(true);   // 지도를 보는 동안 게임 멈춤 (마우스 잠금이 없는 환경 포함)
+      Atlas.openModal(); this.level = 0; this.apply(); return;
+    }
     try { localStorage.setItem('astraea-minimap', this.level); } catch (_) {}
     this.apply();
-    Game.toast(`미니맵 · ${this.LEVELS[this.level].name}${this.LEVELS[this.level].world ? ' · Esc → 빠른 이동' : ''}`, '#9fd8ff');
+    Game.toast(`미니맵 · ${this.LEVELS[this.level].name}${this.level === this.LEVELS.length - 2 ? ' · 한 번 더 M = 세계 지도·빠른 이동' : ''}`, '#9fd8ff');
     this.draw();
   },
   apply() {
@@ -9471,7 +9668,8 @@ const Story = {
 #modePick .ch small{font-size:12px;color:#898989;line-height:1.5}#modePick .ch.done{border-color:rgba(159,224,176,.5)}#modePick .ch.done::after{content:'완료';position:absolute;right:10px;top:10px;font-size:10px;color:#9fe0b0;border:1px solid rgba(159,224,176,.5);border-radius:10px;padding:1px 7px}
 #modePick .row{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:12px}#modePick .back{background:none;border:1px solid rgba(255,255,255,.2);color:#ddd;padding:9px 16px;border-radius:5px;cursor:pointer;font:inherit}
 #modePick .bar{height:8px;flex:1;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}#modePick .bar>div{height:100%;background:linear-gradient(90deg,#D71A1C,#ffdf8a)}
-#modePick[hidden],#cutFx[hidden]{display:none}   /* display:grid가 hidden을 덮어써 닫아도 화면에 남던 문제 */
+#modePick[hidden],#cutFx[hidden]{display:none}
+#modePick .mpX{position:absolute;top:16px;right:18px;z-index:5;cursor:pointer;font:700 14px 'Noto Serif KR',serif;color:#FFFFFF;background:#1a1a1a;border:1px solid #797977;padding:9px 18px;border-radius:3px}#modePick .mpX:hover{border-color:#D71A1C}   /* display:grid가 hidden을 덮어써 닫아도 화면에 남던 문제 */
 #modePick.shake .box{animation:mpShake .45s}
 @keyframes mpShake{0%,100%{transform:none}15%{transform:translate(-14px,9px)}30%{transform:translate(12px,-8px)}45%{transform:translate(-9px,6px)}60%{transform:translate(6px,-4px)}80%{transform:translate(-3px,2px)}}
 .fistFx{position:fixed;z-index:40;pointer-events:none;width:340px;margin-left:-170px}
@@ -9515,8 +9713,10 @@ const Story = {
   modal(html) {
     let m = document.getElementById('modePick');
     if (!m) { m = document.createElement('div'); m.id = 'modePick'; document.body.appendChild(m); }
-    m.innerHTML = `<div class="box">${html}</div>`;
+    m.innerHTML = `<button type="button" class="mpX">${html.includes('data-ch') ? '← 뒤로' : '✕ 닫기'}</button><div class="box">${html}</div>`;
     m.hidden = false;
+    // 34차: 어느 선택 화면이든 오른쪽 위 닫기/뒤로 (장 선택 → 모드 선택, 모드 선택 → 닫기)
+    m.querySelector('.mpX').onclick = () => { if (html.includes('data-ch')) this.openModes(); else this.close(); };
     return m;
   },
   close() { const m = document.getElementById('modePick'); if (m) m.hidden = true; },
@@ -10374,13 +10574,14 @@ const Music = {
   },
   scene() {
     if (!Game.started || Game.over) return 'menu';
+    if (typeof Story !== 'undefined' && Story.active && !Story.done) return 'free';   // 34차: 스토리도 자유 모드처럼 4곡 무작위
     if (typeof Story !== 'undefined' && Story.active) return Story.done ? 'menu' : 'story';
     return 'free';
   },
   wanted() {
     if (!this.loaded || Game.dying) return null;   // 먹히는 장면에서는 음악을 줄여 끔
     const sc = this.scene();
-    if (sc === 'story') {
+    if (sc === 'story' && false) {   // 34차: 스토리 장도 무작위 (사용자 요청)
       const id = Story.ch >= 7 ? 'twothousand' : Story.ch >= 5 ? 'devil' : 'attack';
       if (this.tracks[id]) return id;
       if (this.tracks.attack) return 'attack';
