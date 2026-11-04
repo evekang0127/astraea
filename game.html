@@ -4006,6 +4006,14 @@ const Field = {
       rock: inst(new THREE.ConeGeometry(1, 1, 7, 1), new THREE.MeshStandardMaterial({ color: 0x7a7266, flatShading: true, roughness: 1 }), 300),
       snow: inst(new THREE.ConeGeometry(1, 1, 7, 1), new THREE.MeshStandardMaterial({ color: 0xf2f0ea, flatShading: true, roughness: 0.9 }), 300),
       far: inst(new THREE.ConeGeometry(1, 1, 6, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }), 120),
+      // 31차 마을 디테일: 나무 골조·창문·굴뚝·울타리 말뚝·짚가리·우물
+      trim: inst(box, new THREE.MeshLambertMaterial({ color: 0x3a2618 }), 12000),
+      win: inst(box, new THREE.MeshLambertMaterial({ color: 0x24303a }), 5000),
+      chim: inst(box, new THREE.MeshLambertMaterial({ color: 0x7a7068 }), 900),
+      post: inst(box, new THREE.MeshLambertMaterial({ color: 0x5a4030 }), 9000),
+      hay: inst(new THREE.CylinderGeometry(1, 1, 1, 10), new THREE.MeshLambertMaterial({ color: 0xd2b45c }), 700),
+      hayTop: inst(new THREE.ConeGeometry(1, 1, 10), new THREE.MeshLambertMaterial({ color: 0xc8a850 }), 700),
+      well: inst(new THREE.CylinderGeometry(1, 1, 1, 12), new THREE.MeshLambertMaterial({ color: 0x8e877a }), 120),
     };
     for (const k of ['leaf', 'house', 'roof', 'crop', 'far']) this.I[k].instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.I[k].count === 0 ? this.I[k].instanceMatrix.count * 3 : 0), 3);
     this.wallWin = null; this.lastChunk = ''; this.t = 0; this.out = false;
@@ -4039,7 +4047,7 @@ const Field = {
   gen(ix, iy) {
     const C = this.CH, X0 = ix * C, Y0 = iy * C, R = this.rng(ix, iy), r = Math.hypot(X0 + C / 2, Y0 + C / 2) / 1000;   // 미트라스에서 km
     const inWalls = r < 480, forest = this.noise((X0 + C / 2) / 3200, (Y0 + C / 2) / 3200);
-    const out = { trees: [], houses: [], crops: [], roads: [], water: [], sand: [], peaks: [] };
+    const out = { trees: [], houses: [], crops: [], roads: [], water: [], sand: [], peaks: [], hay: [], wells: [] };
     // 바다·모래사장: 100m 칸마다 섬 윤곽 안팎을 봄 (섬 밖 = 바다, 바다와 붙은 땅 = 모래)
     let anyLand = false;
     for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
@@ -4065,6 +4073,8 @@ const Field = {
     // 마을: 벽 안 8%, 벽 밖 3%(폐촌)
     if (!mountain && out.water.length === 0 && forest < 0.62 && R() < (inWalls ? 0.08 : 0.03)) {
       const cx = X0 + 100 + R() * (C - 200), cy = Y0 + 100 + R() * (C - 200), n = 6 + Math.floor(R() * 8);
+      out.wells.push([cx, cy]);
+      for (let i = 0, k = 2 + Math.floor(R() * 4); i < k; i++) { const a = R() * Math.PI * 2, d = 70 + R() * 40; out.hay.push([cx + Math.cos(a) * d, cy + Math.sin(a) * d, 0.9 + R() * 0.5]); }
       for (let i = 0; i < n; i++) {
         const a = R() * Math.PI * 2, d = 12 + R() * 55;
         out.houses.push([cx + Math.cos(a) * d, cy + Math.sin(a) * d, 6 + R() * 5, 7 + R() * 6, 4.5 + R() * 3, R() * Math.PI, [0xa8513a, 0x8a4630, 0x5a5c66, 0x9a6040][Math.floor(R() * 4)]]);
@@ -4139,10 +4149,12 @@ const Field = {
       const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
       for (const f of [[0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6], [0, 4, 5], [0, 5, 1], [3, 2, 6], [3, 6, 7], [0, 3, 7], [0, 7, 4], [1, 5, 6], [1, 6, 2]]) for (const i of f) tris.push(...v[i]);
     };
-    const ch = { trees: [], houses: [], crops: [], roads: [], water: [], sand: [], peaks: [] };
+    const ch = { trees: [], houses: [], crops: [], roads: [], water: [], sand: [], peaks: [], hay: [], wells: [] };
     for (const [X, Y, s] of g.trees) { const p = keep(X, Y); if (!p) continue; const h = 12 * s; ch.trees.push([p[0], p[1], s]); addBox(p[0] - 0.45, 0, p[1] - 0.45, p[0] + 0.45, h * 0.62, p[1] + 0.45); }
     for (const [X, Y, w, d, h, rot, col] of g.houses) { const p = keep(X, Y); if (!p) continue; ch.houses.push([p[0], p[1], w, d, h, rot, col]); const e = Math.max(w, d) * 0.5 * 0.8; addBox(p[0] - e, 0, p[1] - e, p[0] + e, h, p[1] + e); }
     for (const c of g.crops) { const p = keep(c[0], c[1]); if (p) ch.crops.push([p[0], p[1], ...c.slice(2)]); }
+    ch.hay = []; for (const [X, Y, s] of g.hay) { const p = keep(X, Y); if (p) { ch.hay.push([p[0], p[1], s]); addBox(p[0] - 2 * s, 0, p[1] - 2 * s, p[0] + 2 * s, 2.6 * s, p[1] + 2 * s); } }
+    ch.wells = []; for (const [X, Y] of g.wells) { const p = keep(X, Y); if (p) { ch.wells.push(p); addBox(p[0] - 1.4, 0, p[1] - 1.4, p[0] + 1.4, 1, p[1] + 1.4); } }
     for (const rd of g.roads) { const [x, z] = this.toLocal(rd[0], rd[1]); ch.roads.push([x, z, rd[2], rd[3]]); }
     ch.water = g.water.map(([X, Y]) => this.toLocal(X, Y)); ch.sand = g.sand.map(([X, Y]) => this.toLocal(X, Y));
     ch.peaks = g.peaks.map(([X, Y, r, h]) => [...this.toLocal(X, Y), r, h]);
@@ -4182,6 +4194,25 @@ const Field = {
     for (const [x, z, w, d, h, rot, c] of ch.houses) {
       o.rotation.set(0, rot, 0, 'XYZ'); o.position.set(x, h / 2, z); o.scale.set(w, h, d); put('house', 0xe8dcc4);
       o.rotation.set(Math.PI / 4, rot, 0, 'YXZ'); o.position.set(x, h, z); o.scale.set(w + 0.8, d * 0.72, d * 0.72); put('roof', c); o.rotation.order = 'XYZ';
+      // 하프팀버 골조: 네 모서리 기둥 + 앞뒤 가로보 2줄 + 앞면 가새, 문, 창문(앞뒤 2개씩), 굴뚝
+      const cs = Math.cos(rot), sn = Math.sin(rot), L = (lx, ly, lz) => [x + lx * cs + lz * sn, ly, z - lx * sn + lz * cs];
+      const bar = (k, lx, ly, lz, sx, sy, sz, rz = 0) => { const [px, py, pz] = L(lx, ly, lz); o.rotation.set(0, rot, rz); o.position.set(px, py, pz); o.scale.set(sx, sy, sz); put(k); };
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) bar('trim', sx * w / 2, h / 2, sz * d / 2, 0.35, h, 0.35);
+      for (const sz of [-1, 1]) { bar('trim', 0, h * 0.5, sz * (d / 2 + 0.05), w, 0.3, 0.12); bar('trim', 0, h - 0.2, sz * (d / 2 + 0.05), w, 0.3, 0.12); }
+      bar('trim', -w / 4, h * 0.25, -(d / 2 + 0.06), 0.25, h * 0.55, 0.1, 0.6); bar('trim', w / 4, h * 0.75, -(d / 2 + 0.06), 0.25, h * 0.5, 0.1, -0.6);
+      bar('trim', 0, 1.1, -(d / 2 + 0.08), 1.3, 2.2, 0.12);                                 // 문
+      for (const sz of [-1, 1]) for (const lx of [-w / 3.2, w / 3.2]) bar('win', lx, h * 0.68, sz * (d / 2 + 0.07), 1.1, 1.2, 0.1);
+      bar('chim', w * 0.28, h + d * 0.32, d * 0.12, 0.9, 2.4, 0.9);
+    }
+    for (const [x, z, s] of (ch.hay || [])) { o.rotation.set(0, 0, 0); o.position.set(x, 1.3 * s, z); o.scale.set(2 * s, 2.6 * s, 2 * s); put('hay'); o.position.set(x, 3.4 * s, z); o.scale.set(2.2 * s, 1.8 * s, 2.2 * s); put('hayTop'); }
+    for (const [x, z] of (ch.wells || [])) { o.rotation.set(0, 0, 0); o.position.set(x, 0.5, z); o.scale.set(1.4, 1, 1.4); put('well'); for (const s of [-1, 1]) { o.position.set(x + s * 1.2, 1.8, z); o.scale.set(0.15, 2.6, 0.15); put('post'); } o.position.set(x, 3.2, z); o.scale.set(3, 0.2, 1.8); put('trim'); }
+    // 울타리: 밭 넷 중 하나는 둘레에 8m 간격 말뚝
+    let ci = 0;
+    for (const [x, z, w, d, rot] of ch.crops) {
+      if (ci++ % 4) continue;
+      const cs = Math.cos(rot), sn = Math.sin(rot);
+      for (let t = -w / 2; t <= w / 2; t += 8) for (const sz of [-1, 1]) { const lx = t, lz = sz * d / 2; o.rotation.set(0, rot, 0); o.position.set(x + lx * cs + lz * sn, 0.7, z - lx * sn + lz * cs); o.scale.set(0.18, 1.4, 0.18); put('post'); }
+      for (let t = -d / 2; t <= d / 2; t += 8) for (const sx of [-1, 1]) { const lx = sx * w / 2, lz = t; o.rotation.set(0, rot, 0); o.position.set(x + lx * cs + lz * sn, 0.7, z - lx * sn + lz * cs); o.scale.set(0.18, 1.4, 0.18); put('post'); }
     }
     for (const [x, z, w, d, rot, c] of ch.crops) { o.rotation.set(0, rot, 0); o.position.set(x, 0.03, z); o.scale.set(w, 0.06, d); put('crop', c); }
     for (const [x, z] of ch.water) { o.rotation.set(0, 0, 0); o.position.set(x, 0.1, z); o.scale.set(100.5, 0.1, 100.5); put('sea'); }
@@ -4194,7 +4225,7 @@ const Field = {
     ch.buf = {};
     for (const k in B) ch.buf[k] = { m: new Float32Array(B[k].m), c: B[k].c.length ? new Float32Array(B[k].c) : null, n: B[k].m.length / 16 };
   },
-  CAP: { trunk: 5000, leaf: 15000, house: 900, roof: 900, crop: 900, road: 400, sea: 1700, sand: 900, rock: 300, snow: 300 },
+  CAP: { trunk: 5000, leaf: 15000, house: 900, roof: 900, crop: 900, road: 400, sea: 1700, sand: 900, rock: 300, snow: 300, trim: 12000, win: 5000, chim: 900, post: 9000, hay: 700, hayTop: 700, well: 120 },
   LEAF_NEAR: 1100,   // 이보다 먼 칸의 나무는 잎 덩어리 1개
   // 활성 칸의 물체를 InstancedMesh에 다시 채움 (배열 복사)
   fill() {
