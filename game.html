@@ -7579,3 +7579,302 @@ function loop(now = performance.now()) {
 setTimeout(() => { bootWorld(); bootFinish(); loop(); }, 60);
 
 </script>
+<script>
+// ===== 스토리 모드 (13차): 애니 줄거리를 9장으로 따라가는 목표형 진행. 자유 모드(기존)는 그대로 =====
+// 출격을 누르면 모드 선택 → 스토리는 장 선택. 장마다 맞는 맵이 다르면 그 맵으로 다시 열고(sessionStorage) 바로 이어 시작
+// 대사·설명은 줄거리를 따라 새로 쓴 문장. 진행률(전체 %)은 화면 위쪽, 목표는 그 아래, 대사는 아래쪽 상자
+const Story = {
+  ready: false, active: false, ch: -1, step: 0, stepT: 0, stepKills: 0, done: false, lines: [], lineT: 0,
+  KEY: 'astraea-story-pending',
+
+  // 장: map, powers(이 장에서 쓸 수 있는 거인), allies, steps[{t: 목표 종류, ...}]
+  // 목표 종류: kill(n) · boss(kind, at) · survive(sec) · transform(kind) · reach(at, r) · rumble
+  chapters: [
+    { title: '시간시나 함락', year: '845년', map: 'gateward', powers: [], allies: 2,
+      brief: '백 년의 평화가 깨지는 날. 성벽 위로 거대한 얼굴이 나타난다.',
+      steps: [
+        { t: 'kill', n: 6, pure: 6, text: '성문으로 몰려드는 거인 6마리 토벌',
+          say: [['한네스', '성벽 너머가 조용하지 않다. 훈련병들, 와이어를 확인해라!'], ['에렌', '저게 뭐야… 성벽보다 큰 놈이 있잖아!']] },
+        { t: 'survive', sec: 40, pure: 7, boss: { kind: 'colossal', at: [0, 70] }, text: '초대형 거인이 성문을 걷어찼다 · 40초 동안 버티며 피난을 엄호',
+          say: [['아르민', '성문이 뚫렸어! 사람들이 아직 안쪽에 있어!'], ['미카사', '에렌, 혼자 앞서가지 마. 내가 같이 간다.']] },
+        { t: 'boss', kind: 'armored', at: [0, 120], pure: 4, text: '내문으로 돌진하는 갑옷 거인 저지',
+          say: [['한네스', '저 거인은 포탄을 튕겨 낸다… 목덜미를 노려!']] },
+      ] },
+    { title: '트로스트 구 공방전', year: '850년', map: 'embergate', powers: ['attack'], allies: 4,
+      brief: '훈련병 졸업 다음 날, 초대형 거인이 다시 나타나 외문을 부순다.',
+      steps: [
+        { t: 'kill', n: 10, pure: 9, text: '구역 안으로 들어온 거인 10마리 토벌',
+          say: [['아르민', '보급탑이 거인에게 둘러싸였어. 가스가 바닥나기 전에 뚫어야 해!'], ['미카사', '싸워서 이기면 살아남는다. 간다.']] },
+        { t: 'transform', kind: 'attack', pure: 4, text: '[T] 진격의 거인으로 변신',
+          say: [['에렌', '…몸 안에서 뭔가 깨어난다. 이 힘이라면!'], ['픽시스 사령관', '그 거인이 우리 편이라면, 큰 바위로 외문을 막아 보게.']] },
+        { t: 'reach', at: [0, 175], r: 26, pure: 5, text: '바위를 짊어지고 부서진 외문(빛 기둥)까지 이동',
+          say: [['아르민', '에렌! 정신 차려, 문을 막는 거야!']] },
+        { t: 'kill', n: 5, pure: 6, text: '구역에 남은 거인 5마리 소탕',
+          say: [['리바이', '뒤처리는 우리가 한다. 꼬마들은 숨이나 돌려.']] },
+      ] },
+    { title: '제57회 벽외조사', year: '850년', map: 'skyroot', powers: ['attack'], allies: 5,
+      brief: '조사병단이 벽 밖으로 나선다. 대열 오른쪽이 정체불명의 거인에게 무너진다.',
+      steps: [
+        { t: 'kill', n: 5, pure: 6, text: '대열을 습격한 거인 5마리 토벌',
+          say: [['엘빈 단장', '전 병력, 거대수의 숲으로. 나무 위에서 대기한다.']] },
+        { t: 'reach', at: [0, -40], r: 30, pure: 3, boss: { kind: 'female', at: [0, 220] }, text: '여성형 거인을 숲 한가운데(빛 기둥)까지 유인',
+          say: [['아르민', '저 거인은 사람이 들어 있어. 누군가를 찾고 있어!'], ['리바이', '돌아보지 말고 달려라.']] },
+        { t: 'boss', kind: 'female', at: null, pure: 2, text: '여성형 거인 토벌',
+          say: [['엘빈 단장', '지금이다, 사격! 놈을 묶어라!']] },
+      ] },
+    { title: '스토헤스 구 습격', year: '850년', map: 'ironhold', powers: ['attack'], allies: 4,
+      brief: '여성형 거인의 정체를 밝혀내기 위한 작전. 도시 한가운데서 두 거인이 맞붙는다.',
+      steps: [
+        { t: 'transform', kind: 'attack', pure: 2, text: '[T] 진격의 거인으로 변신',
+          say: [['아르민', '정체가 드러났어. 이제 도망치게 둘 수 없어.']] },
+        { t: 'boss', kind: 'female', at: [60, 60], pure: 2, text: '거리에서 여성형 거인 격파',
+          say: [['에렌', '배신자… 끝까지 쫓아가 주마!']] },
+      ] },
+    { title: '우트가르드 성', year: '850년', map: 'moonfall', powers: [], allies: 3,
+      brief: '벽 안쪽에서 거인이 나타났다. 무너진 고성에서 밤을 새워 버텨야 한다.',
+      steps: [
+        { t: 'survive', sec: 90, pure: 12, text: '해가 뜰 때까지 고성 방어 (90초)',
+          say: [['게르게르', '탑으로 올라가! 놈들이 밤인데도 움직인다!'], ['유미르', '…이대로 여기서 끝낼 순 없지.']] },
+        { t: 'kill', n: 8, pure: 10, text: '성벽에 매달린 거인 8마리 토벌',
+          say: [['크리스타', '모두 살아서 돌아가는 거야!']] },
+      ] },
+    { title: '시간시나 탈환전', year: '850년', map: 'gateward', powers: ['attack'], allies: 6,
+      brief: '월 마리아를 되찾는 밤. 갑옷·짐승·초대형이 기다리고 있다.',
+      steps: [
+        { t: 'boss', kind: 'armored', at: [0, 90], pure: 3, text: '갑옷 거인 격파',
+          say: [['엘빈 단장', '구멍을 막는다. 그리고 지하실로 간다.'], ['에렌', '이번엔 내가 끝낸다!']] },
+        { t: 'boss', kind: 'beast', at: [80, 300], pure: 5, text: '바위를 던지는 짐승 거인 격파',
+          say: [['리바이', '짐승은 내가 맡는다. 길만 열어 줘라.']] },
+        { t: 'boss', kind: 'colossal', at: [-60, 120], pure: 2, text: '성벽 위로 떨어진 초대형 거인 격파',
+          say: [['아르민', '열기를 버틸 수 있으면… 목덜미까지 닿을 수 있어.']] },
+      ] },
+    { title: '레벨리오 습격', year: '854년', map: 'ashward', powers: ['attack'], allies: 6,
+      brief: '바다 건너 마레의 수용 구역. 에렌이 무대 위에서 전쟁을 시작한다.',
+      steps: [
+        { t: 'transform', kind: 'attack', pure: 3, text: '[T] 진격의 거인으로 변신',
+          say: [['에렌', '여기서 멈출 생각은 없어.']] },
+        { t: 'boss', kind: 'warhammer', at: [40, 80], pure: 3, text: '전퇴의 거인 격파',
+          say: [['미카사', '조사병단, 비행선으로 집결한다. 그 전에 저 결정을 부숴!']] },
+        { t: 'boss', kind: 'jaw', at: [-60, 40], pure: 2, text: '턱 거인 격파',
+          say: [['장', '빠르다… 놓치지 마!']] },
+        { t: 'boss', kind: 'cart', at: [70, -60], pure: 2, text: '차력 거인 격파',
+          say: [['한지 분대장', '포대를 등에 진 녀석이야. 사거리 안으로 파고들어!']] },
+      ] },
+    { title: '땅울림', year: '854년', map: 'ironhold', powers: ['founding'], allies: 0,
+      brief: '시조의 힘이 깨어난다. 벽 속에 잠든 초대형 거인들이 일어선다.',
+      steps: [
+        { t: 'transform', kind: 'founding', pure: 3, text: '[T] 시조의 거인으로 변신',
+          say: [['에렌', '벽 속에 잠든 거인들아, 이제 일어나라.']] },
+        { t: 'rumble', pure: 6, text: '[1] 땅울림 발동',
+          say: [['아르민', '…벽이, 전부 무너지고 있어.']] },
+        { t: 'survive', sec: 12, pure: 0, text: '땅울림이 땅을 밟고 지나간다',
+          say: [['미카사', '에렌… 어디까지 가려는 거야.']] },
+      ] },
+    { title: '천지의 싸움', year: '854년', map: 'saltmere', powers: ['attack'], allies: 8,
+      brief: '마지막 항구. 연합군이 시조의 거인 앞에 선다.',
+      steps: [
+        { t: 'kill', n: 10, pure: 10, text: '척추에서 쏟아지는 거인 10마리 토벌',
+          say: [['한지 분대장', '여기서 막지 못하면 세상이 끝나. 비행정이 올 때까지 버텨!'], ['라이너', '…싸우자. 이번엔 같은 편으로.']] },
+        { t: 'boss', kind: 'founding', at: [0, 300], pure: 4, text: '시조의 거인 목덜미까지 올라가 격파',
+          say: [['아르민', '에렌, 우리가 끝낼게.'], ['미카사', '에렌, 이제 쉬어도 돼.']] },
+      ] },
+  ],
+
+  // ---------- 저장 ----------
+  progress() { const d = Account.load(); return Math.max(0, d.storyDone || 0); },   // 완료한 장 수
+  saveProgress(n) { if (n > this.progress()) Account.save({ storyDone: n }); },
+  pending() { try { return JSON.parse(sessionStorage.getItem(this.KEY) || 'null'); } catch (_) { return null; } },
+
+  // ---------- 모드·장 선택 화면 ----------
+  initUI() {
+    const css = document.createElement('style');
+    css.textContent = `
+#modePick{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(4,6,12,.78);backdrop-filter:blur(3px)}
+#modePick .box{width:min(880px,94vw);max-height:88vh;overflow:auto;padding:26px;background:#0c1220;border:1px solid rgba(211,166,37,.45);border-radius:6px;color:#ebe0cc;font-family:inherit}
+#modePick h2{margin:0 0 4px;color:#e0c070;letter-spacing:2px}#modePick p.sub{margin:0 0 18px;color:#a99a7a;font-size:13px}
+#modePick .modes{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+#modePick .card{text-align:left;padding:18px;background:rgba(255,255,255,.03);border:1px solid rgba(211,166,37,.35);border-radius:5px;color:inherit;cursor:pointer;font:inherit}
+#modePick .card:hover{border-color:#e0c070;background:rgba(224,192,112,.08)}#modePick .card b{display:block;font-size:18px;color:#f0d890;margin-bottom:6px}
+#modePick .card small{color:#a99a7a;line-height:1.5}
+#modePick .chs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
+#modePick .ch{position:relative;text-align:left;padding:12px;background:rgba(255,255,255,.03);border:1px solid rgba(211,166,37,.3);border-radius:4px;color:inherit;cursor:pointer;font:inherit;min-height:92px}
+#modePick .ch:disabled{opacity:.35;cursor:not-allowed}#modePick .ch b{display:block;color:#f0d890;margin:2px 0 4px}#modePick .ch i{font-style:normal;font-size:11px;color:#c8b27a}
+#modePick .ch small{font-size:11px;color:#a99a7a}#modePick .ch.done::after{content:'완료';position:absolute;right:8px;top:8px;font-size:10px;color:#9fe0b0}
+#modePick .row{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px}#modePick .back{background:none;border:1px solid rgba(255,255,255,.2);color:#ddd;padding:8px 14px;border-radius:4px;cursor:pointer;font:inherit}
+#modePick .bar{height:8px;flex:1;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}#modePick .bar>div{height:100%;background:linear-gradient(90deg,#c9a646,#ffdf8a)}
+#storyHud{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:6;min-width:340px;max-width:70vw;text-align:center;pointer-events:none;color:#f3e6cf;text-shadow:0 1px 3px #000}
+#storyHud .t{font-size:12px;letter-spacing:1px;color:#e0c070}#storyHud .pb{height:7px;margin:5px 0;background:rgba(0,0,0,.45);border:1px solid rgba(224,192,112,.5);border-radius:4px;overflow:hidden}
+#storyHud .pb>div{height:100%;background:linear-gradient(90deg,#c9a646,#ffe39a);transition:width .4s}#storyHud .o{font-size:14px;font-weight:bold}
+#storySay{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);z-index:7;max-width:min(680px,90vw);padding:10px 16px;background:rgba(8,10,16,.82);border-left:3px solid #e0c070;color:#f3e6cf;font-size:15px;pointer-events:none}
+#storySay b{color:#e0c070;margin-right:8px}
+#storyEnd{position:fixed;inset:0;z-index:31;display:grid;place-items:center;background:rgba(4,6,12,.8)}
+#storyEnd .box{padding:30px 34px;background:#0c1220;border:1px solid #e0c070;border-radius:6px;color:#ebe0cc;text-align:center;max-width:560px}
+#storyEnd h2{color:#f0d890;margin:6px 0 10px}#storyEnd button{margin:14px 6px 0;padding:10px 18px;background:#c9a646;border:0;border-radius:4px;color:#1b1206;font:inherit;font-weight:bold;cursor:pointer}#storyEnd button.alt{background:none;border:1px solid rgba(255,255,255,.3);color:#ddd}`;
+    document.head.appendChild(css);
+    // 출격 버튼: 모드를 아직 안 골랐으면 선택 화면을 먼저 (게임을 시작하는 원래 클릭보다 먼저 가로챔)
+    document.getElementById('overlay').addEventListener('click', e => {
+      if (!e.target.closest('[data-view]') || Game.over || this.ready) return;
+      e.stopImmediatePropagation();
+      const p = this.pending();
+      if (p && p.map === World.mapId) { this.ready = true; this.begin(p.ch); requestPlay(); return; }   // 맵을 바꿔 다시 연 직후: 바로 그 장
+      this.openModes();
+    }, true);
+    const p = this.pending(), deploy = document.querySelector('.deploy [data-view]');
+    if (p && p.map === chosenMap() && deploy) deploy.textContent = `스토리 ${p.ch + 1}장 시작`;
+  },
+  modal(html) {
+    let m = document.getElementById('modePick');
+    if (!m) { m = document.createElement('div'); m.id = 'modePick'; document.body.appendChild(m); }
+    m.innerHTML = `<div class="box">${html}</div>`;
+    m.hidden = false;
+    return m;
+  },
+  close() { const m = document.getElementById('modePick'); if (m) m.hidden = true; },
+  openModes() {
+    const done = this.progress(), pct = Math.round(done / this.chapters.length * 100);
+    const m = this.modal(`<h2>모드 선택</h2><p class="sub">언제든 메인 메뉴에서 다시 고를 수 있습니다.</p>
+      <div class="modes">
+        <button class="card" data-m="free"><b>자유 모드</b><small>지금 맵에서 끝없이 몰려오는 거인과 싸웁니다. 9거인 사용자를 먹어 힘을 계승하고, 마음대로 변신하고 날아다니세요.</small></button>
+        <button class="card" data-m="story"><b>스토리 모드</b><small>시간시나 함락부터 천지의 싸움까지, 애니 줄거리를 9장으로 따라갑니다. 장마다 목표가 있고 진행률이 화면 위에 표시됩니다.<br><br>진행 ${pct}% · ${done}/${this.chapters.length}장 완료</small></button>
+      </div>`);
+    m.querySelector('[data-m=free]').onclick = () => { this.close(); this.ready = true; try { sessionStorage.removeItem(this.KEY); } catch (_) {} requestPlay(); };
+    m.querySelector('[data-m=story]').onclick = () => this.openChapters();
+  },
+  openChapters() {
+    const done = this.progress(), pct = Math.round(done / this.chapters.length * 100);
+    const m = this.modal(`<h2>스토리 모드</h2><p class="sub">완료한 장 다음까지 열립니다. 이미 끝낸 장은 다시 할 수 있어요.</p>
+      <div class="chs">${this.chapters.map((c, i) => `<button class="ch${i < done ? ' done' : ''}" data-ch="${i}" ${i > done ? 'disabled' : ''}>
+        <i>${i + 1}장 · ${c.year}</i><b>${c.title}</b><small>${c.brief}</small></button>`).join('')}</div>
+      <div class="row"><button class="back">← 모드 선택</button><span style="font-size:12px;color:#c8b27a">전체 ${pct}%</span><div class="bar"><div style="width:${pct}%"></div></div></div>`);
+    m.querySelector('.back').onclick = () => this.openModes();
+    m.querySelectorAll('[data-ch]').forEach(b => b.onclick = () => this.choose(+b.dataset.ch));
+  },
+  // 장 고르기: 맵이 다르면 그 맵으로 다시 열고, 같으면 바로 시작
+  choose(i) {
+    const c = this.chapters[i];
+    try { sessionStorage.setItem(this.KEY, JSON.stringify({ ch: i, map: c.map })); sessionStorage.setItem('map', c.map); } catch (_) {}
+    if (c.map !== World.mapId) { location.hash = c.map; location.reload(); return; }
+    this.close(); this.ready = true; this.begin(i); requestPlay();
+  },
+
+  // ---------- 진행 ----------
+  begin(i) {
+    const c = this.chapters[i];
+    this.active = true; this.ch = i; this.done = false;
+    Nine.selection = 'classic';                       // 평소 출현은 일반 거인, 9거인은 장의 보스로만
+    Shifter.owned = new Set(c.powers); if (c.powers.length) Shifter.kind = c.powers[0];
+    Shifter.charge = 0;
+    Allies.setCount(c.allies);
+    this.hud = document.getElementById('storyHud') || Object.assign(document.createElement('div'), { id: 'storyHud' });
+    this.say = document.getElementById('storySay') || Object.assign(document.createElement('div'), { id: 'storySay', hidden: true });
+    document.body.append(this.hud, this.say);
+    Game.toast(`${i + 1}장 · ${c.title}`, '#f0d890');
+    this.queue([['', c.brief]]);
+    this.startStep(0);
+  },
+  startStep(k) {
+    const c = this.chapters[this.ch], s = c.steps[k];
+    this.step = k; this.stepT = 0; this.stepKills = Game.kills; this.boss = null;
+    if (s.say) this.queue(s.say);
+    if (s.t === 'transform' || s.t === 'rumble') Shifter.charge = 1;
+    const b = s.t === 'boss' ? { kind: s.kind, at: s.at } : s.boss;
+    if (b) this.boss = this.spawnBoss(b.kind, b.at);
+    if (s.t === 'boss' && !b.at && this.lastBoss && !this.lastBoss.dead) this.boss = this.lastBoss;   // 앞 단계에서 나온 보스를 그대로
+    if (s.t === 'reach') this.markT = 0;
+  },
+  spawnBoss(kind, at) {
+    if (!at) {   // 앞에서 나온 같은 보스가 살아 있으면 그대로
+      const alive = Titans.list.find(t => t.boss && !t.dead && t.kind === kind);
+      if (alive) return (this.lastBoss = alive);
+      const f = Player.forward(); at = [Player.pos.x + f.x * 160, Player.pos.z + f.z * 160];
+    }
+    const t = new Titan(Titans.scene, at[0], at[1], Nine.defs[kind].height, false, kind);
+    t.boss = true; t.rallyT = 999;   // 보스는 처음부터 플레이어를 쫓음
+    Titans.list.push(t); Titans._hooksDirty = true;
+    Effects.lightning(t.pos.clone(), Math.min(t.height, 120));
+    Game.toast(`${Nine.defs[kind].name} 출현!`, '#ff9a6a');
+    return (this.lastBoss = t);
+  },
+  queue(lines) { this.lines.push(...lines); if (!this.lineT) this.nextLine(); },
+  nextLine() {
+    const l = this.lines.shift();
+    if (!l) { this.say.hidden = true; this.lineT = 0; return; }
+    this.say.innerHTML = l[0] ? `<b>${l[0]}</b>${l[1]}` : `<i>${l[1]}</i>`;
+    this.say.hidden = false; this.lineT = 2.2 + l[1].length * 0.07;
+  },
+  // 목표 진행도 0~1
+  stepFrac() {
+    const s = this.chapters[this.ch].steps[this.step];
+    switch (s.t) {
+      case 'kill': return Math.min(1, (Game.kills - this.stepKills) / s.n);
+      case 'survive': return Math.min(1, this.stepT / s.sec);
+      case 'boss': return this.boss && this.boss.dead ? 1 : 0;
+      case 'transform': return Shifter.active && Shifter.kind === s.kind ? 1 : 0;
+      case 'rumble': return Shifter.rumble ? 1 : 0;
+      case 'reach': { const me = Shifter.active ? Shifter.titan.pos : Player.pos; return Math.hypot(me.x - s.at[0], me.z - s.at[1]) < s.r ? 1 : 0; }
+    }
+    return 0;
+  },
+  objectiveText() {
+    const s = this.chapters[this.ch].steps[this.step];
+    if (s.t === 'kill') return `${s.text} (${Math.min(s.n, Game.kills - this.stepKills)}/${s.n})`;
+    if (s.t === 'survive') return `${s.text} · ${Math.max(0, Math.ceil(s.sec - this.stepT))}초`;
+    return s.text;
+  },
+  // 전체 진행률: 완료한 장 + 지금 장의 진행 (단계 수로 나눔)
+  percent() {
+    const c = this.chapters[this.ch], f = (this.step + (this.done ? 1 : this.stepFrac())) / c.steps.length;
+    return Math.min(100, Math.floor((this.ch + Math.min(1, f)) / this.chapters.length * 1000) / 10);
+  },
+  update(dt) {
+    if (!this.active || this.done) return;
+    const c = this.chapters[this.ch], s = c.steps[this.step];
+    this.stepT += dt;
+    if (this.lineT && (this.lineT -= dt) <= 0) this.nextLine();
+    if (s.t === 'reach') {   // 목적지 빛 기둥
+      if ((this.markT -= dt) <= 0) { this.markT = 1.4; Effects.pillar({ x: s.at[0], y: 0, z: s.at[1] }, 260, s.r * 0.5, 0xffe39a, 1.3); }
+    }
+    if (this.stepFrac() >= 1) {
+      if (this.step + 1 < c.steps.length) { Effects.screenFlash(0xffe39a, 0.25); Game.toast('목표 달성', '#ffe39a'); this.startStep(this.step + 1); }
+      else this.finish();
+    }
+    const hud = `<div class="t">스토리 ${this.ch + 1}장 · ${c.title} · 전체 ${this.percent()}%</div><div class="pb"><div style="width:${this.percent()}%"></div></div><div class="o">${this.done ? '장 완료' : '목표: ' + this.objectiveText()}</div>`;
+    if (this.hud._h !== hud) { this.hud.innerHTML = hud; this.hud._h = hud; }
+  },
+  finish() {
+    this.done = true;
+    const i = this.ch, last = i + 1 >= this.chapters.length;
+    this.saveProgress(i + 1);
+    try { sessionStorage.removeItem(this.KEY); } catch (_) {}
+    Effects.screenFlash(0xffe39a, 0.4);
+    setTimeout(() => {
+      setPaused(true); document.getElementById('pause').hidden = true;
+      const e = document.createElement('div'); e.id = 'storyEnd';
+      e.innerHTML = `<div class="box"><div style="color:#c8b27a;font-size:12px;letter-spacing:2px">${last ? '스토리 완료 · 100%' : `${i + 1}장 완료 · 전체 ${Math.round((i + 1) / this.chapters.length * 100)}%`}</div>
+        <h2>${this.chapters[i].title}</h2><p>${last ? '긴 싸움이 끝났다. 벽 너머의 바다에도 평화가 찾아왔다.' : `다음: ${i + 2}장 · ${this.chapters[i + 1].title}`}</p>
+        ${last ? '' : '<button data-a="next">다음 장</button>'}<button class="alt" data-a="menu">메인 메뉴</button></div>`;
+      document.body.appendChild(e);
+      e.querySelector('[data-a=menu]').onclick = () => location.reload();
+      const n = e.querySelector('[data-a=next]');
+      if (n) n.onclick = () => { const c = this.chapters[i + 1]; try { sessionStorage.setItem(this.KEY, JSON.stringify({ ch: i + 1, map: c.map })); sessionStorage.setItem('map', c.map); } catch (_) {} location.hash = c.map; location.reload(); };
+    }, 1500);
+  },
+};
+
+// ---------- 게임에 연결 ----------
+{
+  const baseUpdate = Game.update, baseTarget = Game.titanTarget;
+  Game.update = function (dt) { baseUpdate.call(this, dt); Story.update(dt); };
+  // 스토리에서는 단계가 정한 수만큼만 일반 거인 (보스는 따로)
+  Game.titanTarget = function () {
+    if (!Story.active) return baseTarget.call(this);
+    const s = Story.chapters[Story.ch].steps[Story.step];
+    return Story.done ? 0 : (s.pure ?? 6) + Titans.list.filter(t => t.boss && !t.dead).length;
+  };
+  // 스토리에서는 쓰러진 9거인 사용자가 떨어지지 않음 (힘은 장마다 정해짐), 계승도 저장하지 않음
+  const baseDrop = Shifter.dropUser;
+  Shifter.dropUser = function (t) { if (!Story.active) baseDrop.call(this, t); };
+  Story.initUI();
+}
+
+</script>
