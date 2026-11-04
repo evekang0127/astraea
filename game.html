@@ -4008,6 +4008,11 @@ const Field = {
       far: inst(new THREE.ConeGeometry(1, 1, 6, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }), 120),
       // 31차 마을 디테일: 나무 골조·창문·굴뚝·울타리 말뚝·짚가리·우물
       trim: inst(box, new THREE.MeshLambertMaterial({ color: 0x3a2618 }), 12000),
+      // 31차 성벽 링 디테일: 꼭대기 갓돌 띠·레일 2줄·고정포(포가+포신)
+      wcap: inst(box, new THREE.MeshLambertMaterial({ color: 0xcfc8b6 }), 160),
+      wrail: inst(box, new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 }), 320),
+      wcar: inst(box, new THREE.MeshLambertMaterial({ color: 0x4a3324 }), 900),
+      wgun: inst(new THREE.CylinderGeometry(1, 1, 1, 8), new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 }), 900),
       win: inst(box, new THREE.MeshLambertMaterial({ color: 0x24303a }), 5000),
       chim: inst(box, new THREE.MeshLambertMaterial({ color: 0x7a7068 }), 900),
       post: inst(box, new THREE.MeshLambertMaterial({ color: 0x5a4030 }), 9000),
@@ -4256,7 +4261,9 @@ const Field = {
     this.wallKey = key;
     if (this.wallWin) { W.walls = W.walls.filter(w => !w.field); const i = W.hookables.indexOf(this.wallWin); if (i >= 0) W.hookables.splice(i, 1); this.wallWin = null; }
     const I = this.I.wall; I.count = 0;
-    if (!ring) { I.instanceMatrix.needsUpdate = true; return; }
+    const D = { wcap: this.I.wcap, wrail: this.I.wrail, wcar: this.I.wcar, wgun: this.I.wgun }; for (const k in D) D[k].count = 0;
+    const fin = () => { for (const k in D) D[k].instanceMatrix.needsUpdate = true; };
+    if (!ring) { I.instanceMatrix.needsUpdate = true; fin(); return; }
     const R = ring.r * 1000, SEG = 300, H = 50, T = 30, o = new THREE.Object3D(), tris = [];
     const n = Math.ceil(10000 / SEG);   // 3단계: ±10km (먼 쪽은 안개에 묻혀 지평선까지 이어진 것처럼)
     for (let i = -n; i < n; i++) {
@@ -4266,6 +4273,17 @@ const Field = {
       if (Math.hypot(cx, cz) < this.placeR + 20) continue;     // 장소 자체 성벽이 있는 곳은 비움
       const len = Math.hypot(x1 - x0, z1 - z0) + 0.5, tx = (x1 - x0) / len, tz = (z1 - z0) / len;
       o.position.set(cx, H / 2, cz); o.rotation.set(0, -Math.atan2(tz, tx), 0); o.scale.set(len, H, T); o.updateMatrix(); I.setMatrixAt(I.count++, o.matrix);
+      // 꼭대기: 갓돌 띠 + 바깥쪽 레일 2줄 + 50m마다 고정포 (포신은 바깥=섬 중심 반대쪽을 향함)
+      const ry = -Math.atan2(tz, tx), put = (m, x, y, z, sx, sy, sz, rx = 0) => { o.position.set(x, y, z); o.rotation.set(rx, ry, 0, 'YXZ'); o.scale.set(sx, sy, sz); o.updateMatrix(); m.setMatrixAt(m.count++, o.matrix); o.rotation.order = 'XYZ'; };
+      const [wx, wy] = this.toWorld(cx, cz), ox = wx / Math.hypot(wx, wy), oy = wy / Math.hypot(wx, wy), onx = ox, onz = -oy;   // 바깥 방향(게임 좌표)
+      const side = (-tz * onx + tx * onz) >= 0 ? 1 : -1, nX = -tz * side, nZ = tx * side;
+      put(D.wcap, cx, H + 0.4, cz, len, 0.8, T + 1.2);
+      for (const off of [T / 2 - 4, T / 2 - 7]) put(D.wrail, cx + nX * off, H + 0.95, cz + nZ * off, len, 0.15, 0.35);
+      for (let t = -len / 2 + 25; t < len / 2; t += 50) {
+        const px = cx + tx * t + nX * (T / 2 - 5.5), pz = cz + tz * t + nZ * (T / 2 - 5.5);
+        put(D.wcar, px, H + 1.6, pz, 2.6, 1.3, 3.4);
+        o.position.set(px + nX * 2.4, H + 2.4, pz + nZ * 2.4); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(nX, 0.12, nZ).normalize()); o.scale.set(0.5, 5, 0.5); o.updateMatrix(); D.wgun.setMatrixAt(D.wgun.count++, o.matrix);
+      }
       W.walls.push({ cx, cz, tx, tz, half: len / 2, thick: T / 2, h: H, y0: 0, field: true });
       // 와이어 판정 사본 (성벽 양면·윗면)
       const nx = -tz * T / 2, nz = tx * T / 2;
@@ -4273,7 +4291,7 @@ const Field = {
       for (const [a, b] of [[0, 1], [2, 3]]) tris.push(q[a][0], 0, q[a][1], q[b][0], 0, q[b][1], q[b][0], H, q[b][1], q[a][0], 0, q[a][1], q[b][0], H, q[b][1], q[a][0], H, q[a][1]);
       tris.push(q[0][0], H, q[0][1], q[1][0], H, q[1][1], q[2][0], H, q[2][1], q[0][0], H, q[0][1], q[2][0], H, q[2][1], q[3][0], H, q[3][1]);
     }
-    I.instanceMatrix.needsUpdate = true;
+    I.instanceMatrix.needsUpdate = true; fin();
     if (tris.length) {
       const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(tris, 3)); geo.computeBoundingSphere(); geo.computeBoundingBox();
       this.wallWin = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })); this.wallWin.userData.wall = true; this.wallWin.updateMatrixWorld(); W.hookables.push(this.wallWin);
