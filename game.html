@@ -4204,7 +4204,8 @@ const Nine = {
       for(let j=0;j<3;j++)bar(t.body,[-1.1,7.2-j*.7,.8],[1.1,7.2-j*.7,.8],.03,dark);
     }
     if(founder)for(const s of [-1,1])for(let j=0;j<3;j++)bar(t.head,[s*(.5+j*.2),.6,-.2],[s*(.7+j*.25),-2.2-j*.5,-.6],.09,hair);   // long hanging hair
-    if(!quad && !founder && !beast)t.head.scale.set(.86,.95,.9);
+    if(id==='colossal')this.colossalHead(t,{part,ell,bar,skin,muscle,bone,dark,eye,mat});
+    else if(!quad && !founder && !beast)t.head.scale.set(.86,.95,.9);
     if(id==='female')this.femaleDetail(t,ell,bar,skin,muscle,dark);
     t.napeMat=mat(0xb5523f,.6);
     t.nape=ell(t.body,[.6,.5,.3],0,quad?4.25:founder?8.3:8.6,quad?1.7:founder?.2:-.55,t.napeMat);
@@ -4237,7 +4238,7 @@ const Nine = {
       }
     }
     if(id==='colossal'){                                                   // 초대형: 어깨·팔꿈치·무릎·등줄기의 뜨거운 증기 구멍(빛남), 허벅지 힘줄
-      const vent=mat(0xff8a4a,.5);vent.emissive.setHex(0xff3d10);t.materials.push(vent);
+      const vent=mat(0xff8a4a,.5);vent.emissive.setHex(0xff3d10);t.materials.push(vent);t.ventMat=vent;
       for(const s of [-1,1]){
         ell(s<0?t.armL:t.armR,[.5,.28,.5],0,.42,0,vent,true);
         ell(s<0?t.elbowL:t.elbowR,[.26,.26,.26],0,0,-.1,vent,true);
@@ -4358,6 +4359,52 @@ const Nine = {
     const k=p.pos.clone().sub(center);k.y=0;k.normalize().multiplyScalar(15);k.y=6;
     Game.damagePlayer(t.kind==='attack'?12:t.kind==='colossal'?30:22,k);
   },
+  // 초대형 얼굴(애니 참고): 피부 없는 붉은 근육 위 옅은 살색 띠(민머리 정수리·굵은 눈두덩·콧등·광대·턱끝),
+  // 깊고 어두운 눈구멍, 입술 없이 볼까지 드러난 이빨 두 줄, 세로 근섬유가 보이는 볼과 턱, 길게 내려온 아래턱, 굵은 목 근육
+  colossalHead(t,k){
+    const {part,ell,bar,muscle,dark,eye,mat}=k, h=t.head;
+    for(const o of [...h.children])h.remove(o);                      // 공통 얼굴을 지우고 새로 조각
+    t.parts=t.parts.filter(o=>o.parent);t.detail=t.detail.filter(o=>o.parent);
+    const pale=mat(0xe6cdb2,.75), deep=mat(0x7e2620,.7), tooth=mat(0xf1ead6,.5);
+    pale.map=this.texture;deep.map=this.texture;t.materials.push(pale,deep,tooth);
+    h.position.y=10.2;h.scale.set(1.08,1,1);   // 넓은 얼굴, 키의 약 1/6 (성벽 위로 얼굴과 어깨가 드러나는 비율)
+    ell(h,[.88,.9,.92],0,.36,-.1,pale);                               // 민머리 이마·정수리
+    ell(h,[.86,.86,.86],0,-.3,.08,muscle);                            // 근육 얼굴 바탕 (아래 얼굴은 붉은 근육)
+    ell(h,[.86,.21,.34],0,.43,.7,pale);                               // 굵은 눈두덩
+    for(const s of [-1,1]){
+      const sock=ell(h,[.26,.17,.13],s*.35,.2,.84,dark);sock.rotation.z=s*.18;   // 깊은 눈구멍
+      ell(h,[.06,.055,.04],s*.35,.2,.93,eye,true);                     // 작은 눈동자
+      const under=ell(h,[.27,.1,.14],s*.42,.01,.84,pale);under.rotation.z=-s*.25;  // 눈 밑 살색 띠
+      const cheek=ell(h,[.36,.52,.28],s*.48,-.42,.76,muscle);cheek.rotation.z=s*.12; // 볼 근육 (크게 드러남)
+      for(let j=0;j<5;j++)bar(h,[s*(.3+j*.075),-.05,.93-j*.04],[s*(.33+j*.08),-.84,.86-j*.05],.022,deep);  // 볼·턱 세로 근섬유
+      bar(h,[s*.8,.42,.3],[s*.72,-.72,.42],.11,pale,false);           // 관자놀이에서 턱으로 내려오는 살색 띠
+      bar(h,[s*.74,-.25,.12],[s*.3,-1.02,.66],.075,pale,false);        // 아래턱 뼈 선
+      const cb=ell(h,[.22,.1,.14],s*.62,.06,.68,pale,true);cb.rotation.z=s*.4;  // 광대
+      ell(h,[.11,.25,.1],s*.94,.02,-.02,muscle);                         // 작은 귀
+      ell(h,[.05,.03,.03],s*.07,-.2,1.1,dark,true);                      // 콧구멍
+    }
+    ell(h,[.12,.32,.14],0,.12,.96,pale);ell(h,[.19,.12,.16],0,-.13,1.03,pale);   // 콧등·코끝
+    ell(h,[.66,.09,.1],0,-.52,.93,dark);                               // 이 사이 어두운 입
+    ell(h,[.64,.06,.13],0,-.33,.94,deep);ell(h,[.6,.06,.12],0,-.72,.91,deep);   // 잇몸 근육
+    // 이빨 두 줄 32개: 볼까지 둥글게 이어짐 (한 번에 그림)
+    const G=this.geo, teeth=new THREE.InstancedMesh(G.box,tooth,32), o=new THREE.Object3D();
+    for(let i=0;i<32;i++){
+      const a=((i%16)/15-.5)*1.9, up=i<16;
+      o.position.set(Math.sin(a)*.66,up?-.44:-.6,Math.cos(a)*.5+.45);o.rotation.set(0,a,0);
+      o.scale.set(.075,up?.13:.12,.05);o.updateMatrix();teeth.setMatrixAt(i,o.matrix);
+    }
+    teeth.castShadow=false;h.add(teeth);
+    ell(h,[.42,.36,.32],0,-.95,.58,muscle);                            // 길게 내려온 턱 근육
+    ell(h,[.17,.2,.14],0,-1.0,.82,pale);                               // 턱끝 살색
+    for(let j=0;j<4;j++)bar(h,[(j-1.5)*.1,-.78,.86],[(j-1.5)*.12,-1.22,.66],.025,deep);
+    // 굵은 목: 목 기둥 + 귀 뒤에서 쇄골로 내려오는 근육 + 승모근
+    part(t.body,'limb',[.62,1.7,.58],0,9.1,0,muscle);
+    for(const s of [-1,1]){
+      bar(t.body,[s*.62,9.95,-.05],[s*.24,8.15,.62],.17,muscle,false);
+      bar(t.body,[s*.35,9.75,-.35],[s*1.5,8.2,-.25],.2,muscle,false);
+      for(let j=0;j<3;j++)bar(t.body,[s*(.15+j*.15),9.8,.4],[s*(.12+j*.18),8.3,.6],.035,deep);
+    }
+  },
   // 여성형(애니): 흰 피부 위 드러난 근육 띠(어깨·아래팔·종아리·옆구리·쇄골), 속눈썹
   femaleDetail(t,ell,bar,skin,muscle,dark){
     for(const s of [-1,1]){
@@ -4380,18 +4427,33 @@ const Nine = {
     ell(t.head,[.55,.5,.4],0,0,-.92,hair);
   },
   rally(at,radius,secs){for(const e of Titans.list)if(!e.dead&&Math.hypot(e.pos.x-at.x,e.pos.z-at.z)<radius)e.rallyT=Math.max(e.rallyT||0,secs);},
-  // Colossal: every 9 s vents steam for 2.5 s. Soldiers within reach are blown outward and their wires torn off this titan
+  // 초대형(애니): 근육을 태워 고온 증기를 대량으로 뿜음. 9초마다, 그리고 와이어로 붙거나 목덜미 높이로 다가오면 알아채고(지능)
+  // 0.8초 열을 모았다가(증기 구멍이 밝아짐) 3초 분출: 가까운 병사는 날아가고 0.5초마다 데며 와이어가 끊김, 목덜미 베기는 막힘(Titans.trySlash)
   colossalVent(t,dt,p){
-    t.ventT=(t.ventT??6)-dt;
-    if(t.ventT<=0){t.ventT=9;t.ventOn=2.5;}
+    t.ventT=(t.ventT??6)-dt;t.ventReact=(t.ventReact||0)-dt;
+    const dx=p.pos.x-t.pos.x,dz=p.pos.z-t.pos.z,d=Math.hypot(dx,dz),reach=t.height*.5+14,shifted=typeof Shifter!=='undefined'&&Shifter.active;
+    const latched=!shifted&&p.hooks&&p.hooks.some(h=>h&&h.obj.userData.titan===t);
+    if(!(t.ventOn>0)&&!(t.ventCharge>0)&&(t.ventT<=0||(t.ventReact<=0&&(latched||(!shifted&&d<reach&&p.pos.y>t.height*.45))))){
+      t.ventCharge=.8;t.ventReact=7;
+      if(d<reach*1.6&&!shifted)Game.toast('초대형 거인이 열을 모은다 · 떨어져!','#ffb27a');
+    }
+    if(t.ventMat)t.ventMat.emissiveIntensity=t.ventCharge>0?1+(.8-t.ventCharge)*4:t.ventOn>0?2.6+Math.sin(performance.now()/60)*.6:1;
+    if(t.ventCharge>0){
+      if(Math.random()<.5)Effects.corpseSteam(t.pos.clone().setY(t.height*(.4+Math.random()*.5)),t.scale*.4);
+      if((t.ventCharge-=dt)<=0){
+        t.ventOn=3;t.ventT=9;t.scaldT=0;
+        Effects.shockwave(t.pos.clone().setY(t.height*.55),reach,0xfff0e0,.7);
+        if(typeof Sound!=='undefined')Sound.play('steam',t.pos,1.2,260);
+      }
+      return;
+    }
     if(!(t.ventOn>0))return;
     t.ventOn-=dt;
-    for(let i=0;i<3;i++)Effects.corpseSteam(t.pos.clone().setY(t.height*(.25+Math.random()*.7)),t.scale*.5);
-    if(typeof Shifter!=='undefined'&&Shifter.active)return;
-    const dx=p.pos.x-t.pos.x,dz=p.pos.z-t.pos.z,d=Math.hypot(dx,dz);
-    if(d>t.height*.45+12||p.pos.y>t.height*1.1||d<.01)return;
-    p.vel.x+=dx/d*70*dt;p.vel.z+=dz/d*70*dt;p.vel.y+=18*dt;
-    if(p.hooks&&p.hooks.some(h=>h&&h.obj.userData.titan===t))p.releaseHook();
+    for(let i=0;i<4;i++)Effects.corpseSteam(t.pos.clone().setY(t.height*(.25+Math.random()*.75)),t.scale*.55);
+    if(shifted||d>reach||p.pos.y>t.height*1.15||d<.01)return;
+    p.vel.x+=dx/d*90*dt;p.vel.z+=dz/d*90*dt;p.vel.y+=22*dt;
+    if(latched)p.releaseHook();
+    if((t.scaldT-=dt)<=0){t.scaldT=.5;Game.damagePlayer(4,new THREE.Vector3(dx/d*6,4,dz/d*6));}
   },
   // Cart: back cannon fires every 4.5 s at the player's position (shell flies 0.9 s; dodge by moving)
   cartCannon(t,dt,p,dist){
@@ -4987,6 +5049,8 @@ const Titans = {
   trySlash(player) {
     const n = this.nearestNape(player);
     if (!n || n.dist > this.napeReach(n.titan, player)) return;
+    // 초대형의 고열 증기가 뿜어지는 동안은 칼이 목덜미에 닿지 않음
+    if (n.titan.ventOn > 0) { if (!(this._steamMsg > Game.time)) { this._steamMsg = Game.time + 1.5; Game.toast('고열 증기 · 칼이 목덜미에 닿지 않는다', '#ffb27a'); } return; }
     // 회전 베기: 사거리 +1.5m, 즉사 확률 +10%
     this.strike(n.titan, { spin: player.spinT > 0, speed: player.vel.length(), mul: Game.damageMul(), source: 'player' });
   },
@@ -4996,6 +5060,8 @@ const Titans = {
   // opts: spin, speed(m/s), mul(피해 배율), bonus(즉사 확률 추가), source('player'|'ally'|'shifter'), credit(동료 소속 이름)
   strike(titan, opts = {}) {
     if (titan.dead) return false;
+    // 스토리 장면용 보스(성벽 너머 초대형·돌파하는 갑옷·숲의 여성형)는 애니처럼 쓰러뜨릴 수 없음
+    if (titan.storyShield) { if (opts.source === 'player' && !(this._shieldMsg > Game.time)) { this._shieldMsg = Game.time + 2; Game.toast('지금은 쓰러뜨릴 수 없다 · 목표를 따르자', '#cfd8e6'); } return false; }
     titan.hits++;
     const roll = this.rollHit(!!opts.spin, opts.speed || 0, opts.bonus || 0);
     let label, dmg;
@@ -6668,6 +6734,7 @@ const Sound = {
     hit(o, t) { this.tone(o, t, 0.18, 'sine', 150, 60, 0.75); this.noise(o, t, 0.5, 'highpass', 2000, 5200, 0.5, 0.22); },              // 목덜미 타격 + 증기
     kill(o, t) { this.tone(o, t, 0.45, 'sine', 115, 38, 1); this.noise(o, t, 0.35, 'lowpass', 700, 100, 1, 0.6); this.noise(o, t + 0.05, 1.4, 'highpass', 1500, 6000, 0.4, 0.35); },
     punch(o, t) { this.tone(o, t, 0.3, 'sine', 95, 40, 0.95); this.noise(o, t, 0.25, 'lowpass', 900, 140, 0.8, 0.6); },                // 거인 주먹: 쿵
+    steam(o, t) { this.noise(o, t, 2.8, 'highpass', 2600, 900, 0.6, 0.75); this.noise(o, t, 2.2, 'lowpass', 500, 140, 0.8, 0.5); },     // 초대형 고열 증기 분출
     gas(o, t) { this.noise(o, t, 0.38, 'highpass', 1700, 4200, 0.7, 0.45); },                                                         // 가스 분사: 푸슉
     land(o, t, k) { this.tone(o, t, 0.15, 'sine', 120, 55, 0.4 * k); this.noise(o, t, 0.2, 'lowpass', 700, 150, 0.8, 0.35 * k); },
     step(o, t, k) { this.tone(o, t, 0.45, 'sine', 75 / Math.sqrt(Math.max(1, k)), 28, 0.9); this.noise(o, t, 0.3, 'lowpass', 320, 55, 0.8, 0.45); },   // 거인 발소리: 둥
@@ -7581,7 +7648,8 @@ setTimeout(() => { bootWorld(); bootFinish(); loop(); }, 60);
 <script>
 // ===== 스토리 모드 (13·14차): 애니 줄거리를 9장으로 따라가는 목표형 진행. 자유 모드(기존)는 그대로 =====
 // 출격을 누르면 모드 선택 → 스토리는 장 선택. 고르면 거인 주먹이 카드를 부수고 시작. 장 맵이 다르면 그 맵으로 다시 열고 이어 시작
-// 대사·설명은 줄거리를 따라 새로 쓴 문장(원작 대사 인용 아님). 진행률(전체 %)은 화면 위쪽, 목표는 그 아래, 대사는 아래쪽 상자
+// 대사·설명은 줄거리를 따라 새로 쓴 문장. 1장 첫 내레이션만 사용자가 넣어 달라고 한 원작 명대사(컷신 가운데 큰 글씨, opening).
+// 15차: 장 시작·목표 전환마다 컷신(기울어진 만화 칸 + 인물 초상 + 자막, 아래쪽 컷신 부분). 고른 뒤에도 모드를 바꿀 수 있음 — 일시정지 화면 '모드 변경', 시작 화면 '다른 모드 고르기'. 진행률(전체 %)은 화면 위쪽, 목표는 그 아래, 대사는 아래쪽 상자
 // 14차 고증 수정: 1장은 초대형 거인이 먼저 나타나 성문을 차고 사라짐 → 거인 유입 → 갑옷 거인이 내문을 뚫고 사라짐(둘 다 쓰러뜨리지 못함),
 // 2장도 초대형 출현으로 시작, 3장 여성형은 숲에서 포획 → 비명으로 거인을 불러 탈출, 6장은 갑옷 → 초대형(낙하 폭발) → 짐승 순
 const Story = {
@@ -7593,6 +7661,7 @@ const Story = {
   // 보스 설정(boss: {...} 또는 boss 단계): still(제자리에 서 있음) · vanish(n초 뒤 증기 속에 사라짐) · kick([x,z] 성문 차기 폭발) · drop(나타날 때 큰 폭발)
   chapters: [
     { title: '시간시나 함락', year: '845년', map: 'gateward', powers: [], allies: 2,
+      opening: '그날 인류는 떠올렸다.<br>녀석들에게 지배당하고 있던 공포를…',
       brief: '백 년 동안 아무 일도 없던 성벽. 그날, 성벽보다 큰 얼굴이 나타났다.',
       steps: [
         { t: 'survive', sec: 16, pure: 0, boss: { kind: 'colossal', at: [0, 44], still: true, vanish: 15, kick: [0, 12] }, text: '성벽 너머에 초대형 거인 출현 · 성문이 부서진다',
@@ -7727,6 +7796,8 @@ const Story = {
 #storyHud .pb>div{height:100%;background:linear-gradient(90deg,#c9a646,#ffe39a);transition:width .4s}#storyHud .o{font-size:14px;font-weight:bold}
 #storySay{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);z-index:7;max-width:min(680px,90vw);padding:10px 16px;background:rgba(8,10,16,.82);border-left:3px solid #e0c070;color:#f3e6cf;font-size:15px;pointer-events:none}
 #storySay b{color:#e0c070;margin-right:8px}
+#modeSwitch{margin-top:8px;width:100%}.deploy .switch{display:block;margin:8px auto 0;background:none;border:1px solid rgba(240,216,144,.35);color:#e8d39a;padding:6px 14px;border-radius:4px;cursor:pointer;font:inherit;font-size:12px}
+#modePick .cur{position:absolute;top:10px;left:10px;z-index:1;padding:2px 9px;border-radius:10px;background:#c9a646;color:#1b1206;font-size:11px;font-weight:bold}
 #storyEnd{position:fixed;inset:0;z-index:31;display:grid;place-items:center;background:rgba(4,6,12,.8)}
 #storyEnd .box{padding:30px 34px;background:#0c1220;border:1px solid #e0c070;border-radius:6px;color:#ebe0cc;text-align:center;max-width:560px}
 #storyEnd h2{color:#f0d890;margin:6px 0 10px}#storyEnd button{margin:14px 6px 0;padding:10px 18px;background:#c9a646;border:0;border-radius:4px;color:#1b1206;font:inherit;font-weight:bold;cursor:pointer}#storyEnd button.alt{background:none;border:1px solid rgba(255,255,255,.3);color:#ddd}`;
@@ -7736,11 +7807,23 @@ const Story = {
       if (!e.target.closest('[data-view]') || Game.over || this.ready) return;
       e.stopImmediatePropagation();
       const p = this.pending();
+      if (p && p.free) { this.ready = true; try { sessionStorage.removeItem(this.KEY); } catch (_) {} requestPlay(); return; }   // 모드 변경으로 자유 모드를 고르고 다시 연 직후
       if (p && p.map === World.mapId) { this.ready = true; this.begin(p.ch); requestPlay(); return; }   // 맵을 바꿔 다시 연 직후: 바로 그 장
       this.openModes();
     }, true);
     const p = this.pending(), deploy = document.querySelector('.deploy [data-view]');
-    if (p && p.map === chosenMap() && deploy) deploy.textContent = `스토리 ${p.ch + 1}장 시작`;
+    if (p && (p.free || p.map === chosenMap()) && deploy) {
+      deploy.textContent = p.free ? '자유 모드 시작' : `스토리 ${p.ch + 1}장 시작`;
+      // 시작 화면: 이미 고른 모드를 버리고 다시 고르기
+      const sw = Object.assign(document.createElement('button'), { type: 'button', className: 'switch', textContent: '다른 모드 고르기' });
+      sw.onclick = () => { try { sessionStorage.removeItem(this.KEY); } catch (_) {} deploy.textContent = '출격'; sw.remove(); this.openModes(); };
+      deploy.closest('.deploy').appendChild(sw);
+    }
+    // 게임 중: 일시정지 화면의 '모드 변경'
+    const sw = Object.assign(document.createElement('button'), { type: 'button', id: 'modeSwitch', textContent: '모드 변경 (자유 ↔ 스토리 · 장 선택)' });
+    sw.onclick = () => this.openModes();
+    document.querySelector('.pause-actions').before(sw);
+    addEventListener('keydown', e => { if (e.code === 'Escape' && Game.started && !this.smashing) this.close(); });   // Esc로 게임에 돌아가면 창도 닫힘
   },
   modal(html) {
     let m = document.getElementById('modePick');
@@ -7764,14 +7847,20 @@ const Story = {
       <g stroke="#8a7a5a" stroke-width="2" opacity=".7"><path d="M135 78 H188 M135 92 H188 M135 106 H180 M212 78 H265 M212 92 H265 M212 106 H258"/></g>
       <path d="M250 40 L292 8 L296 12 L258 46Z" fill="#f2e8cf"/><path d="M258 46 l-6 8 l4 -10z" fill="#3a2a1a"/></svg>`,
   },
+  // 게임 중(일시정지에서 '모드 변경')이면 지금 모드에 '현재' 표시와 돌아가기 버튼
   openModes() {
-    const done = this.progress(), pct = Math.round(done / this.chapters.length * 100);
-    const m = this.modal(`<div class="eyebrow">ASTRAEA</div><h2>모드 선택</h2><p class="sub">고르면 거인의 주먹이 내려칩니다</p>
+    const done = this.progress(), pct = Math.round(done / this.chapters.length * 100), ing = Game.started, cur = n => ing && (n === 'story') === this.active ? '<span class="cur">현재</span>' : '';
+    const m = this.modal(`<div class="eyebrow">ASTRAEA</div><h2>${ing ? '모드 변경' : '모드 선택'}</h2><p class="sub">고르면 거인의 주먹이 내려칩니다${ing ? ' · 다른 모드는 새로 시작합니다' : ''}</p>
       <div class="modes">
-        <button class="card" data-m="free"><div class="art">${this.ART.free}</div><div class="txt"><b>자유 모드</b><small>끝없이 몰려오는 거인과 싸웁니다. 9거인 사용자를 먹어 힘을 계승하고, 마음껏 변신하고 날아다니세요.</small><br><span class="tag">맵 9곳 · 무한 출현</span></div></button>
-        <button class="card" data-m="story"><div class="art">${this.ART.story}</div><div class="txt"><b>스토리 모드</b><small>시간시나 함락부터 천지의 싸움까지 애니 줄거리를 9장으로 따라갑니다. 진행률이 화면 위에 표시됩니다.</small><br><span class="tag">진행 ${pct}% · ${done}/${this.chapters.length}장</span></div></button>
-      </div>`);
-    m.querySelector('[data-m=free]').onclick = e => this.smash(e.currentTarget, () => { this.close(); this.ready = true; try { sessionStorage.removeItem(this.KEY); } catch (_) {} requestPlay(); });
+        <button class="card" data-m="free">${cur('free')}<div class="art">${this.ART.free}</div><div class="txt"><b>자유 모드</b><small>끝없이 몰려오는 거인과 싸웁니다. 9거인 사용자를 먹어 힘을 계승하고, 마음껏 변신하고 날아다니세요.</small><br><span class="tag">맵 9곳 · 무한 출현</span></div></button>
+        <button class="card" data-m="story">${cur('story')}<div class="art">${this.ART.story}</div><div class="txt"><b>스토리 모드</b><small>시간시나 함락부터 천지의 싸움까지 애니 줄거리를 9장으로 따라갑니다. 진행률이 화면 위에 표시됩니다.</small><br><span class="tag">진행 ${pct}% · ${done}/${this.chapters.length}장</span></div></button>
+      </div>${ing ? '<div class="row"><button class="back">← 게임으로 돌아가기</button></div>' : ''}`);
+    if (ing) m.querySelector('.back').onclick = () => this.close();
+    m.querySelector('[data-m=free]').onclick = e => this.smash(e.currentTarget, () => {
+      // 게임 중 스토리 → 자유: 거인·진행을 깨끗이 하려고 같은 맵을 다시 열고 '자유 모드 시작'
+      if (ing && this.active) { try { sessionStorage.setItem(this.KEY, JSON.stringify({ free: true })); } catch (_) {} location.reload(); return; }
+      this.close(); this.ready = true; try { sessionStorage.removeItem(this.KEY); } catch (_) {} requestPlay();
+    });
     m.querySelector('[data-m=story]').onclick = e => this.smash(e.currentTarget, () => this.openChapters());
   },
   openChapters() {
@@ -7781,6 +7870,7 @@ const Story = {
         <span class="num">${i + 1}</span><i>${i + 1}장 · ${c.year}</i><b>${c.title}</b><small>${c.brief}</small></button>`).join('')}</div>
       <div class="row"><button class="back">← 모드 선택</button><span style="font-size:12px;color:#c8b27a">전체 ${pct}%</span><div class="bar"><div style="width:${pct}%"></div></div></div>`);
     m.querySelector('.back').onclick = () => this.openModes();
+    if (Game.started) m.querySelectorAll('[data-ch]').forEach(b => { if (this.active && +b.dataset.ch === this.ch) b.insertAdjacentHTML('afterbegin', '<span class="cur">현재</span>'); });
     m.querySelectorAll('[data-ch]').forEach(b => b.onclick = e => this.smash(e.currentTarget, () => this.choose(+b.dataset.ch)));
   },
   // 고른 카드 위로 거인 주먹(직접 그린 근육 팔)이 내려와 부숨 → 금·파편·섬광·흔들림·쿵 소리 → then()
@@ -7829,7 +7919,7 @@ const Story = {
   choose(i) {
     const c = this.chapters[i];
     try { sessionStorage.setItem(this.KEY, JSON.stringify({ ch: i, map: c.map })); sessionStorage.setItem('map', c.map); } catch (_) {}
-    if (c.map !== World.mapId) { location.hash = c.map; location.reload(); return; }
+    if (c.map !== World.mapId || Game.started) { location.hash = c.map; location.reload(); return; }   // 게임 중에 고르면 새로 시작
     this.close(); this.ready = true; this.begin(i); requestPlay();
   },
 
@@ -7845,16 +7935,16 @@ const Story = {
     this.say = document.getElementById('storySay') || Object.assign(document.createElement('div'), { id: 'storySay', hidden: true });
     document.body.append(this.hud, this.say);
     Game.toast(`${i + 1}장 · ${c.title}`, '#f0d890');
-    this.queue([['', c.brief]]);
+    this.pre = [...(c.opening ? [{ big: true, line: c.opening }] : []), ['', c.brief]];   // 첫 컷신 앞에 붙는 내레이션
     this.startStep(0);
   },
   startStep(k) {
     const c = this.chapters[this.ch], s = c.steps[k];
     this.step = k; this.stepT = 0; this.stepKills = Game.kills; this.boss = null;
-    if (s.say) this.queue(s.say);
     if (s.t === 'transform' || s.t === 'rumble') Shifter.charge = 1;
-    const b = s.t === 'boss' ? { kind: s.kind, at: s.at, drop: s.drop } : s.boss;
+    const b = s.t === 'boss' ? { kind: s.kind, at: s.at, drop: s.drop, fight: true } : s.boss;
     if (b) this.boss = this.spawnBoss(b);
+    this.playCut([...(this.pre || []), ...(s.say || [])]); this.pre = null;   // 보스가 나온 뒤 컷신 (보스 얼굴부터)
     if (s.t === 'reach') this.markT = 0;
   },
   // 보스: at이 없으면 앞 단계에서 나온 같은 종류를 그대로 씀 (새 설정만 덧입힘)
@@ -7871,6 +7961,7 @@ const Story = {
       Effects.lightning(t.pos.clone(), Math.min(t.height, 120));
       Game.toast(`${Nine.defs[b.kind].name} 출현!`, '#ff9a6a');
     }
+    t.storyShield = !b.fight;   // boss 단계(쓰러뜨려야 하는 목표)에서만 처치 가능
     t.still = !!b.still; t.vanishT = b.vanish || 0; t.kickT = b.kick ? 1.8 : 0; t.kickAt = b.kick || null;
     return t;
   },
@@ -7931,6 +8022,7 @@ const Story = {
     const c = this.chapters[this.ch], s = c.steps[this.step];
     this.stepT += dt;
     this.updateBosses(dt);
+    if (this.cut) this.updateCut(dt);
     if (this.lineT && (this.lineT -= dt) <= 0) this.nextLine();
     if (s.t === 'reach') {   // 목적지 빛 기둥
       if ((this.markT -= dt) <= 0) { this.markT = 1.4; Effects.pillar({ x: s.at[0], y: 0, z: s.at[1] }, 260, s.r * 0.5, 0xffe39a, 1.3); }
@@ -7976,6 +8068,163 @@ const Story = {
   const baseDrop = Shifter.dropUser;
   Shifter.dropUser = function (t) { if (!Story.active) baseDrop.call(this, t); };
   Story.initUI();
+}
+
+// ---------- 컷신 (15차): 장 시작·목표가 바뀔 때 대사를 영상처럼 보여 줌 ----------
+// 기울어진 만화 칸 안에 실제 게임 장면(카메라가 거인 얼굴로 다가가거나 인물 옆을 돎) + 말하는 인물 초상과 자막.
+// 지난 장면은 오른쪽 작은 칸에 사진처럼 남음. Space/Enter로 넘기기. 컷신 동안 플레이어는 멈추고 다치지 않음
+Object.assign(Story, {
+  // 인물 초상: 직접 그린 단순한 얼굴 (머리색·특징만)
+  FACES: {
+    '에렌': { hair: '#3b2a1e', eye: '#5fbf7a' }, '미카사': { hair: '#141414', eye: '#3a3a44', scarf: '#b3262a' },
+    '아르민': { hair: '#e9c766', eye: '#4f8fd0' }, '한네스': { hair: '#9a7a48', eye: '#6a5a40', beard: true },
+    '리바이': { hair: '#151515', eye: '#5a6470', short: true }, '엘빈 단장': { hair: '#e2c46e', eye: '#4f86c0', short: true },
+    '한지 분대장': { hair: '#6b4a2c', eye: '#7a5a3a', glasses: true }, '픽시스 사령관': { hair: null, eye: '#5a5a5a', beard: true },
+    '장': { hair: '#7a5a3a', eye: '#6a5030', short: true }, '라이너': { hair: '#e6d08a', eye: '#a08a50', short: true },
+    '게르게르': { hair: '#3a2a20', eye: '#5a4a3a', short: true }, '크리스타': { hair: '#f2dc92', eye: '#5a8ad0' },
+    '유미르': { hair: '#4a3020', eye: '#6a5030' }, '주둔병단': { hair: '#5a4a3a', eye: '#5a5040', helm: true },
+  },
+  face(name) {
+    const f = this.FACES[name] || { hair: '#4a3a2a', eye: '#5a5040' };
+    const hair = f.hair ? `<path d="M22 46 C20 20 80 20 78 46 C76 34 68 28 50 30 C34 28 26 34 22 46Z" fill="${f.hair}"/>${f.short ? '' : `<path d="M22 44 C18 60 22 70 26 72 L28 48Z M78 44 C82 60 78 70 74 72 L72 48Z" fill="${f.hair}"/>`}` : '';
+    return `<svg viewBox="0 0 100 100"><defs><linearGradient id="pf${name.length}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b3c6e"/><stop offset="1" stop-color="#0a1630"/></linearGradient></defs>
+      <rect width="100" height="100" fill="url(#pf${name.length})"/>
+      <path d="M14 100 C16 80 32 74 50 74 C68 74 84 80 86 100Z" fill="${f.helm ? '#6a6a5a' : '#4b5d3a'}"/>${f.scarf ? `<path d="M30 76 C40 84 60 84 70 76 L72 84 C60 92 40 92 28 84Z" fill="${f.scarf}"/>` : ''}
+      <rect x="43" y="62" width="14" height="14" fill="#e8bf98"/><ellipse cx="50" cy="50" rx="25" ry="28" fill="#f1cba6"/>${hair}
+      <ellipse cx="41" cy="52" rx="4" ry="3" fill="${f.eye}"/><ellipse cx="59" cy="52" rx="4" ry="3" fill="${f.eye}"/>
+      <path d="M35 45 L46 46 M54 46 L65 45" stroke="#3a2a1e" stroke-width="2"/><path d="M45 66 Q50 68 55 66" stroke="#9a6a50" stroke-width="1.6" fill="none"/>
+      ${f.glasses ? '<g fill="none" stroke="#2a2a2a" stroke-width="2"><circle cx="41" cy="52" r="7"/><circle cx="59" cy="52" r="7"/><path d="M48 52 H52"/></g>' : ''}
+      ${f.beard ? '<path d="M30 60 C34 82 66 82 70 60 C64 72 36 72 30 60Z" fill="#a08a6a"/>' : ''}
+      ${f.helm ? '<path d="M24 44 C24 18 76 18 76 44Z" fill="#7a7a6a"/>' : ''}</svg>`;
+  },
+  // lines: [[인물, 대사], ...] 또는 {big:true, line} (화면 가운데 큰 내레이션)
+  playCut(lines) {
+    if (!lines.length) return;
+    const shots = lines.map((l, i) => Array.isArray(l) ? { who: l[0], line: l[1], v: i } : { ...l, who: '', v: i });
+    if (this.cut) { this.cut.shots.push(...shots); return; }
+    this.cut = { shots, i: -1, snaps: [] };
+    document.documentElement.classList.add('cutting');
+    Player.keys = {}; Player.releaseHook && Player.releaseHook();
+    const W = innerWidth, H = innerHeight;
+    camera.setViewOffset(W, H, W * 0.17, 0, W, H);   // 장면 가운데가 왼쪽 큰 칸 가운데에 오게
+    let e = document.getElementById('cutFx');
+    if (!e) { e = document.createElement('div'); e.id = 'cutFx'; document.body.appendChild(e); }
+    const stars = Array.from({ length: 60 }, (_, i) => `<circle cx="${(i * 37.3) % 100}" cy="${(i * 61.7) % 100}" r="${i % 4 ? .12 : .25}" fill="#cfe6ff" opacity="${.3 + (i % 5) * .12}"/>`).join('');
+    e.innerHTML = `<svg class="frame" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs><linearGradient id="cutBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#06122a"/><stop offset="1" stop-color="#0d2550"/></linearGradient></defs>
+        <path fill="url(#cutBg)" fill-rule="evenodd" d="M0 0H100V100H0Z M3 9 L66 4 L64 92 L2 88Z"/>${stars}
+        <path d="M3 9 L66 4 L64 92 L2 88Z" fill="none" stroke="#5fd0ff" stroke-width=".5" vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 6px #5fd0ff)"/>
+        <path d="M3 9 L66 4 L64 92 L2 88Z" fill="none" stroke="#bfefff" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-dasharray="0.1 8" opacity=".6"/></svg>
+      <div class="slot s0"></div><div class="slot s1"></div>
+      <div class="title"><i>${this.ch + 1}장 · ${this.chapters[this.ch].year}</i><b>${this.chapters[this.ch].title}</b></div>
+      <div class="big"></div><div class="sub"><div class="who"></div><p></p></div><div class="skip">Space · Enter 넘기기</div>`;
+    e.hidden = false;
+    this.nextShot();
+  },
+  nextShot() {
+    const c = this.cut; if (!c) return;
+    if (c.lastSnap) this.pin(c.lastSnap); c.lastSnap = null;   // 지난 장면을 오른쪽 칸에 남김
+    c.i++;
+    const s = c.shots[c.i];
+    if (!s) { this.endCut(); return; }
+    s.t = 0; s.dur = s.big ? 5.5 : 2.4 + s.line.length * 0.075;
+    const e = document.getElementById('cutFx'), sub = e.querySelector('.sub'), big = e.querySelector('.big');
+    big.innerHTML = s.big ? s.line : ''; big.classList.toggle('on', !!s.big);
+    sub.hidden = !!s.big;
+    sub.querySelector('.who').innerHTML = s.who ? `<div class="pic">${this.face(s.who)}</div><span>${s.who}</span>` : '';
+    sub.classList.toggle('narr', !s.who);
+    const p = sub.querySelector('p'); p.textContent = ''; s.typed = 0;
+    sub.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 260 });
+  },
+  endCut() {
+    this.cut = null;
+    document.documentElement.classList.remove('cutting');
+    camera.clearViewOffset();
+    const e = document.getElementById('cutFx');
+    if (e) e.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300 }).onfinish = () => { if (!this.cut) e.hidden = true; };
+  },
+  updateCut(dt) {
+    const c = this.cut, s = c && c.shots[c.i];
+    if (!s) return;
+    s.t += dt;
+    if (!s.snapped && s.t > s.dur * 0.7) { s.snapped = true; c.wantSnap = true; }   // 장면 끝 무렵을 찍어 둠
+    if (!s.big) {   // 자막이 한 글자씩
+      const n = Math.min(s.line.length, Math.floor(s.t * 28));
+      if (n !== s.typed) { s.typed = n; document.querySelector('#cutFx .sub p').textContent = s.line.slice(0, n); }
+    }
+    if (s.t >= s.dur) this.nextShot();
+  },
+  // 컷 카메라: 보스가 있으면 첫 장면은 거인 얼굴을 올려다보며 다가감, 인물 대사는 플레이어 옆에서 천천히 돎
+  cutCamera(cam) {
+    const c = this.cut, s = c.shots[c.i]; if (!s) return;
+    const k = Math.min(1, s.t / s.dur), e = k * k * (3 - 2 * k), boss = this.boss && !this.boss.dead ? this.boss : null;
+    const me = Shifter.active ? Shifter.titan : null;
+    const V = THREE.Vector3, F = new V(), a = new V(), b = new V();
+    let look = null;
+    const onTitan = boss && (!s.who || s.v === 0 || /거인|초대형|갑옷|여성형|짐승|시조/.test(s.line)) ? boss : me;
+    if (onTitan) {
+      const h = onTitan.height, f = onTitan.forward(), sd = new V(f.z, 0, -f.x);
+      F.copy(onTitan.pos).setY(h * 0.86);
+      // 얼굴 높이에서 찍음 (성벽 너머 거인도 얼굴이 보이게)
+      if (s.big) { a.copy(F).addScaledVector(f, h * 2.6).addScaledVector(sd, h * 0.8).setY(h * 1.05); b.copy(F).addScaledVector(f, h * 1.9).addScaledVector(sd, -h * 0.3).setY(h * 0.95); }
+      else if (s.v % 2) { a.copy(F).addScaledVector(f, h * 0.9).addScaledVector(sd, -h * 0.6).setY(h * 0.95); b.copy(F).addScaledVector(f, h * 0.65).addScaledVector(sd, -h * 0.25).setY(h * 0.9); }
+      else { a.copy(F).addScaledVector(f, h * 1.5).addScaledVector(sd, h * 0.3).setY(h * 0.74); b.copy(F).addScaledVector(f, h * 0.75).addScaledVector(sd, h * 0.12).setY(h * 0.8); }
+    } else {
+      const f = Player.forward(), sd = new V(f.z, 0, -f.x);
+      F.copy(Player.pos); F.y += 1.5;
+      if (boss) { f.set(boss.pos.x - F.x, 0, boss.pos.z - F.z).normalize(); sd.set(f.z, 0, -f.x); }   // 보스가 있으면 플레이어 어깨 너머로 보스를 봄
+      if (s.v % 2) { a.copy(F).addScaledVector(f, -4.5).addScaledVector(sd, 1.8).setY(F.y + 1.2); b.copy(F).addScaledVector(f, -3.2).addScaledVector(sd, 1.4).setY(F.y + 0.9); look = boss ? boss.pos.clone().setY(boss.height * 0.8) : F.clone().addScaledVector(f, 40).setY(F.y + 6); }
+      else { a.copy(F).addScaledVector(f, 4.5).addScaledVector(sd, 3).setY(F.y + 0.8); b.copy(F).addScaledVector(f, 3.4).addScaledVector(sd, -2.2).setY(F.y + 0.5); }
+      if (s.big) { a.copy(F).addScaledVector(f, -30).setY(F.y + 40); b.copy(F).addScaledVector(f, -18).setY(F.y + 30); look = F.clone().addScaledVector(f, 120); }
+    }
+    cam.position.lerpVectors(a, b, e);
+    cam.lookAt(look || F);
+  },
+  // 그린 직후 장면을 찍어 두었다가 다음 장면으로 넘어갈 때 오른쪽 칸(위가 최신)에 넣음
+  snap(canvas) {
+    const c = this.cut; if (!c || !c.wantSnap) return;
+    c.wantSnap = false;
+    const cv = document.createElement('canvas'); cv.width = 480; cv.height = 300;
+    const W = canvas.width, H = canvas.height;
+    cv.getContext('2d').drawImage(canvas, W * 0.04, H * 0.08, W * 0.6, H * 0.8, 0, 0, 480, 300);
+    c.lastSnap = cv;
+  },
+  pin(cv) {
+    const slots = document.querySelectorAll('#cutFx .slot');
+    if (slots[0].firstChild) { slots[1].innerHTML = ''; slots[1].appendChild(slots[0].firstChild); }
+    slots[0].appendChild(cv);
+    document.querySelector('#cutFx .title').style.opacity = 0;
+    slots[0].animate([{ transform: 'rotate(3deg) scale(1.2)', opacity: 0 }, { transform: 'rotate(3deg)', opacity: 1 }], { duration: 300 });
+  },
+});
+{
+  // 컷 동안: 카메라는 컷 카메라, 플레이어·거인화 조작은 멈춤, 피해 없음
+  for (const o of [Player, Shifter]) { const base = o.updateCamera; o.updateCamera = function (cam) { if (Story.cut) Story.cutCamera(cam); else base.call(this, cam); }; }
+  const pu = Player.update, su = Shifter.update, dmg = Game.damagePlayer;
+  Player.update = function (dt) { if (!Story.cut) pu.call(this, dt); };
+  Shifter.update = function (dt) { if (!Story.cut) su.call(this, dt); };
+  Game.damagePlayer = function (d, k) { if (!Story.cut) dmg.call(this, d, k); };
+  const draw = renderer.render.bind(renderer);
+  renderer.render = (s, c) => { draw(s, c); if (Story.cut) Story.snap(renderer.domElement); };
+  addEventListener('keydown', e => { if (Story.cut && Game.running && (e.code === 'Space' || e.code === 'Enter')) { e.preventDefault(); Story.nextShot(); } });
+  addEventListener('resize', () => { if (Story.cut) camera.setViewOffset(innerWidth, innerHeight, innerWidth * 0.17, 0, innerWidth, innerHeight); });
+  const css = document.createElement('style');
+  css.textContent = `#cutFx{position:fixed;inset:0;z-index:9;pointer-events:none;color:#eaf6ff;font-family:inherit}
+#cutFx .frame{position:absolute;inset:0;width:100%;height:100%}
+#cutFx .slot{position:absolute;left:69%;width:28%;height:38%;border:2px solid #5fd0ff;box-shadow:0 0 18px rgba(95,208,255,.55);background:#0a1a38;overflow:hidden;transform:rotate(3deg)}
+#cutFx .slot canvas{width:100%;height:100%;object-fit:cover;display:block}#cutFx .s0{top:7%}#cutFx .s1{top:50%;transform:rotate(-2deg)}#cutFx .slot:empty{opacity:.35}
+#cutFx .title{position:absolute;left:70%;top:14%;width:26%;transform:rotate(3deg);text-align:center;transition:opacity .4s}
+#cutFx .title i{display:block;font-style:normal;font-size:13px;letter-spacing:3px;color:#8fd8ff}#cutFx .title b{display:block;margin-top:6px;font-size:clamp(22px,2.6vw,38px);font-weight:900;font-style:italic;color:#fff;-webkit-text-stroke:1px #1d5fa8;text-shadow:3px 3px 0 #0b2c5a,0 0 22px rgba(95,208,255,.6)}
+#cutFx .big{position:absolute;left:3%;width:62%;top:40%;text-align:center;font-size:clamp(20px,2.4vw,34px);line-height:1.7;letter-spacing:3px;color:#f6ead2;text-shadow:0 2px 14px #000,0 0 30px #000;opacity:0;transition:opacity 1s}#cutFx .big.on{opacity:1}
+#cutFx .sub{position:absolute;left:6%;width:56%;bottom:13%;display:flex;align-items:flex-end;gap:12px}
+#cutFx .sub p{flex:1;margin:0;padding:10px 18px;min-height:24px;background:linear-gradient(90deg,rgba(4,10,24,.88),rgba(4,10,24,.6));border-left:3px solid #5fd0ff;font-size:17px;letter-spacing:.5px;text-shadow:0 1px 3px #000}
+#cutFx .sub.narr p{font-style:italic;color:#d8e6f4;text-align:center;border-left:0;background:rgba(4,10,24,.7)}
+#cutFx .who{display:flex;flex-direction:column;align-items:center;gap:3px}#cutFx .who:empty{display:none}
+#cutFx .pic{width:64px;height:64px;border:2px solid #5fd0ff;box-shadow:0 0 10px rgba(95,208,255,.6);transform:rotate(-3deg);overflow:hidden}#cutFx .pic svg{width:100%;height:100%;display:block}
+#cutFx .who span{font-size:11px;padding:1px 6px;background:#0b2c5a;border:1px solid #5fd0ff}
+#cutFx .skip{position:absolute;right:3%;bottom:3%;font-size:11px;color:#8fb8d8;letter-spacing:1px}
+html.cutting #storyHud,html.cutting #storySay,html.cutting #crosshair,html.cutting #hud,html.cutting #info,html.cutting #hint,html.cutting #minimap,html.cutting #wireL,html.cutting #wireR,html.cutting #speedlines{visibility:hidden}`;
+  document.head.appendChild(css);
 }
 
 </script>
