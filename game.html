@@ -4431,6 +4431,67 @@ Polish.add('gateward', W => { Polish.castle(W, 0, -330, 1); W.batch('gwAvenue', 
 Polish.pre('embergate', [[-235, -142, -105, -12]]);
 Polish.add('embergate', W => Polish.castle(W, -170, -77, 0.85));
 
+// ===== 38차(1): 트로스트 운하 — 사진 고증(돌 제방 + 난간, 청록 물, 높은 돌 아치 다리, 물가로 내려가는 계단, 동상 광장) =====
+Polish.pre('embergate', [[24, -16, 80, 18]]);
+Polish.add('embergate', W => {
+  const C = -150, R = 340, CZ = 30, half = Math.sqrt((R - 16) ** 2 - (CZ - C) ** 2);
+  const B = W.unitBox, stone = W._canalStone || (W._canalStone = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#c9bea6', '#8f8470') }));
+  if (W.waterMat && W.waterMat.color) W.waterMat.color.setHex(0x4fb9b2);   // 맑은 청록 물(원작 운하 색)
+  // 1) 제방 벽(높이 1.6m, 두께 1.2m) + 갓돌 — 다리 자리와 계단 자리는 비움
+  const gaps = [[0, 13], [-150, 6], [150, 6], [-75, 1.5], [75, 1.5], [-220, 3], [220, 3], [-30, 3], [110, 3]];
+  const segs = [];
+  let x0 = -half;
+  for (const [gx, gw] of gaps.slice().sort((a, b) => a[0] - b[0])) { segs.push([x0, gx - gw]); x0 = gx + gw; }
+  segs.push([x0, half]);
+  for (const s of [-1, 1]) for (const [a, b] of segs) {
+    if (b - a < 1) continue;
+    const cx = (a + b) / 2, L = b - a, z = CZ + s * 6.5;
+    W.batch('cnWall', B, stone, cx, 0.8, z, L, 1.6, 1.2, 0, null, 0, 0, { hook: true });
+    W.batch('cnCap', B, W.trimMat, cx, 1.68, z, L, 0.16, 1.5, 0, null, 0, 0, { noShadow: true });
+    W.solid(a, 0, z - 0.6, b, 1.6, z + 0.6);
+  }
+  // 2) 물가로 내려가는 계단(제방 틈마다, 물 쪽으로 3단) — 헤엄치다 올라올 수 있음
+  for (const [gx] of [[-220], [220], [-30], [110]]) for (const s of [-1, 1]) for (let k = 0; k < 3; k++)
+    W.batch('cnStep', B, stone, gx, 0.25 - k * 0.12, CZ + s * (6.9 - k * 0.6), 5, 0.3, 0.6, 0, null, 0, 0, { noShadow: true });
+  // 3) 높은 돌 아치 다리 2개(사람용): 1m 간격 돌판을 아치 곡선으로(한 칸 오르막 ≤0.6m라 걸어서 넘음) + 아치 아래 반원 돌테 + 난간
+  if (!W._archGeo) W._archGeo = new THREE.TorusGeometry(6.2, 0.9, 6, 18, Math.PI);
+  for (const bx of [-75, 75]) {
+    const span = 20, top = 3.4;
+    for (let i = 0; i <= span; i++) {
+      const t = i / span, z = CZ - span / 2 + i, y = 0.3 + top * Math.sin(Math.PI * t);
+      W.batch('cnDeck', B, stone, bx, y - 0.25, z, 4.2, 0.5, 1.05, 0, null, 0, 0, { hook: true });
+      W.solid(bx - 2.1, 0, z - 0.5, bx + 2.1, y, z + 0.5);
+      for (const sx of [-1, 1]) W.batch('cnRail', B, W.trimMat, bx + sx * 2.0, y + 0.5, z, 0.3, 1.0, 1.05, 0, null, 0, 0, { noShadow: true });
+    }
+    for (const sx of [-1.6, 1.6]) { const m = new THREE.Mesh(W._archGeo, stone); m.position.set(bx + sx, 0.05, CZ); m.rotation.y = Math.PI / 2; m.scale.set(1, 0.5, 1); W.scene.add(m); }
+  }
+  // 4) 동상 광장(운하 북쪽, 큰 다리 동쪽): 돌바닥 + 2단 기단 계단 + 받침대 + 사람 동상(망토를 두른 기마 없는 입상)
+  const PX = 52, PZ = 2;
+  W.batch('cnPlaza', B, stone, PX, 0.05, PZ, 52, 0.1, 30, 0, null, 0, 0, { noShadow: true });
+  W.batch('cnStage', B, stone, PX, 0.3, PZ, 14, 0.6, 14, 0, null, 0, 0, { hook: true }); W.solid(PX - 7, 0, PZ - 7, PX + 7, 0.6, PZ + 7);
+  W.batch('cnStage', B, stone, PX, 0.9, PZ, 9, 0.6, 9, 0, null, 0, 0, { hook: true }); W.solid(PX - 4.5, 0.6, PZ - 4.5, PX + 4.5, 1.2, PZ + 4.5);
+  W.batch('cnPed', B, W.trimMat, PX, 2.6, PZ, 2.6, 2.8, 2.6, 0, null, 0, 0, { hook: true }); W.solid(PX - 1.3, 1.2, PZ - 1.3, PX + 1.3, 4, PZ + 1.3);
+  if (!W.unitSphere) Kit3.prep(W);
+  const bronze = new THREE.MeshLambertMaterial({ color: 0x8f9a8a });
+  W.batch('cnStatue', W.unitCyl, bronze, PX, 5.4, PZ, 0.55, 2.8, 0.55, 0, null, 0, 0, { noShadow: false });
+  W.batch('cnCloak', W.unitCone, bronze, PX, 5.2, PZ - 0.15, 0.95, 3.2, 0.8, 0, null, 0, 0);
+  W.batch('cnHead', W.unitSphere, bronze, PX, 7.15, PZ, 0.36, 0.42, 0.36, 0, null, 0, 0, { noShadow: true });
+  W.batch('cnArm', B, bronze, PX + 0.6, 7.0, PZ + 0.2, 0.22, 1.6, 0.22, 0, null, 0.2, -0.6, { noShadow: true });   // 앞으로 든 팔
+  for (const [dx, dz] of [[-20, -11], [20, -11], [-20, 11], [20, 11]]) { W.addTree(PX + dx, PZ + dz, 1.1); }
+});
+// 파라디 목조 집: 일부 모서리에 원뿔 지붕 작은 탑(사진 ③의 모서리 탑)
+{
+  const base = Arch.deco;
+  Arch.deco = function (W, st, A, x, z, w, d, h, box) {
+    base.call(this, W, st, A, x, z, w, d, h, box);
+    if (st !== 'paradis' || h < 8 || Math.random() > 0.14) return;
+    if (!W.unitCone) Kit3.prep(W);
+    const sx = Math.random() < 0.5 ? 1 : -1, sz = Math.random() < 0.5 ? 1 : -1, tx = x + sx * (w / 2), tz = z + sz * (d / 2), th = h + 3;
+    W.batch('arTurret', W.unitCyl, A.cap[0], tx, th / 2, tz, 1.7, th, 1.7, 0, null, 0, 0, { hook: true });
+    W.batch('arTurretR', W.unitCone, A.roof[0], tx, th + 2.4, tz, 2.1, 4.8, 2.1, 0, null, 0, 0, { hook: true });
+  };
+}
+
 </script>
 <script>
 // ===== 세계 지도 (22차): 맵 9개를 하나의 1:1 세계 안 "장소"로 =====
@@ -4979,8 +5040,8 @@ const Field = {
     const inst = (geo, mat, cap) => { const m = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
     const box = new THREE.BoxGeometry(1, 1, 1);
     this.I = {
-      trunk: inst(new THREE.CylinderGeometry(0.28, 0.42, 1, 6), new THREE.MeshLambertMaterial({ color: 0x5a3e2b }), 5000),
-      leaf: inst(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), 15000),
+      trunk: inst(new THREE.CylinderGeometry(0.28, 0.42, 1, 6), new THREE.MeshLambertMaterial({ color: 0x5a3e2b }), 8000),
+      leaf: inst(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), 24000),
       house: inst(box, new THREE.MeshLambertMaterial({ color: 0xffffff, map: W.stoneTexture ? W.stoneTexture('#d8ccb4', '#a89a80') : null }), 900),
       roof: inst(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), 900),
       crop: inst(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), 900),
@@ -5054,7 +5115,7 @@ const Field = {
     }
     const mountain = yKm > 560;
     // 숲: 노이즈가 높은 곳은 빽빽한 숲(나무 10~18m), 아니면 드문드문
-    const nT = forest > 0.66 ? 40 + Math.floor(R() * 25) : forest > 0.5 ? 8 + Math.floor(R() * 8) : Math.floor(R() * 4);
+    const nT = forest > 0.66 ? 95 + Math.floor(R() * 40) : forest > 0.58 ? 30 + Math.floor(R() * 20) : forest > 0.5 ? 8 + Math.floor(R() * 8) : Math.floor(R() * 4);   // 38차: 숲은 빽빽한 침엽수 벽(원작 들판 숲), 가장자리는 중간 밀도
     for (let i = 0; i < nT; i++) { const x = X0 + R() * C, y = Y0 + R() * C, s = 0.8 + R() * 0.6; if (!this.seaW(x, y) && !this.peakAt(out.peaks, x, y)) out.trees.push([x, y, s]); }
     { const nS = Math.floor(R() * R() * 15); for (let i = 0; i < nS; i++) { const x = X0 + R() * C, y = Y0 + R() * C, s = 0.6 + R() * R() * 5; if (!this.seaW(x, y) && !this.peakAt(out.peaks, x, y)) out.stones.push([x, y, s]); } }   // 37차: 바위
     // 밭: 벽 안은 거의 다 밭(밀·초록·갈색 띠), 벽 밖(월 마리아 함락 뒤)은 버려져 드묾
@@ -5278,7 +5339,7 @@ const Field = {
     ch.buf = {};
     for (const k in B) ch.buf[k] = { m: new Float32Array(B[k].m), c: B[k].c.length ? new Float32Array(B[k].c) : null, n: B[k].m.length / 16 };
   },
-  CAP: { trunk: 5000, leaf: 15000, house: 900, roof: 900, crop: 900, road: 400, sea: 1700, sand: 900, rock: 300, stone: 2400, snow: 300, trim: 12000, win: 5000, chim: 900, post: 9000, hay: 700, hayTop: 700, well: 120 },
+  CAP: { trunk: 8000, leaf: 24000, house: 900, roof: 900, crop: 900, road: 400, sea: 1700, sand: 900, rock: 300, stone: 2400, snow: 300, trim: 12000, win: 5000, chim: 900, post: 9000, hay: 700, hayTop: 700, well: 120 },
   LEAF_NEAR: 1100,   // 이보다 먼 칸의 나무는 잎 덩어리 1개
   // 활성 칸의 물체를 InstancedMesh에 다시 채움 (배열 복사)
   fill() {
