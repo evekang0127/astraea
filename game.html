@@ -8228,3 +8228,125 @@ html.cutting #storyHud,html.cutting #storySay,html.cutting #crosshair,html.cutti
 }
 
 </script>
+<script>
+// ===== 배경 음악 (16차) =====
+// 곡 파일은 게임에 넣지 않음(저작권 곡, 공개 저장소). 설정에서 내 컴퓨터의 음악 파일을 곡 칸에 넣으면 이 브라우저(IndexedDB)에만 저장
+// 상황마다 곡이 바뀜: 시작 화면·장 완료 = Call of Silence, 자유 모드·스토리 1~5장 = ətˈæk 0N tάɪtn,
+// 스토리 6~7장 = 악마의 아이, 스토리 8~9장(땅울림·천지의 싸움) = 2천 년... 곡이 없으면 넣은 다른 곡으로. 효과음보다 작게(기본 30%), 일시정지 중엔 더 작게
+const Music = {
+  SLOTS: [
+    { id: 'silence', title: 'Call of Silence', artist: 'Hiroyuki Sawano', use: '시작 화면 · 장 완료' },
+    { id: 'attack', title: 'ətˈæk 0N tάɪtn', artist: 'Hiroyuki Sawano', use: '자유 모드 · 스토리 1~5장' },
+    { id: 'devil', title: '악마의 아이', artist: 'Ai Higuchi', use: '스토리 6~7장' },
+    { id: 'twothousand', title: '2천 년... 혹은... 2만 년 후의 너에게...', artist: 'Linked Horizon', use: '스토리 8~9장' },
+  ],
+  LEVELS: [['0', '끄기'], ['0.15', '아주 작게'], ['0.3', '작게'], ['0.5', '보통']],
+  vol: 0.3, tracks: {}, cur: null, level: 0, el: null,
+
+  // ---------- 저장 (IndexedDB: 곡 칸 id → {blob, name}) ----------
+  db() {
+    return this._db || (this._db = new Promise((res, rej) => {
+      const r = indexedDB.open('astraea-music', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('tracks');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    }));
+  },
+  async tx(mode, fn) {
+    const d = await this.db();
+    return new Promise((res, rej) => { const t = d.transaction('tracks', mode), q = fn(t.objectStore('tracks')); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); });
+  },
+  async load() {
+    for (const s of this.SLOTS) {
+      try { const v = await this.tx('readonly', st => st.get(s.id)); if (v && v.blob) this.tracks[s.id] = { name: v.name, url: URL.createObjectURL(v.blob) }; } catch (_) {}
+    }
+    this.refreshUI();
+  },
+  async put(id, file) {
+    try { await this.tx('readwrite', st => st.put({ blob: file, name: file.name }, id)); } catch (e) { Game.toast('음악을 저장하지 못했습니다 (브라우저 저장 공간)', '#ff9a6a'); return; }
+    if (this.tracks[id]) URL.revokeObjectURL(this.tracks[id].url);
+    this.tracks[id] = { name: file.name, url: URL.createObjectURL(file) };
+    if (this.cur === id) this.cur = null;   // 지금 곡이면 새 파일로 다시 틀기
+    this.refreshUI(); this.unlock();
+  },
+  async remove(id) {
+    try { await this.tx('readwrite', st => st.delete(id)); } catch (_) {}
+    if (this.tracks[id]) { URL.revokeObjectURL(this.tracks[id].url); delete this.tracks[id]; }
+    if (this.cur === id) this.cur = null;
+    this.refreshUI();
+  },
+  setVolume(v) { this.vol = v; try { localStorage.setItem('astraea-music-volume', String(v)); } catch (_) {} },
+
+  // ---------- 지금 상황에 맞는 곡 ----------
+  wanted() {
+    let id = 'attack';
+    if (!Game.started || Game.over) id = 'silence';
+    else if (typeof Story !== 'undefined' && Story.active) id = Story.done ? 'silence' : Story.ch >= 7 ? 'twothousand' : Story.ch >= 5 ? 'devil' : 'attack';
+    if (this.tracks[id]) return id;
+    if (this.tracks.attack) return 'attack';
+    return Object.keys(this.tracks)[0] || null;
+  },
+  // 0.05초마다: 곡이 바뀌면 소리를 줄였다가 새 곡으로 바꾸고 다시 키움
+  tick() {
+    const want = this.wanted(), duck = Game.started && !Game.running && !Game.over ? 0.4 : 1;
+    const target = want && want === this.cur ? this.vol * duck : 0;
+    this.level += Math.sign(target - this.level) * Math.min(Math.abs(target - this.level), 0.025);
+    if (want !== this.cur && this.level < 0.01) {
+      this.cur = want;
+      if (want) { this.el.src = this.tracks[want].url; this.el.currentTime = 0; this.play(); } else this.el.pause();
+    }
+    this.el.volume = Math.max(0, Math.min(1, this.level));
+  },
+  play() { const p = this.el.play(); if (p && p.catch) p.catch(() => { this.blocked = true; }); },
+  // 브라우저는 클릭 전에는 소리를 못 틀게 함 → 첫 클릭·키 입력 때 다시 시도
+  unlock() { if (this.cur && this.el.paused) this.play(); this.blocked = false; },
+
+  // ---------- 설정 화면 ----------
+  initUI() {
+    const css = document.createElement('style');
+    css.textContent = `.music{grid-column:1/-1;margin-top:6px;padding:12px 14px;border:1px solid rgba(211,166,37,.35);border-radius:6px;background:rgba(0,0,0,.2)}
+.music .hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}.music .hd b{color:#f0d890;letter-spacing:1px}.music .hd small{color:#a99a7a;font-size:11px}
+.music .mrow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid rgba(255,255,255,.06);font-size:12px}
+.music .mrow i{display:block;font-style:normal;font-size:10px;color:#a99a7a}.music .st{font-size:11px;color:#8a8a8a;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.music .st.on{color:#9fe0b0}
+.music .pick,.music .del{cursor:pointer;font:inherit;font-size:11px;padding:5px 10px;border-radius:4px;border:1px solid rgba(240,216,144,.45);background:none;color:#f0d890}.music .del{border-color:rgba(255,255,255,.2);color:#bbb}
+.music .vol{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px}`;
+    document.head.appendChild(css);
+    const box = document.createElement('div'); box.className = 'music';
+    box.innerHTML = `<div class="hd"><b>배경 음악</b><small>내 컴퓨터의 음악 파일을 넣으면 이 브라우저에만 저장됩니다</small></div>
+      ${this.SLOTS.map(s => `<div class="mrow" data-id="${s.id}"><span>${s.artist} - ${s.title}<i>${s.use}</i></span>
+        <span class="st">없음</span><span><label class="pick">파일 넣기<input type="file" accept="audio/*" hidden></label> <button type="button" class="del" hidden>빼기</button></span></div>`).join('')}
+      <div class="vol">음악 볼륨<select id="musicVol"></select></div>`;
+    document.querySelector('#panel-setup .fields').appendChild(box);
+    box.querySelectorAll('.mrow').forEach(r => {
+      const id = r.dataset.id;
+      r.querySelector('input').addEventListener('change', e => { const f = e.target.files[0]; if (f) this.put(id, f); e.target.value = ''; });
+      r.querySelector('.del').onclick = () => this.remove(id);
+    });
+    // 일시정지 화면에도 음악 볼륨
+    const lab = document.createElement('label'); lab.innerHTML = '음악<select id="pMusic"></select>';
+    document.querySelector('.pause-grid').appendChild(lab);
+    for (const id of ['musicVol', 'pMusic']) {
+      const sel = document.getElementById(id);
+      for (const [v, t] of this.LEVELS) sel.add(new Option(t, v));
+      sel.value = String(this.vol);
+      sel.addEventListener('change', e => { this.setVolume(+e.target.value); for (const o of ['musicVol', 'pMusic']) document.getElementById(o).value = e.target.value; this.unlock(); });
+    }
+  },
+  refreshUI() {
+    document.querySelectorAll('.music .mrow').forEach(r => {
+      const t = this.tracks[r.dataset.id], st = r.querySelector('.st');
+      st.textContent = t ? '✓ ' + t.name : '없음'; st.classList.toggle('on', !!t); st.title = t ? t.name : '';
+      r.querySelector('.del').hidden = !t;
+    });
+  },
+  init() {
+    try { const v = parseFloat(localStorage.getItem('astraea-music-volume')); if (v >= 0 && v <= 1) this.vol = v; } catch (_) {}
+    this.el = new Audio(); this.el.loop = true; this.el.volume = 0;
+    this.initUI();
+    this.load();
+    setInterval(() => this.tick(), 50);
+    for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { if (this.blocked || (this.cur && this.el.paused)) this.unlock(); }, true);
+  },
+};
+Music.init();
+
+</script>
