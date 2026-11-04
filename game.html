@@ -4121,6 +4121,8 @@ const Arch = {
   World.addBuilding = function (x, z, w, d, h, opts = {}) {
     const st = Arch.OF[this.mapId]; if (!st) return base.call(this, x, z, w, d, h, opts);
     const A = Arch.mats(this, st), S = Arch.SETS[st];
+    if (st === 'paradis' && h > 24) h = 12 + Math.round((h - 24) / 8) * 4 % 16;   // 벽 안 목조 도시는 2~6층(원작 분위기) — 목조 고층 탑처럼 보이던 것 방지
+    if (st === 'village' && h > 8) h = 8;
     const sv = [this.facadeMats, this.capMats, this.roofMats, this.flatRoofMat];
     this.facadeMats = A.facade; this.capMats = A.cap; this.roofMats = A.roof; this.flatRoofMat = A.flat;
     const o = Object.assign({}, opts);
@@ -4274,6 +4276,85 @@ Polish.add('saltmere', W => {
     for (let k = -2; k <= 2; k++) gun(px + k * 13, 3.8, pz - 2);
   }
   for (let x = -540; x <= 300; x += 42) gun(x, 2.5, 38.5);
+});
+
+// ===== 37차(2): 상징 건물 더 — 자리 예약(그 자리엔 보통 건물을 짓지 않음) + 원작 장면을 참고한 게임용 모형 =====
+Polish.pre = function (id, rects) { const m = Maps[id]; if (!m) return; const base = m.build; m.build = function (W) { W._reserve = (W._reserve || []).concat(rects); base.call(this, W); }; };
+{
+  const prev = World.addBuilding;
+  World.addBuilding = function (x, z, w, d, h, opts = {}) {
+    if (this._reserve && this._reserve.some(r => x + w / 2 > r[0] && x - w / 2 < r[2] && z + d / 2 > r[1] && z - d / 2 < r[3])) return new THREE.Box3();   // 예약지: 건너뜀
+    return prev.call(this, x, z, w, d, h, opts);
+  };
+}
+// 시간시나 구: 예거 가의 집 — 성문이 부서질 때 날아온 돌덩이에 깔려 무너진 집, 마당 쪽 '지하실' 들창과 내려가는 계단
+Polish.pre('gateward', [[-142, -182, -98, -138]]);
+Polish.add('gateward', W => {
+  const X = -120, Z = -160, B = W.unitBox;
+  const stone = W.stoneMat, wood = new THREE.MeshLambertMaterial({ color: 0x5a4030 }), plaster = new THREE.MeshLambertMaterial({ color: 0xe6dcc6 }), dark = new THREE.MeshLambertMaterial({ color: 0x0c0806 });
+  const rock = new THREE.MeshLambertMaterial({ color: 0x8f8170 });
+  W.batch('jgFound', B, stone, X, 0.4, Z, 16, 0.8, 12, 0, null, 0, 0, { solid: true, hook: true });             // 돌 기단
+  W.batch('jgWall', B, plaster, X - 7.6, 3.5, Z, 0.7, 6, 12, 0, null, 0, 0.08, { solid: true, hook: true });     // 기울어진 벽
+  W.batch('jgWall', B, plaster, X + 2, 2.4, Z - 5.7, 11, 3.6, 0.7, 0, null, 0, 0, { solid: true, hook: true });
+  W.batch('jgWall', B, plaster, X + 7.4, 1.6, Z + 1, 0.7, 2.4, 9, 0, null, 0, -0.2, { hook: true });
+  for (let i = 0; i < 7; i++) W.batch('jgBeam', B, wood, X + rand(6), 1.5 + Math.random() * 3, Z + rand(5), 0.4, 0.4, 9 + Math.random() * 4, Math.random() * 3, null, rand(0.5), rand(0.4), { hook: true });   // 부러진 들보
+  W.batch('jgRoof', B, W.roofMats[0], X - 1, 2.6, Z + 2, 12, 0.4, 8, 0.3, null, 0.5, 0.2, { hook: true });        // 꺼진 지붕 조각
+  W.batch('jgBoulder', W.unitRock, rock, X + 1, 4.5, Z + 1, 6, 5, 5.5, 0.8, null, 0.3, 0.2, { solid: true, hook: true });   // 집을 깬 돌덩이
+  // 지하실: 마당 바닥의 들창(열린 나무 문) + 어두운 구멍 + 계단 첫 단들
+  W.batch('jgHole', B, dark, X + 10, 0.03, Z + 9, 3, 0.06, 4, 0, null, 0, 0, { noShadow: true });
+  W.batch('jgHatch', B, wood, X + 10, 1.5, Z + 7, 3, 3, 0.2, 0, null, -0.25, 0, { noShadow: true });
+  for (let k = 0; k < 3; k++) W.batch('jgStep', B, stone, X + 10, 0.02 - k * 0.01, Z + 10.4 - k * 0.9, 2.6, 0.04, 0.8, 0, null, 0, 0, { noShadow: true });
+  W.batch('jgFrame', B, wood, X + 10, 0.15, Z + 11.1, 3.4, 0.3, 0.3, 0, null, 0, 0, { noShadow: true });
+});
+// 트로스트 구: 보급 본부 — 가스·보급품을 쌓아 둔 3층 석조 본부와 가운데 탑(원작 트로스트 공방전의 본부를 참고)
+Polish.pre('embergate', [[85, -70, 155, -10]]);
+Polish.add('embergate', W => {
+  const X = 120, Z = -40, B = W.unitBox;
+  const wall = new THREE.MeshLambertMaterial({ map: W.facadeTexture('#cfc4b0', false) }), stoneL = new THREE.MeshLambertMaterial({ color: 0xbdb19c });
+  const geo = new THREE.BoxGeometry(60, 15, 34); W.scaleBoxUV(geo, 60, 15, 34, 4);
+  W.mesh(geo, [wall, wall, W.flatRoofMat, wall, wall, wall], X, 7.5, Z); W.solid(X - 30, 0, Z - 17, X + 30, 15, Z + 17);
+  const roof = W.mesh(W.gableRoofGeo(34, 60, 12, 0.8), [stoneL, W.roofMats[2]], X, 15, Z); roof.rotation.y = Math.PI / 2;
+  W.solid(X - 30, 15, Z - 17, X + 30, 21, Z + 17);
+  const tg = new THREE.BoxGeometry(11, 36, 11); W.scaleBoxUV(tg, 11, 36, 11, 4);
+  W.mesh(tg, [wall, wall, W.flatRoofMat, wall, wall, wall], X, 18, Z); W.solid(X - 5.5, 0, Z - 5.5, X + 5.5, 36, Z + 5.5);
+  W.batch('suTowerCap', B, stoneL, X, 36.6, Z, 13, 1.2, 13, 0, null, 0, 0, { hook: true });
+  W.batch('suFlag', B, new THREE.MeshLambertMaterial({ color: 0x8a1a18 }), X + 2.5, 43, Z, 4.5, 3, 0.15, 0, null, 0, 0, { noShadow: true });
+  W.batch('suPole', W.unitCyl, W.darkIron, X, 40, Z, 0.15, 8, 0.15, 0, null, 0, 0, { noShadow: true });
+  // 정문 + 마당의 가스통 더미와 보급 상자
+  W.batch('suDoor', B, W.woodMat, X, 3, Z + 17.1, 6, 6, 0.3, 0, null, 0, 0, { noShadow: true });
+  const tank = new THREE.MeshLambertMaterial({ color: 0x6c7276 });
+  for (let i = 0; i < 18; i++) W.batch('suTank', W.unitCyl, tank, X - 24 + (i % 6) * 2.2, 0.9 + Math.floor(i / 6) * 0.01, Z + 22 + Math.floor(i / 6) * 2.2, 0.8, 1.8, 0.8, 0, null, 0, 0, { noShadow: true });
+  for (let i = 0; i < 8; i++) W.batch('crate', B, W.crateMat, X + 14 + (i % 4) * 1.3, 0.55 + Math.floor(i / 4) * 1.1, Z + 22, 1.1, 1.1, 1.1, Math.random());
+});
+// 레벨리오: 기차역 — 수용 구역 밖 남쪽 철로, 승강장·지붕·역사(시계) + 증기기관차와 객차 4량 (마레 근대 철도)
+Polish.pre('ashward', [[-480, -362, 480, -328], [-130, -390, 130, -300]]);
+Polish.add('ashward', W => {
+  const Z = -345, B = W.unitBox, C = W.unitCyl;
+  const steel = W.darkIron, sleeper = new THREE.MeshLambertMaterial({ color: 0x4a3a2c }), plat = new THREE.MeshLambertMaterial({ color: 0x9a948a });
+  const brick = (W._arch && W._arch.marley) ? W._arch.marley.facade[0] : W.stoneMat, roofM = new THREE.MeshLambertMaterial({ color: 0x3e4448 });
+  for (const o of [-1.4, 1.4]) W.batch('lbRail', B, steel, 0, 0.15, Z + o, 960, 0.2, 0.25, 0, null, 0, 0, { noShadow: true });
+  for (let x = -478; x <= 478; x += 2.4) W.batch('lbSleeper', B, sleeper, x, 0.05, Z, 0.5, 0.1, 4.4, 0, null, 0, 0, { noShadow: true });
+  W.batch('lbPlat', B, plat, 0, 0.6, Z - 9, 200, 1.2, 10, 0, null, 0, 0, { solid: true, hook: true });             // 승강장
+  for (let x = -90; x <= 90; x += 15) W.batch('lbPost', C, steel, x, 4.7, Z - 9, 0.25, 7, 0.25, 0, null, 0, 0, { solid: true, hook: true });
+  W.batch('lbCanopy', B, roofM, 0, 8.4, Z - 8, 196, 0.4, 13, 0, null, 0.12, 0, { hook: true });                  // 승강장 지붕
+  const sg = new THREE.BoxGeometry(56, 13, 16); W.scaleBoxUV(sg, 56, 13, 16, 4);
+  W.mesh(sg, [brick, brick, W.flatRoofMat, brick, brick, brick], 0, 7.7, Z - 24); W.solid(-28, 0, Z - 32, 28, 14.2, Z - 16);   // 역사
+  W.batch('lbCornice', B, plat, 0, 14.4, Z - 24, 57.5, 0.9, 17.5, 0, null, 0, 0, { noShadow: true });
+  W.batch('lbClockT', B, brick, 0, 19, Z - 24, 8, 10, 8, 0, null, 0, 0, { solid: true, hook: true });
+  const face = new THREE.Mesh(new THREE.CircleGeometry(2.6, 24), new THREE.MeshLambertMaterial({ color: 0xf2ecdc })); face.position.set(0, 20, Z - 19.95); W.scene.add(face);
+  // 증기기관차(검은 보일러·운전실·굴뚝·바퀴) + 객차 4량
+  const black = new THREE.MeshLambertMaterial({ color: 0x1d1f22 }), car = new THREE.MeshLambertMaterial({ color: 0x3e4a3a }), win = new THREE.MeshLambertMaterial({ color: 0xc8b878 });
+  const LX = 60;
+  W.batch('lbBoiler', C, black, LX, 3.4, Z, 1.6, 10, 1.6, 0, null, 0, Math.PI / 2, { solid: true, hook: true });
+  W.batch('lbCab', B, black, LX - 7, 3.8, Z, 4, 4.6, 3.4, 0, null, 0, 0, { solid: true, hook: true });
+  W.batch('lbStack', C, black, LX + 3.5, 5.8, Z, 0.5, 2.2, 0.5, 0, null, 0, 0, { noShadow: true });
+  for (let k = 0; k < 4; k++) for (const o of [-1.5, 1.5]) W.batch('lbWheel', C, steel, LX - 6 + k * 3.4, 1.1, Z + o, 1, 0.3, 1, 0, null, Math.PI / 2, 0, { noShadow: true });
+  for (let c = 0; c < 4; c++) {
+    const cx = LX - 20 - c * 17;
+    W.batch('lbCar', B, car, cx, 3.2, Z, 15.5, 3.6, 3.2, 0, null, 0, 0, { solid: true, hook: true });
+    W.batch('lbCarRoof', B, roofM, cx, 5.2, Z, 16, 0.4, 3.5, 0, null, 0, 0, { noShadow: true });
+    for (const o of [-1.62, 1.62]) W.batch('lbWin', B, win, cx, 3.8, Z + o, 13, 1, 0.05, 0, null, 0, 0, { noShadow: true });
+  }
 });
 
 </script>
