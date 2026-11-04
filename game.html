@@ -762,9 +762,8 @@ const World = {
     skyroot:    { exposure: 1.18, fog: 0x8e9a72, skyTop: 0x7aa0ae, skyHorizon: 0xd6d6a8, sunGlow: 0xfff0c0, sunColor: 0xffe8b4, hemiSky: 0xd0dcae, hemiGround: 0x3a3220 },                         // 거목의 숲: 초록빛 금색 햇살
     moonfall:   { fog: 0x18242c, skyTop: 0x060b10, skyHorizon: 0x283a44, sunGlow: 0xd0e0f0, sunColor: 0xb8cce0, hemiSky: 0x8aa0b4, hemiGround: 0x2a2620 },                         // 밤: 보라 대신 짙은 청록 어둠
     ashward:    { exposure: 1.15, fog: 0xa8a194, skyTop: 0x6f7680, skyHorizon: 0xc8bea8, sunGlow: 0xf0e2c4, sunColor: 0xf2e4c8, hemiSky: 0xd0cec4, hemiGround: 0x5a4c3c },                         // 폐허: 바랜 잿빛 + 따뜻한 먼지
-    saltmere:   { fog: 0xe0b896, skyTop: 0x5a7aa0, skyHorizon: 0xf2c084, sunGlow: 0xffc878, sunColor: 0xffc890, hemiSky: 0xffe0bc, hemiGround: 0x5a4636 },                         // 바다: 금빛 석양
+    // saltmere(카리파)·mourning(낙원행의 벽)은 29차에 맵 자체 색감으로 새로 만들어 덮어쓰지 않음
     undercrypt: { fog: 0x16110c, skyTop: 0x050403, skyHorizon: 0x16110c, sunColor: 0xffc890, hemiSky: 0xa88a6a, hemiGround: 0x2a2018 },                                            // 지하: 촛불 같은 주황 어둠
-    mourning:   { fog: 0x8a8a80, skyTop: 0x525c64, skyHorizon: 0xa8a290, sunGlow: 0xe6dcc6, sunColor: 0xe2d8c4, hemiSky: 0xc0c0b4, hemiGround: 0x3e3a34 },                         // 땅울림의 바다: 바랜 흐린 하늘
   },
 
   init(scene, mapId) {
@@ -1606,6 +1605,7 @@ const World = {
     let grounded = false;
     let floor = this.waterLevel(pos.x, pos.z) !== null ? this.swimFloor(pos.x, pos.z) : 0;   // 물에서는 헤엄 높이가 바닥
     if (this.open) floor = Math.max(floor, Field.height(pos.x, pos.z));                       // 3단계: 산비탈
+    if (this.map.groundAt) { const g = this.map.groundAt(pos.x, pos.z, pos.y); if (g !== null) floor = Math.max(floor, g); }   // 29차: 맵 전용 바닥(스라토아 나선 경사로)
     if (pos.y <= floor) { pos.y = floor; if (vel.y < 0) vel.y = 0; grounded = true; }
 
     for (const b of this.near(pos.x - r, pos.z - r, pos.x + r, pos.z + r)) {
@@ -3228,6 +3228,239 @@ Object.assign(Maps, {
 
 </script>
 <script>
+// ===== 29차 맵: 카리파 군항 · 스라토아 요새 · 낙원행의 벽 (사용자 참고 이미지 기준으로 새로 만듦) =====
+// 원작 그림은 넣지 않고 구도·구조만 참고. maps2.js 다음에 불러와 같은 id(saltmere·mourning)는 덮어씀.
+const Kit3 = {
+  // 원뿔·구 단위 도형 (World에는 상자·원기둥·바위만 있음)
+  prep(W) { W.unitCone = W.unitCone || new THREE.ConeGeometry(1, 1, 8); W.unitSphere = W.unitSphere || new THREE.SphereGeometry(1, 14, 8); },
+  // 근대 철갑 군함: 회색 선체 + 뾰족한 이물 + 함교 + 굴뚝 2개 + 연장포 포탑 (세계 연합 함대)
+  // ry는 0(동서 방향) 또는 Math.PI/2(남북)만 — 충돌 상자를 축에 맞추기 위해
+  warship(W, x, z, ry, len = 110, sink = 0) {
+    const M = W.navyMats || (W.navyMats = {
+      hull: new THREE.MeshStandardMaterial({ color: 0x4a5058, roughness: 0.7, metalness: 0.3 }),
+      deck: new THREE.MeshLambertMaterial({ color: 0x7a6a58 }), dark: new THREE.MeshStandardMaterial({ color: 0x2a2d31, roughness: 0.6, metalness: 0.5 }),
+      red: new THREE.MeshLambertMaterial({ color: 0x6a2420 }), light: new THREE.MeshLambertMaterial({ color: 0xb8bcc0 }),
+    });
+    const ax = Math.abs(Math.cos(ry)) > 0.5, along = (d) => ax ? [x + d, z] : [x, z + d];
+    const W2 = 15, H = 10;
+    const put = (key, mat, d, y, l, h, w, rx = 0, rz = 0, flags = { hook: true }) => { const [px, pz] = along(d); W.batch(key, W.unitBox, mat, px, y - sink, pz, ax ? l : w, h, ax ? w : l, 0, null, rx, rz, flags); };
+    put('wsHull', M.hull, 0, H / 2, len, H, W2);                                   // 선체
+    put('wsBelt', M.red, 0, 1.2, len * 1.01, 2.4, W2 * 1.02, 0, 0, { noShadow: true });   // 흘수선 붉은 띠
+    put('wsDeck', M.deck, 0, H + 0.2, len * 0.98, 0.4, W2 * 0.96);
+    // 이물: 45도 돌린 상자로 뾰족하게
+    { const [px, pz] = along(len / 2); W.batch('wsBow', W.unitBox, M.hull, px, H / 2 - sink, pz, W2 * 0.72, H, W2 * 0.72, Math.PI / 4, null, 0, 0, { hook: true }); }
+    put('wsBridge', M.light, -len * 0.05, H + 6, len * 0.16, 12, W2 * 0.55);          // 함교
+    put('wsBridge2', M.light, -len * 0.05, H + 13.5, len * 0.08, 3, W2 * 0.4);
+    for (const k of [-0.18, -0.28]) { const [px, pz] = along(len * k); W.batch('wsFunnel', W.unitCyl, M.dark, px, H + 9 - sink, pz, 2.4, 18, 2.4, 0, null, 0, 0, { hook: true }); }
+    for (const k of [0.3, 0.15, -0.42]) {                                            // 포탑 + 포신 2문
+      const [px, pz] = along(len * k);
+      W.batch('wsTurret', W.unitCyl, M.dark, px, H + 2 - sink, pz, 4.2, 3.2, 4.2, 0, null, 0, 0, { hook: true });
+      for (const o of [-1.1, 1.1]) {
+        const s = k > 0 ? 1 : -1, bx = ax ? px + s * 9 : px + o, bz = ax ? pz + o : pz + s * 9;
+        W.batch('wsGun', W.unitCyl, M.dark, bx, H + 2.4 - sink, bz, 0.5, 13, 0.5, 0, null, ax ? 0 : Math.PI / 2 - 0.05, ax ? Math.PI / 2 - 0.05 : 0, { noShadow: true });
+      }
+    }
+    const [mx, mz] = along(len * 0.08); W.batch('wsMast', W.unitCyl, M.dark, mx, H + 22 - sink, mz, 0.6, 26, 0.6, 0, null, 0, 0, { hook: true, solid: true });
+    const hx = ax ? len / 2 + 5 : W2 / 2, hz = ax ? W2 / 2 : len / 2 + 5;
+    W.solid(x - hx, 0, z - hz, x + hx, H + 0.4 - sink, z + hz);
+  },
+  // 대거인포: 콘크리트 받침 + 철제 바퀴 + 긴 포신
+  bigGun(W, x, z, ry) {
+    const M = W.navyMats; const c = Math.cos(ry), s = Math.sin(ry);
+    W.batch('agBase', W.unitBox, W.trimMat || W.stoneMat, x, 1, z, 7, 2, 7, ry, null, 0, 0, { solid: true, hook: true });
+    for (const o of [-2.2, 2.2]) W.batch('agWheel', W.unitCyl, M.dark, x + c * o, 3, z - s * o, 1.6, 0.6, 1.6, ry, null, 0, Math.PI / 2, { noShadow: true });
+    W.batch('agBarrel', W.unitCyl, M.dark, x - s * 5, 4.4, z - c * 5, 0.9, 13, 0.9, ry, null, Math.PI / 2 - 0.25, 0, { hook: true });
+  },
+  // 돌 방파제 한 토막(위를 걸을 수 있음): 성벽처럼 등록
+  mole(W, x1, z1, x2, z2, w, h, mat) { W.addWallSegment(x1, z1, x2, z2, w, h, mat, 1, false); },
+  // 등대: 원통 + 흰 띠 + 불빛
+  lighthouse(W, x, z, h) {
+    W.addTower(x, z, 3.2, h, W.lhMat || (W.lhMat = new THREE.MeshLambertMaterial({ color: 0xe8e2d4 })), W.roofMats[1], 4);
+    if (typeof Fx !== 'undefined') Fx.flame(W, x, h + 2, z, 3);
+  },
+  // 시계탑·교회 첨탑: 높은 석조 몸통 + 시계판 + 뾰족 지붕
+  clockTower(W, x, z, h) {
+    W.batch('ctBody', W.unitBox, W.stoneMat, x, h / 2, z, 9, h, 9, 0, null, 0, 0, { solid: true, hook: true });
+    W.batch('ctFace', W.unitCyl, W.clockMat || (W.clockMat = new THREE.MeshLambertMaterial({ color: 0xf2ecd8 })), x, h * 0.82, z + 4.6, 2.6, 0.3, 2.6, 0, null, Math.PI / 2, 0, { noShadow: true });
+    W.batch('ctSpire', W.unitCone || W.unitCyl, W.roofMats[0], x, h + 7, z, 6.5, 14, 6.5, Math.PI / 4, null, 0, 0, { hook: true });
+  },
+};
+
+// ──────────────────────────────────────────────────────────────
+// 카리파 군항 (마레 대륙 북쪽 해안): 석양 바다를 감싼 방파제 2개(끝에 등대), 빗살처럼 뻗은 잔교,
+// 오른쪽 공업 부두의 크레인·창고·철로, 빽빽한 붉은 지붕 도시와 시계탑, 정박한 세계 연합 함대와 대거인포
+// ──────────────────────────────────────────────────────────────
+Maps.saltmere = {
+  name: 'KARIFA NAVAL PORT', sub: '카리파 군항',
+  desc: '석양 아래 세계 연합 함대가 모인 군항. 방파제와 잔교, 크레인과 군함 사이를 날아 바다에서 밀려오는 거인을 막아라.',
+  env: { fog: 0x9a6a78, fogNear: 220, fogFar: 1600, skyTop: 0x262a58, skyHorizon: 0xff9a5a, sunGlow: 0xffb060,
+         sunDir: [-0.35, 0.1, 0.93], sunColor: 0xffa070, sunI: 1.15, hemiSky: 0xd8a0c0, hemiGround: 0x3a2a30, hemiI: 0.6,
+         cloudColor: 0xc89ab8, cloudOpacity: 0.9, mountain: 0x6a5a70, exposure: 1.05 },
+  bound: 600, start: [-160, 2.5, 30], startYaw: Math.PI,
+  water: { level: 2.4, depth: (x, z) => 3 + Math.min(14, Math.max(0, z - 42) * 0.05), at: (x, z) => z > 42 && !(x > 330 && z < 210) },
+  spawn() {
+    if (Math.random() < 0.75) return [rand(520), 460 + Math.random() * 120];         // 바다 너머에서 (방파제 입구로 몰려옴)
+    const a = Math.PI * (1.15 + Math.random() * 0.7), r = 280 + Math.random() * 250;
+    return [Math.cos(a) * r, Math.sin(a) * r];
+  },
+  build(W) {
+    W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+    Kit3.prep(W);
+    const cob = W.cobbleTexture('#8f8478'); cob.repeat.set(140, 140);
+    W.addGround(1400, new THREE.MeshLambertMaterial({ map: cob }), 0);
+    W.addWater(0, 330, 1400, 580, 2.4);
+    // 부두 앞 방파 둑 + 철로 2줄
+    W.batch('seawall', W.unitBox, W.stoneMat, -110, 1.25, 40, 900, 2.5, 3, 0, null, 0, 0, { solid: true, hook: true });
+    for (const o of [26, 31]) W.batch('rail', W.unitBox, W.darkIron, -60, 0.08, o, 1000, 0.16, 0.5, 0, null, 0, 0, { noShadow: true });
+    // 빗살 잔교 10개 (길이 제각각) + 사이사이 정박한 군함
+    let i = 0;
+    for (let x = -500; x <= 250; x += 82, i++) {
+      MapKit.pier(W, x, 40, 100 + (i % 3) * 30, 9);
+      if (i % 2 === 0 && x < 220) Kit3.warship(W, x + 36, 130 + (i % 3) * 22, Math.PI / 2, 92 + (i % 3) * 10);
+    }
+    // 오른쪽 공업 부두: 넓은 콘크리트 매립지 + 갠트리 크레인 + 창고 + 대거인포
+    W.batch('dockPad', W.unitBox, W.trimMat || W.stoneMat, 460, 1.3, 120, 260, 2.6, 180, 0, null, 0, 0, { solid: true, hook: true });
+    for (const [x, z] of [[360, 60], [420, 60], [480, 60], [540, 60]]) W.addBuilding(x, z, 46, 26, 14, { roofChance: 0.2, crates: 1 });
+    W.navyMats || Kit3.warship(W, 470, 250, 0, 120);   // 함대 재질 준비 겸 공업 부두 앞 큰 전함
+    for (const x of [360, 430, 500, 560]) {
+      for (const o of [-6, 6]) { W.batch('crLeg', W.unitBox, W.darkIron, x + o, 2.6 + 18, 196, 1.6, 36, 1.6, 0, null, 0, 0, { solid: true, hook: true }); }
+      W.batch('crTop', W.unitBox, W.darkIron, x, 2.6 + 37, 205, 14, 3, 40, 0, null, 0, 0, { hook: true });
+      W.batch('crBoom', W.unitBox, W.darkIron, x, 2.6 + 39, 240, 2.2, 2.2, 50, 0, null, -0.12, 0, { hook: true });
+    }
+    for (const x of [-420, -240, -60, 120, 300]) Kit3.bigGun(W, x, 18, Math.PI);   // 바다를 향한 대거인포
+    // 방파제 2개: 왼쪽은 해안에서 비스듬히 나가 가운데 입구까지, 오른쪽은 반대편. 위를 걸을 수 있고 끝마다 등대
+    const sm = W.stoneMat, Hm = 6;
+    Kit3.mole(W, -585, 120, -540, 410, 12, Hm, sm); Kit3.mole(W, -540, 410, -60, 440, 12, Hm, sm);
+    Kit3.mole(W, 60, 440, 430, 420, 12, Hm, sm); Kit3.mole(W, 430, 420, 585, 300, 12, Hm, sm);
+    for (const [x, z, h] of [[-50, 440, 26], [50, 440, 26], [-540, 410, 18], [430, 420, 18]]) Kit3.lighthouse(W, x, z, h);
+    // 방파제 밖 바다의 연합 함대
+    for (const [x, z, ry, l] of [[-320, 520, 0, 130], [-80, 560, 0, 120], [200, 520, 0, 140], [420, 560, 0, 110], [-480, 560, 0, 100]]) Kit3.warship(W, x, z, ry, l);
+    // 도시: 해안을 따라 빽빽한 붉은 기와 집 + 시계탑·교회 첨탑
+    W.fillBuildings((x, z) => z < -36 && Math.hypot(x, z) < 560, 26, 3, 5, 3, 7, 0.06, { roofs: [0, 0, 1, 3] });
+    for (const [x, z, h] of [[-420, -120, 46], [-180, -260, 52], [120, -90, 40], [330, -300, 48]]) Kit3.clockTower(W, x, z, h);
+    for (let k = 0; k < 4; k++) MapKit.ship(W, rand(400), 300 + Math.random() * 80, Math.PI / 2 + rand(0.1), 34);   // 작은 상선
+  },
+};
+
+// ──────────────────────────────────────────────────────────────
+// 스라토아 요새 (마레 대륙 남부 산맥): 바위 황무지에 솟은 원통형 메사(높이 110m), 둘레를 감아 오르는 나선 경사로,
+// 꼭대기의 활주로·비행선 계류탑·격납고, 아래 피난민 천막. 천지전 결전지
+// ──────────────────────────────────────────────────────────────
+Maps.slatoa = {
+  name: 'FORT SLATOA', sub: '스라토아 요새',
+  desc: '남부 산맥의 바위 요새. 나선 경사로를 따라 꼭대기 비행선 기지로 오르고, 사방에서 밀려오는 땅울림을 막아라.',
+  env: { fog: 0xcfb894, fogNear: 260, fogFar: 1700, skyTop: 0x5f86b0, skyHorizon: 0xeed6a8, sunGlow: 0xffe0a0,
+         sunDir: [0.5, 0.45, 0.4], sunColor: 0xffe2b4, sunI: 1.15, hemiSky: 0xd8d4c4, hemiGround: 0x6a5038, hemiI: 0.55,
+         mountain: 0x9a8268, exposure: 1.1 },
+  noKit: true, bound: 620, start: [0, 0, 175], startYaw: 0,
+  spawn() { const a = Math.random() * Math.PI * 2, r = 330 + Math.random() * 260; return [Math.cos(a) * r, Math.sin(a) * r]; },
+  // 나선 경사로 바닥 높이 (수식): 반지름 131~143m 띠에서, 지금 높이에서 0.6m 이내로 오를 수 있는 가장 높은 바퀴의 높이
+  // (회전된 경사로를 축 맞춤 상자로 막으면 대각선에서 이어짐이 어긋나 중간에 막혔음)
+  groundAt(x, z, y) {
+    const r = Math.hypot(x, z); if (r < 131 || r > 143) return null;
+    const T = 2.3 * Math.PI * 2, H = 110; let phi = Math.atan2(z, x) + Math.PI / 2; phi = ((phi % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    let best = null;
+    for (; phi <= T; phi += Math.PI * 2) { const h = phi / T * H; if (h <= y + 0.6 && (best === null || h > best)) best = h; }
+    return best;
+  },
+  build(W) {
+    W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+    Kit3.prep(W);
+    const sand = W.groundTexture('#c2a878', ['#b49a6a', '#cdb486', '#a88e60']); sand.repeat.set(140, 140);
+    W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
+    const rock = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b7a07e', '#7e6a50') });
+    // 메사: 아래가 조금 넓은 원통 (꼭대기 110m 평지). 원기둥 충돌이라 꼭대기에 설 수 있음
+    const R = 130, H = 110;
+    const mesa = new THREE.Mesh(new THREE.CylinderGeometry(R, R * 1.12, H, 48, 6), rock);
+    const pos = mesa.geometry.attributes.position;
+    for (let k = 0; k < pos.count; k++) { const y = pos.getY(k); if (Math.abs(y) < H / 2 - 1) { const f = 1 + (Math.sin(k * 12.9898) * 0.5) * 0.06; pos.setX(k, pos.getX(k) * f); pos.setZ(k, pos.getZ(k) * f); } }
+    mesa.geometry.computeVertexNormals();
+    mesa.position.y = H / 2; mesa.castShadow = mesa.receiveShadow = true; W.scene.add(mesa); W.hookables.push(mesa);
+    W.cylinders.push({ x: 0, z: 0, r: R, h: H, block: true });
+    // 나선 경사로: 2.3바퀴, 한 토막 9m · 높이 0.42m씩 올라감 (걸어서·말로 오를 수 있음)
+    const turns = 2.3, segs = Math.round(turns * 2 * Math.PI * (R + 7) / 9), rise = H / segs;
+    for (let s = 0; s < segs; s++) {
+      const a = -Math.PI / 2 + s / segs * turns * Math.PI * 2, y = (s + 1) * rise, rx = Math.cos(a) * (R + 7), rz = Math.sin(a) * (R + 7);
+      W.batch('ramp', W.unitBox, rock, rx, y - 0.6, rz, 12, 1.2, 10, -a, null, 0, 0, { hook: true });
+      if (s % 3 === 0) W.batch('rampRail', W.unitBox, W.darkIron, Math.cos(a) * (R + 12.5), y + 0.6, Math.sin(a) * (R + 12.5), 0.3, 1.2, 9, -a, null, 0, 0, { noShadow: true });
+    }
+    // 꼭대기: 활주로(어두운 띠) + 비행선 계류탑 3기 + 비행선 + 격납고 + 막사 + 대공포
+    W.batch('runway', W.unitBox, W.darkIron, 0, H + 0.1, 0, 220, 0.2, 26, 0.35, null, 0, 0, { noShadow: true });
+    const env = new THREE.MeshLambertMaterial({ color: 0xd8d2c0 });
+    for (const [x, z] of [[-70, -60], [60, 70], [80, -50]]) {
+      W.batch('mast', W.unitCyl, W.darkIron, x, H + 22, z, 1.2, 44, 1.2, 0, null, 0, 0, { hook: true, solid: true });
+      for (let k = 0; k < 4; k++) W.batch('mastLeg', W.unitCyl, W.darkIron, x + Math.cos(k * 1.57) * 4, H + 10, z + Math.sin(k * 1.57) * 4, 0.35, 22, 0.35, 0, null, Math.sin(k * 1.57) * 0.18, -Math.cos(k * 1.57) * 0.18, { hook: true });
+      const bag = W.mesh(new THREE.SphereGeometry(1, 20, 12), env, x + 32, H + 42, z); bag.scale.set(30, 10, 10);   // 계류된 비행선 (와이어 걸림)
+      W.mesh(new THREE.BoxGeometry(10, 3, 3), W.darkIron, x + 32, H + 30, z);
+    }
+    const hangar = W.mesh(new THREE.CylinderGeometry(22, 22, 70, 24, 1, false, 0, Math.PI), new THREE.MeshLambertMaterial({ color: 0x8a8478, side: THREE.DoubleSide }), -30, H, 70);
+    hangar.rotation.set(0, 0, Math.PI / 2); hangar.rotation.order = 'ZYX'; hangar.rotation.y = Math.PI / 2;
+    W.solid(-65, H, 48, 5, H + 22, 92);
+    for (const [x, z] of [[40, -90], [70, 20], [-90, 10], [-60, -100]]) W.addBuilding(x, z, 16, 12, 6, { roofChance: 0.3 });
+    // 꼭대기 위로 올라가는 건물 충돌: addBuilding은 땅(0) 기준이라 높이를 메사 위로 옮김
+    for (const b of W.solids) if (b.min.y === 0 && Math.hypot((b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2) < R - 5 && b.max.y < 30) { b.min.y += H; b.max.y += H; }
+    for (const o of W.scene.children) if (o.isMesh && o.geometry.type !== 'PlaneGeometry' && o.position.y < 30 && Math.hypot(o.position.x, o.position.z) < R - 5 && o !== mesa) o.position.y += H;
+    for (const k in W.batches) for (const it of W.batches[k].items) if (it.y < 30 && Math.hypot(it.x, it.z) < R - 5 && !['ramp', 'rampRail', 'runway', 'mast', 'mastLeg'].includes(k)) it.y += H;
+    // 주변: 깎인 바위 기둥과 낮은 모래 언덕, 산맥 가장자리, 피난민 천막
+    for (let k = 0; k < 40; k++) {
+      const a = Math.random() * Math.PI * 2, r = 200 + Math.random() * 380, h = 20 + Math.random() * 70;
+      W.batch('butte', W.unitRock, rock, Math.cos(a) * r, h / 2, Math.sin(a) * r, 10 + Math.random() * 18, h / 2, 10 + Math.random() * 18, Math.random() * 6, null, 0, 0, { hook: true, solid: true });
+    }
+    for (let k = 0; k < 30; k++) { const a = Math.random() * Math.PI * 2, r = 180 + Math.random() * 400; W.batch('dune', W.unitSphere || W.unitRock, rock, Math.cos(a) * r, 0, Math.sin(a) * r, 30 + Math.random() * 40, 4 + Math.random() * 5, 20 + Math.random() * 30, Math.random() * 6, null, 0, 0, { noShadow: true }); }
+    const tent = new THREE.MeshLambertMaterial({ color: 0xd8cbb0 });
+    for (let k = 0; k < 36; k++) { const a = Math.PI * 0.35 + Math.random() * 0.6, r = 175 + Math.random() * 40; W.batch('tent', W.unitCone || W.unitBox, tent, Math.cos(a) * r, 2, Math.sin(a) * r, 3, 4, 3, Math.random() * 6, null, 0, 0, { noShadow: true }); }
+  },
+};
+
+// ──────────────────────────────────────────────────────────────
+// 낙원행의 벽 (파라디 섬 남쪽 해안): 한쪽은 사막 모래 언덕, 가운데 사선 버팀벽이 반복되는 높은 방파 성벽(위를 걸을 수 있음),
+// 다른 쪽은 성벽 아래 부두와 직사각형 선거(잔교)가 바다로 뻗은 항구, 끝에는 바위 절벽과 산맥
+// ──────────────────────────────────────────────────────────────
+Maps.mourning = {
+  name: 'PARADISE GATE WALL', sub: '낙원행의 벽',
+  desc: '사막과 바다를 가르는 거대한 방파 성벽. 사선 버팀벽과 잔교, 절벽 사이를 날며 바다에서 오르는 거인을 막아라.',
+  env: { fog: 0xd8c4a0, fogNear: 300, fogFar: 1800, skyTop: 0x5a94c4, skyHorizon: 0xf0dcb0, sunGlow: 0xfff0c0,
+         sunDir: [-0.5, 0.5, -0.3], sunColor: 0xfff0d0, sunI: 1.15, hemiSky: 0xd0e0e8, hemiGround: 0x8a7050, hemiI: 0.55,
+         mountain: 0xa08a70, exposure: 1.1 },
+  noKit: true, bound: 640, start: [-200, 38, -4], startYaw: Math.PI / 2,
+  water: { level: 2.4, depth: (x, z) => 6 + Math.min(14, Math.max(0, z - 40) * 0.04), at: (x, z) => z > 36 && !(x > 470) },
+  spawn() { if (Math.random() < 0.7) return [rand(420), 300 + Math.random() * 280]; return [rand(480), -150 - Math.random() * 400]; },
+  build(W) {
+    W.darkIron = new THREE.MeshStandardMaterial({ color: 0x2c2f33, metalness: 0.6, roughness: 0.5 });
+    Kit3.prep(W);
+    const sand = W.groundTexture('#d6bd88', ['#c9ae78', '#e0c894', '#bda26c']); sand.repeat.set(150, 150);
+    W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
+    W.addWater(-60, 360, 1100, 650, 2.4);
+    const wallMat = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#c9c3b0', '#8e877a') });
+    // 방파 성벽: 높이 36m · 두께 16m, z=0을 따라 동서로. 위를 걸어 다님
+    const H = 36;
+    W.addWallSegment(-620, 0, 470, 0, 16, H, wallMat, 1, false);
+    W.batch('wallCap', W.unitBox, wallMat, -75, H + 0.6, 0, 1090, 1.2, 18, 0, null, 0, 0, { hook: true, noShadow: true });
+    // 바다 쪽 사선 버팀벽: 40m마다 벽에 기대어 비스듬히 내려오는 콘크리트 부벽 (와이어 걸림)
+    for (let x = -600; x <= 450; x += 40) {
+      W.batch('buttress', W.unitBox, wallMat, x, H * 0.48, 15, 5, H * 1.12, 5, 0, null, -0.62, 0, { hook: true });
+      W.solid(x - 2.5, 0, 8, x + 2.5, H * 0.45, 22);
+    }
+    // 성벽 아래 부두(2.6m) + 직사각형 선거: 바다로 뻗은 콘크리트 잔교와 사이 물길
+    W.batch('quayLow', W.unitBox, W.trimMat || wallMat, -75, 1.3, 26, 1090, 2.6, 20, 0, null, 0, 0, { solid: true, hook: true });
+    for (let x = -540; x <= 400; x += 120) {
+      W.batch('jetty', W.unitBox, W.trimMat || wallMat, x, 1.3, 36 + 85, 12, 2.6, 170, 0, null, 0, 0, { solid: true, hook: true });
+      W.batch('jettyEnd', W.unitBox, W.trimMat || wallMat, x + 30, 1.3, 206, 72, 2.6, 10, 0, null, 0, 0, { solid: true, hook: true });
+      for (let z = 50; z < 200; z += 22) W.batch('bollard', W.unitCyl, W.darkIron, x + 5, 3, z, 0.4, 1, 0.4, 0, null, 0, 0, { noShadow: true });
+      W.batch('lamp', W.unitCyl, W.darkIron, x + 62, 9, 206, 0.35, 14, 0.35, 0, null, 0, 0, { hook: true });
+    }
+    MapKit.ship(W, -380, 150, Math.PI / 2, 46); MapKit.ship(W, 100, 140, Math.PI / 2, 40);
+    // 사막 쪽: 부드러운 모래 언덕과 성벽으로 오르는 계단탑
+    for (let k = 0; k < 45; k++) W.batch('dune', W.unitSphere || W.unitRock, new THREE.MeshLambertMaterial({ color: 0xd8bf88 }), rand(600), 0, -80 - Math.random() * 520, 40 + Math.random() * 60, 6 + Math.random() * 10, 30 + Math.random() * 40, Math.random() * 6, null, 0, 0, { noShadow: true });
+    for (const x of [-480, -160, 160]) W.addTower(x, -20, 9, H + 10, wallMat, W.roofMats[2], 12);
+    // 동쪽 끝: 성벽이 기댄 바위 절벽과 뒤 산맥
+    const rock = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#a8927a', '#6e5c4a') });
+    for (let k = 0; k < 28; k++) W.batch('cliff', W.unitRock, rock, 500 + Math.random() * 120, 30, -200 + Math.random() * 500, 30 + Math.random() * 40, 30 + Math.random() * 50, 30 + Math.random() * 40, Math.random() * 6, null, 0, 0, { hook: true, solid: true });
+  },
+};
+
+</script>
+<script>
 // ===== 세계 지도 (22차): 맵 9개를 하나의 1:1 세계 안 "장소"로 =====
 // 좌표는 km, 미트라스(왕도) = (0,0), x = 동쪽, y = 북쪽.
 // 성벽 반지름은 팬 설정 자료(사용자 제공)의 면적에서: 월 시나 내부 약 19만 km² → 250km, 월 로제 약 45만 km² → 380km, 월 마리아 약 72만 km² → 480km. 성벽 높이 50m.
@@ -3253,9 +3486,10 @@ const Atlas = {
     skyroot:    { name: '거대수의 숲', en: 'FOREST OF GIANT TREES', where: '월 로제 밖 동쪽 · 월 마리아 영역', pos: [425, -80] },
     moonfall:   { name: '우트가르드 성', en: 'CASTLE UTGARD', where: '월 로제 안 서남쪽 옛 성', pos: [-290, -110] },
     undercrypt: { name: '레이스 가 예배당 지하', en: 'REISS CHAPEL CAVERN', where: '월 시나 북쪽 · 지하 결정 동굴', pos: [55, 300] },
-    mourning:   { name: '파라디 섬 남쪽 바다', en: 'PARADIS SHORE', where: '벽 밖 남쪽 해안 · 처음 본 바다', pos: [-90, -815] },
+    mourning:   { name: '낙원행의 벽', en: 'PARADISE GATE WALL', where: '파라디 섬 남쪽 해안 · 사막과 바다를 가르는 방파 성벽', pos: [-90, -815] },
     ashward:    { name: '레벨리오 수용 구역', en: 'LIBERIO INTERNMENT ZONE', where: '바다 건너 마레 대륙', pos: [-1750, 260], overseas: true },
-    saltmere:   { name: '마레 군항', en: 'MARLEY NAVAL PORT', where: '바다 건너 마레 대륙 해안', pos: [-1950, -260], overseas: true },
+    saltmere:   { name: '카리파 군항', en: 'KARIFA NAVAL PORT', where: '마레 대륙 북쪽 해안 · 세계 연합 함대 집결지', pos: [-1950, -260], overseas: true },
+    slatoa:     { name: '스라토아 요새', en: 'FORT SLATOA', where: '마레 대륙 남부 산맥 · 비행선 기지 · 천지전 결전지', pos: [-2150, -900], overseas: true },
   },
   // 섬 윤곽: v3f 지도 위 픽셀 좌표 → km (2.7km/px, 월 마리아 중심 315,395)
   OUTLINE_PX: [[150, 18], [240, 12], [330, 12], [400, 40], [450, 90], [495, 150], [530, 210], [560, 280], [580, 350], [592, 430], [590, 510], [575, 580], [550, 640], [510, 700], [470, 745], [420, 735], [370, 700], [320, 690], [270, 722], [230, 760], [190, 735], [150, 690], [110, 650], [80, 590], [62, 520], [70, 440], [85, 370], [95, 300], [100, 230], [88, 160], [95, 90], [120, 40]],
@@ -8717,8 +8951,8 @@ const Story = {
         { t: 'survive', sec: 12, pure: 0, text: '땅울림이 땅을 밟고 지나간다',
           say: [['미카사', '에렌… 어디까지 가려는 거야.']] },
       ] },
-    { title: '천지의 싸움', year: '854년', map: 'saltmere', powers: ['attack'], allies: 8,
-      brief: '마지막 항구. 연합군이 시조의 거인 앞에 선다.',
+    { title: '천지의 싸움', year: '854년', map: 'slatoa', powers: ['attack'], allies: 8,
+      brief: '스라토아 요새. 연합군이 시조의 거인 앞에 선다.',
       steps: [
         { t: 'kill', n: 10, pure: 10, text: '척추에서 쏟아지는 거인 10마리 토벌',
           say: [['한지 분대장', '여기서 막지 못하면 세상이 끝나. 비행정이 올 때까지 버텨!'], ['라이너', '…싸우자. 이번엔 같은 편으로.']] },
