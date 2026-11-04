@@ -3455,6 +3455,9 @@ const Field = {
     };
   },
   enabled() { return this.on && !(typeof Story !== 'undefined' && Story.active); },
+  // 화질 '낮음'(Quality.mode)이면 칸 반경 3(2.8km 사방)·안개 2.6km, 아니면 4칸·3.4km
+  rad() { return typeof Quality !== 'undefined' && Quality.mode === 'low' ? 3 : this.RAD; },
+  fogFar() { return typeof Quality !== 'undefined' && Quality.mode === 'low' ? [400, 2600] : this.FOG; },
   // 세계 m ↔ 게임 좌표
   toLocal(X, Y) { return [X - this.ox, -(Y - this.oy)]; },
   toWorld(x, z) { return [this.ox + x, this.oy - z]; },
@@ -3579,6 +3582,8 @@ const Field = {
     for (const rd of g.roads) { const [x, z] = this.toLocal(rd[0], rd[1]); ch.roads.push([x, z, rd[2], rd[3]]); }
     ch.water = g.water.map(([X, Y]) => this.toLocal(X, Y)); ch.sand = g.sand.map(([X, Y]) => this.toLocal(X, Y));
     ch.peaks = g.peaks.map(([X, Y, r, h]) => [...this.toLocal(X, Y), r, h]);
+    this.bake(ch);
+    const [cx0, cz0] = this.toLocal(ix * this.CH + this.CH / 2, iy * this.CH + this.CH / 2); ch.cx = cx0; ch.cz = cz0;
     // 충돌 격자에 넣기
     const G = W.GRID; ch.cells = [];
     for (const b of boxes) for (let gx = Math.floor(b.min.x / G); gx <= Math.floor(b.max.x / G); gx++) for (let gz = Math.floor(b.min.z / G); gz <= Math.floor(b.max.z / G); gz++) {
@@ -3594,32 +3599,55 @@ const Field = {
     for (const [cell, b] of ch.cells) { const i = cell.indexOf(b); if (i >= 0) cell.splice(i, 1); }
     if (ch.proxy) { const i = this.W.hookables.indexOf(ch.proxy); if (i >= 0) this.W.hookables.splice(i, 1); ch.proxy.geometry.dispose(); }
   },
-  // 활성 칸의 물체를 InstancedMesh에 다시 채움
+  // 최적화(26차): 칸의 인스턴스 행렬·색을 불러올 때 한 번만 계산해 Float32Array로 보관.
+  // 예전에는 칸 경계를 넘을 때마다 1만7천 개를 다시 계산해 숲에서 36ms 멈칫했음 → 이제 배열 복사만(1ms 미만)
+  bake(ch) {
+    const o = this._o || (this._o = new THREE.Object3D()), col = new THREE.Color(), greens = [0x4f7a3a, 0x5d8a44, 0x3f6b33, 0x6b9450];
+    const B = {}, put = (k, c) => {
+      o.updateMatrix(); const b = B[k] || (B[k] = { m: [], c: [] });
+      for (let i = 0; i < 16; i++) b.m.push(o.matrix.elements[i]);
+      if (c !== undefined) { col.setHex(c); b.c.push(col.r, col.g, col.b); }
+    };
+    o.rotation.order = 'XYZ';
+    for (const [x, z, s] of ch.trees) {
+      const h = 12 * s; o.rotation.set(0, 0, 0); o.position.set(x, h * 0.3, z); o.scale.set(s, h * 0.6, s); put('trunk');
+      for (let j = 0; j < 3; j++) { const k = s * (3.6 - j * 0.8); o.position.set(x + Math.sin(x + j) * 0.8, h * (0.55 + j * 0.16), z + Math.cos(z + j) * 0.8); o.rotation.set(j, x % 6, 0); o.scale.set(k, k * 0.9, k); put('leaf', greens[Math.abs(Math.floor(x * 7 + j)) % 4]); }
+      // 먼 칸용: 잎 덩어리 1개 (삼각형 1/3)
+      const k = s * 3.9; o.position.set(x, h * 0.7, z); o.rotation.set(0.6, x % 6, 0); o.scale.set(k, k * 1.05, k); put('leafFar', greens[Math.abs(Math.floor(x * 7)) % 4]);
+    }
+    for (const [x, z, w, d, h, rot, c] of ch.houses) {
+      o.rotation.set(0, rot, 0, 'XYZ'); o.position.set(x, h / 2, z); o.scale.set(w, h, d); put('house', 0xe8dcc4);
+      o.rotation.set(Math.PI / 4, rot, 0, 'YXZ'); o.position.set(x, h, z); o.scale.set(w + 0.8, d * 0.72, d * 0.72); put('roof', c); o.rotation.order = 'XYZ';
+    }
+    for (const [x, z, w, d, rot, c] of ch.crops) { o.rotation.set(0, rot, 0); o.position.set(x, 0.03, z); o.scale.set(w, 0.06, d); put('crop', c); }
+    for (const [x, z] of ch.water) { o.rotation.set(0, 0, 0); o.position.set(x, 0.1, z); o.scale.set(100.5, 0.1, 100.5); put('sea'); }
+    for (const [x, z] of ch.sand) { o.rotation.set(0, 0, 0); o.position.set(x, 0.02, z); o.scale.set(100.5, 0.04, 100.5); put('sand'); }
+    for (const [x, z, r, h] of ch.peaks) {
+      o.rotation.set(0, x % 3, 0); o.position.set(x, h / 2, z); o.scale.set(r, h, r); put('rock');
+      o.position.set(x, h * 0.86, z); o.scale.set(r * 0.29, h * 0.28, r * 0.29); put('snow');
+    }
+    for (const [x, z, len, a] of ch.roads) { o.rotation.set(0, a, 0); o.position.set(x, 0.04, z); o.scale.set(len, 0.05, 8); put('road'); }
+    ch.buf = {};
+    for (const k in B) ch.buf[k] = { m: new Float32Array(B[k].m), c: B[k].c.length ? new Float32Array(B[k].c) : null, n: B[k].m.length / 16 };
+  },
+  CAP: { trunk: 5000, leaf: 15000, house: 900, roof: 900, crop: 900, road: 400, sea: 1700, sand: 900, rock: 300, snow: 300 },
+  LEAF_NEAR: 1100,   // 이보다 먼 칸의 나무는 잎 덩어리 1개
+  // 활성 칸의 물체를 InstancedMesh에 다시 채움 (배열 복사)
   fill() {
-    const I = this.I, o = new THREE.Object3D(), col = new THREE.Color(), greens = [0x4f7a3a, 0x5d8a44, 0x3f6b33, 0x6b9450];
-    const put = (m, i, c) => { o.updateMatrix(); m.setMatrixAt(i, o.matrix); if (c !== undefined && m.instanceColor) m.setColorAt(i, col.setHex(c)); };
-    const n = { trunk: 0, leaf: 0, house: 0, roof: 0, crop: 0, road: 0, sea: 0, sand: 0, rock: 0, snow: 0 };
+    const I = this.I, p = Player.pos, n = {};
     this.peaks = [];
+    for (const k in this.CAP) n[k] = 0;
     for (const ch of this.chunks.values()) {
-      for (const [x, z, s] of ch.trees) {
-        if (n.trunk >= 5000 || n.leaf + 3 > 15000) break;
-        const h = 12 * s; o.rotation.set(0, 0, 0); o.position.set(x, h * 0.3, z); o.scale.set(s, h * 0.6, s); put(I.trunk, n.trunk++);
-        for (let j = 0; j < 3; j++) { const k = s * (3.6 - j * 0.8); o.position.set(x + Math.sin(x + j) * 0.8, h * (0.55 + j * 0.16), z + Math.cos(z + j) * 0.8); o.rotation.set(j, x % 6, 0); o.scale.set(k, k * 0.9, k); put(I.leaf, n.leaf++, greens[Math.abs(Math.floor(x * 7 + j)) % 4]); }
+      for (const pk of ch.peaks) this.peaks.push(pk);
+      const far = Math.hypot(ch.cx - p.x, ch.cz - p.z) > this.LEAF_NEAR;
+      for (const k in this.CAP) {
+        const src = k === 'leaf' && far ? ch.buf.leafFar : ch.buf[k];
+        if (!src || n[k] + src.n > this.CAP[k]) continue;
+        const m = I[k];
+        m.instanceMatrix.array.set(src.m, n[k] * 16);
+        if (m.instanceColor && src.c) m.instanceColor.array.set(src.c, n[k] * 3);
+        n[k] += src.n;
       }
-      for (const [x, z, w, d, h, rot, c] of ch.houses) {
-        if (n.house >= 900) break;
-        o.rotation.set(0, rot, 0); o.position.set(x, h / 2, z); o.scale.set(w, h, d); put(I.house, n.house++, 0xe8dcc4);
-        o.rotation.set(Math.PI / 4, rot, 0, 'YXZ'); o.position.set(x, h, z); o.scale.set(w + 0.8, d * 0.72, d * 0.72); put(I.roof, n.roof++, c); o.rotation.order = 'XYZ';
-      }
-      for (const [x, z, w, d, rot, c] of ch.crops) { if (n.crop >= 900) break; o.rotation.set(0, rot, 0); o.position.set(x, 0.03, z); o.scale.set(w, 0.06, d); put(I.crop, n.crop++, c); }
-      for (const [x, z] of ch.water) { if (n.sea >= 1700) break; o.rotation.set(0, 0, 0); o.position.set(x, 0.1, z); o.scale.set(100.5, 0.1, 100.5); put(I.sea, n.sea++); }
-      for (const [x, z] of ch.sand) { if (n.sand >= 900) break; o.rotation.set(0, 0, 0); o.position.set(x, 0.02, z); o.scale.set(100.5, 0.04, 100.5); put(I.sand, n.sand++); }
-      for (const [x, z, r, h] of ch.peaks) {
-        if (n.rock >= 300) break; this.peaks.push([x, z, r, h]);
-        o.rotation.set(0, x % 3, 0); o.position.set(x, h / 2, z); o.scale.set(r, h, r); put(I.rock, n.rock++);
-        o.position.set(x, h * 0.86, z); o.scale.set(r * 0.29, h * 0.28, r * 0.29); put(I.snow, n.snow++);
-      }
-      for (const [x, z, len, a] of ch.roads) { if (n.road >= 400) break; o.rotation.set(0, a, 0); o.position.set(x, 0.04, z); o.scale.set(len, 0.05, 8); put(I.road, n.road++); }
     }
     for (const k in n) { const m = I[k]; m.count = n[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   },
@@ -3668,12 +3696,17 @@ const Field = {
     const [X, Y] = this.toWorld(p.x, p.z), C = this.CH, cx = Math.floor(X / C), cy = Math.floor(Y / C), key = cx + ',' + cy;
     if (key !== this.lastChunk) {
       this.lastChunk = key;
-      const want = new Set();
-      for (let i = -this.RAD; i <= this.RAD; i++) for (let j = -this.RAD; j <= this.RAD; j++) want.add((cx + i) + ',' + (cy + j));
-      for (const [k, ch] of this.chunks) if (!want.has(k)) { this.unload(ch); this.chunks.delete(k); }
-      for (const k of want) if (!this.chunks.has(k)) { const [a, b] = k.split(',').map(Number); this.chunks.set(k, this.load(a, b)); }
-      this.fill();
+      const want = new Set(), R = this.rad();
+      for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) want.add((cx + i) + ',' + (cy + j));
+      let removed = false;
+      for (const [k, ch] of this.chunks) if (!want.has(k)) { this.unload(ch); this.chunks.delete(k); removed = true; }
+      this.queue = [...want].filter(k => !this.chunks.has(k)).map(k => k.split(',').map(Number)).sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
+      // 처음(빈 상태)이나 순간이동이면 가까운 3x3은 바로
+      if (this.chunks.size === 0) for (const [a, b] of this.queue.splice(0, 9)) this.chunks.set(a + ',' + b, this.load(a, b));
+      if (removed || this.chunks.size) this.fill();
     }
+    // 최적화(26차): 새 칸은 한 프레임에 하나씩 (칸 경계에서 멈칫하지 않게)
+    if (this.queue && this.queue.length) { const [a, b] = this.queue.shift(); this.chunks.set(a + ',' + b, this.load(a, b)); this.fill(); }
     this.updateWalls(X, Y);
     // 0.5초마다: 장소 숨기기, 먼 거인 정리, 위치 표시, 다른 장소 도착
     if ((this.t -= dt) > 0) return;
@@ -3681,7 +3714,7 @@ const Field = {
     const dp = Math.hypot(p.x, p.z), outside = this.W.mapId === 'wild' || dp > this.placeR - 5;   // 들판 장소는 처음부터 밖
     for (const o of this.placeObjs) o.visible = dp < this.placeR + 3800;
     if (!this.fog0) this.fog0 = [scene.fog.near, scene.fog.far];
-    const f = outside ? this.FOG : this.fog0; scene.fog.near = f[0]; scene.fog.far = f[1];
+    const f = outside ? this.fogFar() : this.fog0; scene.fog.near = f[0]; scene.fog.far = f[1];
     if (outside && !this.out) Game.toast('장소 밖 들판 · 1:1 파라디 섬 · H 말 부르기', '#f0d890');
     this.out = outside;
     for (const t of Titans.list) if (!t.removed && !t.dead && (typeof Shifter === 'undefined' || t !== Shifter.titan) && Math.hypot(t.pos.x - p.x, t.pos.z - p.z) > 3600) { W.scene.remove(t.root); t.removed = true; }
