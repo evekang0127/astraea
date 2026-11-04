@@ -3427,6 +3427,8 @@ const Field = {
     this.ground = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }));
     this.ground.rotation.x = -Math.PI / 2; this.ground.position.y = -0.05; this.ground.receiveShadow = true;
     scene.add(this.ground); W.hookables.push(this.ground);
+    this.ground.userData.moving = true;                                   // 따라 움직이는 땅: 와이어는 고정 기준점(anchor)에 박음
+    this.anchor = new THREE.Object3D(); this.anchor.updateMatrixWorld();
     // 칸 물체: 종류마다 InstancedMesh 하나 (칸이 바뀔 때 다시 채움). 그림자는 끔(성능)
     const inst = (geo, mat, cap) => { const m = new THREE.InstancedMesh(geo, mat, cap); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
     const box = new THREE.BoxGeometry(1, 1, 1);
@@ -4449,7 +4451,9 @@ const Player = {
     [0, 1].forEach(s => {
       const hit = this.aimHit(camera, s === 0 ? this.HOOK_SPREAD : -this.HOOK_SPREAD) || center;
       // 움직이는 물체(거인)에도 붙어 있도록 물체 기준 좌표로 저장
-      this.hooks[s] = { obj: hit.object, local: hit.object.worldToLocal(hit.point.clone()),
+      // 28차 버그 수정: 플레이어를 따라 움직이는 들판 땅판(userData.moving)에 박히면 앵커가 같이 밀려 와이어가 끝없이 늘어났음 → 고정 기준점에 박음
+      const ho = hit.object.userData.moving && typeof Field !== 'undefined' && Field.anchor ? Field.anchor : hit.object;
+      this.hooks[s] = { obj: ho, local: ho.worldToLocal(hit.point.clone()),
                         length: hit.point.distanceTo(this.hipPos()), travel: 0, attached: false };
     });
   },
