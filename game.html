@@ -8234,11 +8234,11 @@ html.cutting #storyHud,html.cutting #storySay,html.cutting #crosshair,html.cutti
 // 곡 파일은 게임에 넣지 않음(저작권 곡, 공개 저장소). 설정에서 내 컴퓨터의 음악 파일을 곡 칸에 넣으면 이 브라우저(IndexedDB)에만 저장
 // 상황마다 곡이 바뀜: 시작 화면·장 완료 = Call of Silence, 자유 모드·스토리 1~5장 = ətˈæk 0N tάɪtn,
 // 스토리 6~7장 = 악마의 아이, 스토리 8~9장(땅울림·천지의 싸움) = 2천 년... 곡이 없으면 넣은 다른 곡으로. 효과음보다 작게(기본 30%), 일시정지 중엔 더 작게
-// 17차: 시작 화면·자유 모드(·게임 오버·장 완료)는 넣은 곡 전부를 차례로 돌려 틈 (시작 화면은 Call of Silence부터, 자유 모드는 ətˈæk부터). 스토리 장은 장마다 정한 곡 반복
+// 18차: 시작 화면·자유 모드(·게임 오버·장 완료)는 넣은 곡 전부를 무작위 순서로 돌려 틈(한 바퀴 다 돌면 다시 섞고, 방금 곡이 바로 또 나오지 않게). 스토리 장은 장마다 정한 곡 반복
 const Music = {
   SLOTS: [
-    { id: 'silence', title: 'Call of Silence', artist: 'Hiroyuki Sawano', use: '시작 화면 첫 곡', keys: ['silence'] },
-    { id: 'attack', title: 'ətˈæk 0N tάɪtn', artist: 'Hiroyuki Sawano', use: '자유 모드 첫 곡 · 스토리 1~5장', keys: ['attack', 'titan', 'tάɪtn', 'ətˈæk', 'ataku'] },
+    { id: 'silence', title: 'Call of Silence', artist: 'Hiroyuki Sawano', use: '시작 화면 · 자유 모드', keys: ['silence'] },
+    { id: 'attack', title: 'ətˈæk 0N tάɪtn', artist: 'Hiroyuki Sawano', use: '스토리 1~5장', keys: ['attack', 'titan', 'tάɪtn', 'ətˈæk', 'ataku'] },
     { id: 'devil', title: '악마의 아이', artist: 'Ai Higuchi', use: '스토리 6~7장', keys: ['악마', 'devil', '悪魔', 'akuma'] },
     { id: 'twothousand', title: '2천 년... 혹은... 2만 년 후의 너에게...', artist: 'Linked Horizon', use: '스토리 8~9장', keys: ['2천', '2만', '2000', '二千', 'nisen', 'linked'] },
   ],
@@ -8261,6 +8261,7 @@ const Music = {
     for (const s of this.SLOTS) {
       try { const v = await this.tx('readonly', st => st.get(s.id)); if (v && v.blob) this.tracks[s.id] = { name: v.name, url: URL.createObjectURL(v.blob) }; } catch (_) {}
     }
+    this.loaded = true;   // 다 불러온 뒤에 섞어야 첫 곡도 무작위
     this.refreshUI();
   },
   async put(id, file) {
@@ -8268,6 +8269,7 @@ const Music = {
     if (this.tracks[id]) URL.revokeObjectURL(this.tracks[id].url);
     this.tracks[id] = { name: file.name, url: URL.createObjectURL(file) };
     if (this.cur === id) this.cur = null;   // 지금 곡이면 새 파일로 다시 틀기
+    this.order = null;                      // 새 곡까지 넣어 다시 섞기
     this.refreshUI(); this.unlock();
   },
   // 한 번에 넣기: 여러 파일을 고르면 파일 이름으로 곡 칸을 찾아 넣고, 이름으로 못 찾은 파일은 빈 칸에 차례로
@@ -8290,14 +8292,20 @@ const Music = {
   setVolume(v) { this.vol = v; try { localStorage.setItem('astraea-music-volume', String(v)); } catch (_) {} },
 
   // ---------- 지금 상황에 맞는 곡 ----------
-  // 시작 화면·자유 모드에서 차례로 돌릴 곡 순서
-  LISTS: { menu: ['silence', 'attack', 'devil', 'twothousand'], free: ['attack', 'devil', 'twothousand', 'silence'] },
+  // 넣은 곡을 섞은 순서 (avoid = 방금 끝난 곡은 맨 앞에 오지 않게)
+  shuffle(avoid) {
+    const a = this.SLOTS.map(s => s.id).filter(id => this.tracks[id]);
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    if (a.length > 1 && a[0] === avoid) [a[0], a[a.length - 1]] = [a[a.length - 1], a[0]];
+    return a;
+  },
   scene() {
     if (!Game.started || Game.over) return 'menu';
     if (typeof Story !== 'undefined' && Story.active) return Story.done ? 'menu' : 'story';
     return 'free';
   },
   wanted() {
+    if (!this.loaded) return null;
     const sc = this.scene();
     if (sc === 'story') {
       const id = Story.ch >= 7 ? 'twothousand' : Story.ch >= 5 ? 'devil' : 'attack';
@@ -8305,12 +8313,13 @@ const Music = {
       if (this.tracks.attack) return 'attack';
       return Object.keys(this.tracks)[0] || null;
     }
-    if (sc !== this.plScene) { this.plScene = sc; this.plIdx = 0; }   // 화면이 바뀌면 그 화면의 첫 곡부터
-    const list = this.LISTS[sc].filter(id => this.tracks[id]);
-    return list.length ? list[this.plIdx % list.length] : null;
+    if (sc !== this.plScene) { this.plScene = sc; this.order = null; }   // 화면이 바뀌면 새로 섞음
+    this.order = (this.order || []).filter(id => this.tracks[id]);      // 뺀 곡은 건너뜀
+    if (!this.order.length) this.order = this.shuffle(this.last);
+    return this.order[0] || null;
   },
-  // 곡이 끝나면 다음 곡 (스토리 장 곡은 loop라 끝나지 않음)
-  next() { this.plIdx = (this.plIdx || 0) + 1; this.cur = null; },
+  // 곡이 끝나면 섞은 순서의 다음 곡 (스토리 장 곡은 loop라 끝나지 않음)
+  next() { if (this.order && this.order.length) this.last = this.order.shift(); this.cur = null; },
   // 0.05초마다: 곡이 바뀌면 소리를 줄였다가 새 곡으로 바꾸고 다시 키움
   tick() {
     const want = this.wanted(), duck = Game.started && !Game.running && !Game.over ? 0.4 : 1;
@@ -8338,7 +8347,7 @@ const Music = {
 .music .vol{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px}`;
     document.head.appendChild(css);
     const box = document.createElement('div'); box.className = 'music';
-    box.innerHTML = `<div class="hd"><b>배경 음악</b><small>시작 화면·자유 모드는 넣은 곡을 모두 차례로, 스토리는 장마다 정한 곡 · 이 브라우저에만 저장</small></div>
+    box.innerHTML = `<div class="hd"><b>배경 음악</b><small>시작 화면·자유 모드는 넣은 곡을 모두 무작위 순서로, 스토리는 장마다 정한 곡 · 이 브라우저에만 저장</small></div>
       <div class="all"><label class="pick big">♪ 4곡 한 번에 넣기<input type="file" accept="audio/*" multiple hidden></label><small>파일 4개를 같이 고르면 이름을 보고 알맞은 칸에 넣어요</small></div>
       ${this.SLOTS.map(s => `<div class="mrow" data-id="${s.id}"><span>${s.artist} - ${s.title}<i>${s.use}</i></span>
         <span class="st">없음</span><span><label class="pick">파일 넣기<input type="file" accept="audio/*" hidden></label> <button type="button" class="del" hidden>빼기</button></span></div>`).join('')}
