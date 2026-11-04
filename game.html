@@ -799,7 +799,7 @@ const World = {
     this.updateSun(this.START);
     this.makeMaterials();
     map.build(this);
-    if (typeof MapKit !== 'undefined') { MapKit.dress(this); this.buildGrid(); MapKit.detail(this); }   // detail은 빈자리 검사(isFree)에 격자가 필요 → 임시 격자, 끝에서 다시 만듦
+    if (typeof MapKit !== 'undefined' && !map.noKit) { MapKit.dress(this); this.buildGrid(); MapKit.detail(this); }   // detail은 빈자리 검사(isFree)에 격자가 필요 → 임시 격자, 끝에서 다시 만듦
     this.flushBatches();
     this.mergeStatic();
     this.buildRayProxies();
@@ -1575,6 +1575,7 @@ const World = {
 
   // ---------- 물 (바다 맵): map.water = { level: 수면 높이, at(x, z): 물인 곳인지 } ----------
   waterLevel(x, z) {
+    if (this.open && Field.sea(x, z)) return 0.15;   // 3단계: 섬 밖 바다
     const w = this.map && this.map.water;
     if (w) return w.at(x, z) ? w.level : null;
     for (const p of this.pools) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.level;
@@ -1582,6 +1583,7 @@ const World = {
   },
   // 수면에서 물 밑바닥까지 깊이 (map.water.depth는 숫자 또는 (x, z) => 깊이)
   waterDepth(x, z) {
+    if (this.open && Field.sea(x, z)) return 25;
     const w = this.map && this.map.water;
     if (w) return typeof w.depth === 'function' ? w.depth(x, z) : (w.depth || w.level);
     for (const p of this.pools) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.depth;
@@ -1602,7 +1604,8 @@ const World = {
   STEP: 0.6,   // 이 높이 이하의 턱은 걸어서 올라감 (계단)
   collide(pos, vel, r, h) {
     let grounded = false;
-    const floor = this.waterLevel(pos.x, pos.z) !== null ? this.swimFloor(pos.x, pos.z) : 0;   // 물에서는 헤엄 높이가 바닥
+    let floor = this.waterLevel(pos.x, pos.z) !== null ? this.swimFloor(pos.x, pos.z) : 0;   // 물에서는 헤엄 높이가 바닥
+    if (this.open) floor = Math.max(floor, Field.height(pos.x, pos.z));                       // 3단계: 산비탈
     if (pos.y <= floor) { pos.y = floor; if (vel.y < 0) vel.y = 0; grounded = true; }
 
     for (const b of this.near(pos.x - r, pos.z - r, pos.x + r, pos.z + r)) {
@@ -3295,6 +3298,8 @@ const Atlas = {
       <text x="0" y="-520" class="wn" text-anchor="middle">월 마리아</text><text x="0" y="-418" class="wn" text-anchor="middle">월 로제</text><text x="0" y="-288" class="wn" text-anchor="middle">월 시나</text>
       <path d="M-905 -260 L-960 -260 M-940 -280 L-960 -260 L-940 -240" class="arrow"/><text x="-905" y="-275" class="ovt">바다 건너 마레 대륙 →</text>
       ${marks}${over}
+      ${cur === 'wild' ? (() => { const [x, y] = this.wildPos(); return `<g transform="translate(${x} ${-y})"><circle r="36" class="here"/><circle r="12" fill="#f0d890" stroke="#3a2a18" stroke-width="4"/><text y="-46" class="pn" style="font-size:52px;font-weight:900;fill:#1a1008;paint-order:stroke;stroke:#e8d6a8;stroke-width:12px" text-anchor="middle">지금 위치</text></g>`; })() : ''}
+      <g class="pick" style="display:none"><circle r="20" fill="none" stroke="#7a1515" stroke-width="8"/><path d="M-34 0 H34 M0 -34 V34" stroke="#7a1515" stroke-width="6"/></g>
       <text x="960" y="1110" class="sc" text-anchor="end">파라디 섬 · 1:1 · 눈금 한 칸 250km</text></svg>`;
   },
   css() {
@@ -3305,7 +3310,7 @@ const Atlas = {
 .atlas .land{fill:#b8986a;stroke:#3a2a18;stroke-width:6}.atlas .mtn path{fill:none;stroke:#5a4228;stroke-width:6;opacity:.7}
 .atlas .wall{fill:none;stroke:#3b2a1a;stroke-width:9}.atlas .dist{fill:#b8986a;stroke:#3b2a1a;stroke-width:7}.atlas .mitras{fill:#7a1515;stroke:#2a0a0a;stroke-width:5}
 .atlas .dn{font-size:44px;fill:#2a1d10;font-weight:700}.atlas .dn.cap{font-size:52px}.atlas .wn{font-size:40px;fill:#4a3420;font-style:italic;letter-spacing:4px}
-.atlas .pl{cursor:pointer}.atlas .pl .hit{fill:transparent}.atlas .pl .dot{fill:#a3171a;stroke:#f6e6c0;stroke-width:6}.atlas .pl .pn{font-size:60px;font-weight:900;fill:#1a1008;text-anchor:middle;paint-order:stroke;stroke:#e8d6a8;stroke-width:12px}
+.atlas{cursor:crosshair}.atlas .pl{cursor:pointer}.atlas .pl .hit{fill:transparent}.atlas .pl .dot{fill:#a3171a;stroke:#f6e6c0;stroke-width:6}.atlas .pl .pn{font-size:60px;font-weight:900;fill:#1a1008;text-anchor:middle;paint-order:stroke;stroke:#e8d6a8;stroke-width:12px}
 .atlas .pl:hover .dot,.atlas .pl:focus .dot,.atlas .pl.sel .dot{fill:#e0a020;r:22}.atlas .pl.sel .pn{fill:#7a1515}
 .atlas .here{fill:none;stroke:#f0d890;stroke-width:6;stroke-dasharray:10 8;animation:atlasSpin 6s linear infinite}@keyframes atlasSpin{to{transform:rotate(360deg)}}
 .atlas .ov .pn{text-anchor:start;font-size:54px;fill:#f2e6c8;stroke:#1d2a26}.atlas .arrow{stroke:#e8dcc0;stroke-width:6;fill:none}.atlas .ovt{font-size:44px;fill:#efe2c2;font-style:italic}
@@ -3321,7 +3326,7 @@ const Atlas = {
   mount(box, cur) {
     this.css();
     box.innerHTML = this.svg(cur) + '<div class="atlas-info"></div>';
-    const info = box.querySelector('.atlas-info'), here = this.PLACES[cur];
+    const info = box.querySelector('.atlas-info'), here = cur === 'wild' ? { pos: this.wildPos() } : this.PLACES[cur];
     const show = id => {
       const p = this.PLACES[id], km = here ? Math.round(this.km(here.pos, p.pos)) : 0;
       const chs = typeof Story !== 'undefined' ? Story.chapters.map((c, i) => c.map === id ? `${i + 1}장 「${c.title}」` : '').filter(Boolean).join(', ') : '';
@@ -3335,7 +3340,33 @@ const Atlas = {
       g.addEventListener('click', e => { e.stopPropagation(); show(g.dataset.place); });
       g.addEventListener('keydown', e => { if (e.key === 'Enter') show(g.dataset.place); });
     });
-    show(cur);
+    // 3단계: 섬 아무 곳이나 누르면 그 지점(1:1 들판)으로 빠른 이동
+    const svg = box.querySelector('svg'), pick = box.querySelector('.pick');
+    svg.addEventListener('click', e => {
+      if (e.target.closest('.pl')) return;
+      e.stopPropagation();
+      const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const q = pt.matrixTransform(svg.getScreenCTM().inverse()), p = [q.x, -q.y];
+      box.querySelectorAll('.pl').forEach(g => g.classList.remove('sel'));
+      if (!this.inIsland(p[0], p[1])) { pick.style.display = 'none'; info.innerHTML = '<b>바다</b><i>섬 안쪽을 눌러 주세요</i>'; return; }
+      pick.style.display = ''; pick.setAttribute('transform', `translate(${q.x} ${q.y})`);
+      const r = Math.hypot(p[0], p[1]), km = here ? Math.round(this.km(here.pos, p)) : 0;
+      info.innerHTML = `<b>선택한 지점 · ${this.zone(p)}</b><i>미트라스에서 ${Math.round(r)}km${p[1] > 560 ? ' · 북쪽 산맥' : ''}</i><br>여기서 ${km.toLocaleString()}km · ${this.travel(km)}<br><button type="button" class="go">이 지점으로 빠른 이동</button>`;
+      info.querySelector('.go').onclick = ev => { ev.stopPropagation(); this.warp(p); };
+    });
+    if (cur === 'wild') { const p = this.wildPos(); info.innerHTML = `<b>들판 · ${this.zone(p)}</b><i>미트라스에서 ${Math.round(Math.hypot(p[0], p[1]))}km · 지금 있는 곳</i><br>섬의 다른 곳이나 장소를 눌러 이동`; }
+    else show(cur);
+  },
+  zone(p) { const r = Math.hypot(p[0], p[1]); return r < 250 ? '월 시나 안' : r < 380 ? '월 로제 영역' : r < 480 ? '월 마리아 영역' : '벽 밖'; },
+  inIsland(x, y) {
+    const O = this.outline(); let inside = false;
+    for (let i = 0, j = O.length - 1; i < O.length; j = i++) { const [xi, yi] = O[i], [xj, yj] = O[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside; }
+    return inside;
+  },
+  wildPos() { return typeof Field !== 'undefined' ? Field.wildPos() : [0, -430]; },
+  warp(p) {
+    try { sessionStorage.setItem('astraea-wild', JSON.stringify(p.map(v => Math.round(v * 100) / 100))); sessionStorage.setItem('map', 'wild'); } catch (_) {}
+    location.hash = 'wild'; location.reload();
   },
   travelTo(id) {
     try { sessionStorage.setItem('map', id); } catch (_) {}
@@ -3372,7 +3403,8 @@ Atlas.applyNames();
 // 자바스크립트 계산은 64비트라 수백 km 떨어져도 정밀하고, 그릴 때는 카메라 기준으로 바뀌어 떨림이 없음(따로 원점 이동 없음).
 // 스토리 진행 중에는 장소 경계를 그대로 둠(스토리 목표가 장소 안이라서).
 const Field = {
-  OPEN: { gateward: 1, embergate: 1, ironhold: 1, skyroot: 1, moonfall: 1 },
+  OPEN: { gateward: 1, embergate: 1, ironhold: 1, skyroot: 1, moonfall: 1, wild: 1 },
+  WILD_KEY: 'astraea-wild',   // 3단계: 세계 지도에서 고른 임의 지점(km). 그 지점을 원점으로 하는 빈 장소 'wild'
   CH: 400, RAD: 4,          // 칸 크기(m), 플레이어 주변 몇 칸까지 (9x9 = 약 3.6km 사방)
   FOG: [500, 3400],         // 들판에서는 안개를 멀리 (50m 성벽이 멀리서도 보이게). 장소 안에서는 맵 원래 안개
   on: false, chunks: new Map(),
@@ -3381,8 +3413,9 @@ const Field = {
     this.W = W;
     this.on = !!this.OPEN[W.mapId] && typeof Atlas !== 'undefined';
     if (!this.on) return;
-    const P = Atlas.PLACES[W.mapId];
+    const P = W.mapId === 'wild' ? { pos: this.wildPos() } : Atlas.PLACES[W.mapId];
     this.ox = P.pos[0] * 1000; this.oy = P.pos[1] * 1000;
+    this.sea0 = new Map();
     this.placeR = W.BOUND;
     // 장소에서 만든 물체 (멀리 가면 숨김. 하늘·빛은 제외)
     this.placeObjs = W.scene.children.filter(o => !W._before.has(o) && o !== W.sky && !o.isLight && o !== (W.sun && W.sun.target));
@@ -3403,9 +3436,14 @@ const Field = {
       roof: inst(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), 900),
       crop: inst(box, new THREE.MeshLambertMaterial({ color: 0xffffff }), 900),
       road: inst(box, new THREE.MeshLambertMaterial({ color: 0x9a8462 }), 400),
-      wall: inst(box, new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b5ab98', '#77705f') }), 120),
+      wall: inst(box, new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b5ab98', '#77705f') }), 160),
+      sea: inst(box, new THREE.MeshPhongMaterial({ color: 0x3f7f98, shininess: 90, specular: 0x88aabb }), 1700),
+      sand: inst(box, new THREE.MeshLambertMaterial({ color: 0xd8c89c }), 900),
+      rock: inst(new THREE.ConeGeometry(1, 1, 7, 1), new THREE.MeshStandardMaterial({ color: 0x7a7266, flatShading: true, roughness: 1 }), 300),
+      snow: inst(new THREE.ConeGeometry(1, 1, 7, 1), new THREE.MeshStandardMaterial({ color: 0xf2f0ea, flatShading: true, roughness: 0.9 }), 300),
+      far: inst(new THREE.ConeGeometry(1, 1, 6, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }), 120),
     };
-    for (const k of ['leaf', 'house', 'roof', 'crop']) this.I[k].instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.I[k].count === 0 ? this.I[k].instanceMatrix.count * 3 : 0), 3);
+    for (const k of ['leaf', 'house', 'roof', 'crop', 'far']) this.I[k].instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.I[k].count === 0 ? this.I[k].instanceMatrix.count * 3 : 0), 3);
     this.wallWin = null; this.lastChunk = ''; this.t = 0; this.out = false;
     W.open = false;
     // 들판에서는 거인이 플레이어 주변 300~700m에서 나타남 (장소 안에서는 원래대로)
@@ -3434,17 +3472,31 @@ const Field = {
   gen(ix, iy) {
     const C = this.CH, X0 = ix * C, Y0 = iy * C, R = this.rng(ix, iy), r = Math.hypot(X0 + C / 2, Y0 + C / 2) / 1000;   // 미트라스에서 km
     const inWalls = r < 480, forest = this.noise((X0 + C / 2) / 3200, (Y0 + C / 2) / 3200);
-    const out = { trees: [], houses: [], crops: [], roads: [] };
+    const out = { trees: [], houses: [], crops: [], roads: [], water: [], sand: [], peaks: [] };
+    // 바다·모래사장: 100m 칸마다 섬 윤곽 안팎을 봄 (섬 밖 = 바다, 바다와 붙은 땅 = 모래)
+    let anyLand = false;
+    for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
+      const x = X0 + 50 + a * 100, y = Y0 + 50 + b * 100;
+      if (this.seaW(x, y)) out.water.push([x, y]);
+      else { anyLand = true; if (this.seaW(x + 100, y) || this.seaW(x - 100, y) || this.seaW(x, y + 100) || this.seaW(x, y - 100)) out.sand.push([x, y]); }
+    }
+    if (!anyLand) return out;
+    // 북쪽 산맥 (미트라스에서 북쪽 560km 넘는 곳): 칸마다 0~2개 봉우리 (반지름 250~700m, 높이는 반지름의 1.4~2배)
+    const yKm = (Y0 + C / 2) / 1000;
+    if (yKm > 560) for (let i = 0, k = Math.min(2, Math.floor(R() * 2.6 * Math.min(1, (yKm - 560) / 60))); i < k; i++) {
+      const pr = 250 + R() * 450; out.peaks.push([X0 + R() * C, Y0 + R() * C, pr, pr * (1.4 + R() * 0.6)]);
+    }
+    const mountain = yKm > 560;
     // 숲: 노이즈가 높은 곳은 빽빽한 숲(나무 10~18m), 아니면 드문드문
     const nT = forest > 0.66 ? 40 + Math.floor(R() * 25) : forest > 0.5 ? 8 + Math.floor(R() * 8) : Math.floor(R() * 4);
-    for (let i = 0; i < nT; i++) out.trees.push([X0 + R() * C, Y0 + R() * C, 0.8 + R() * 0.6]);
+    for (let i = 0; i < nT; i++) { const x = X0 + R() * C, y = Y0 + R() * C, s = 0.8 + R() * 0.6; if (!this.seaW(x, y) && !this.peakAt(out.peaks, x, y)) out.trees.push([x, y, s]); }
     // 밭: 벽 안은 거의 다 밭(밀·초록·갈색 띠), 벽 밖(월 마리아 함락 뒤)은 버려져 드묾
-    if (forest < 0.6 && R() < (inWalls ? 0.9 : 0.15)) {
+    if (!mountain && out.water.length === 0 && forest < 0.6 && R() < (inWalls ? 0.9 : 0.15)) {
       const n = 2 + Math.floor(R() * 3), rot = Math.floor(R() * 4) * Math.PI / 2 + (R() - 0.5) * 0.2;
       for (let i = 0; i < n; i++) out.crops.push([X0 + 60 + R() * (C - 120), Y0 + 60 + R() * (C - 120), 60 + R() * 90, 40 + R() * 70, rot, [0xc8b060, 0x8aa050, 0x9a7a52, 0xb8a868][Math.floor(R() * 4)]]);
     }
     // 마을: 벽 안 8%, 벽 밖 3%(폐촌)
-    if (forest < 0.62 && R() < (inWalls ? 0.08 : 0.03)) {
+    if (!mountain && out.water.length === 0 && forest < 0.62 && R() < (inWalls ? 0.08 : 0.03)) {
       const cx = X0 + 100 + R() * (C - 200), cy = Y0 + 100 + R() * (C - 200), n = 6 + Math.floor(R() * 8);
       for (let i = 0; i < n; i++) {
         const a = R() * Math.PI * 2, d = 12 + R() * 55;
@@ -3455,9 +3507,60 @@ const Field = {
     for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
       const dx = Math.cos(a), dy = Math.sin(a), mx = X0 + C / 2, my = Y0 + C / 2;
       const along = mx * dx + my * dy, perp = -mx * dy + my * dx;
-      if (along > 0 && Math.abs(perp) < C * 0.71) out.roads.push([dx * along - dy * 0, dy * along, C * 1.02, a, perp]);
+      if (!mountain && out.water.length === 0 && along > 0 && Math.abs(perp) < C * 0.71) out.roads.push([dx * along - dy * 0, dy * along, C * 1.02, a, perp]);
     }
     return out;
+  },
+
+  // ---------- 3단계: 바다·산 ----------
+  // 세계 m 좌표가 섬 밖(바다)인지. 100m 칸으로 기억해 둠
+  seaW(X, Y) {
+    const k = Math.floor(X / 100) * 100003 + Math.floor(Y / 100), c = this.sea0.get(k);
+    if (c !== undefined) return c;
+    const O = Atlas.outline(), x = X / 1000, y = Y / 1000;
+    let inside = false;
+    for (let i = 0, j = O.length - 1; i < O.length; j = i++) {
+      const [xi, yi] = O[i], [xj, yj] = O[j];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    if (this.sea0.size > 60000) this.sea0.clear();
+    this.sea0.set(k, !inside);
+    return !inside;
+  },
+  sea(x, z) { const [X, Y] = this.toWorld(x, z); return this.seaW(X, Y); },   // 게임 좌표
+  peakAt(peaks, x, y) { return peaks.some(([px, py, r]) => Math.hypot(x - px, y - py) < r); },
+  // 산 위 땅 높이 (원뿔): 플레이어가 산비탈을 딛고 오를 수 있게
+  height(x, z) {
+    let h = 0;
+    if (this.peaks) for (const [px, pz, r, ph] of this.peaks) { const d = Math.hypot(x - px, z - pz); if (d < r) h = Math.max(h, ph * (1 - d / r)); }
+    return h;
+  },
+  wildPos() {
+    try { const p = JSON.parse(sessionStorage.getItem(this.WILD_KEY)); if (Array.isArray(p) && p.length === 2) return p; } catch (_) {}
+    return [0, -430];   // 기본: 트로스트와 시간시나 사이 월 마리아 영역
+  },
+  // 먼 산 실루엣: 북쪽 산맥의 큰 봉우리 70개를 250km 안이면 카메라 앞 2.2km에 같은 겉보기 크기로 그림 (안개 없이, 멀수록 하늘색에 묻힘)
+  BIG: null,
+  farPeaks(X, Y) {
+    if (!this.BIG) {
+      const R = this.rng(77, 13); this.BIG = [];
+      for (let i = 0; this.BIG.length < 70 && i < 2000; i++) {
+        const x = (R() - 0.5) * 1100 * 1000, y = (580 + R() * 420) * 1000;
+        if (!this.seaW(x, y)) { const h = 1600 + R() * 2200; this.BIG.push([x, y, h * (1.3 + R() * 0.5), h]); }
+      }
+      this.horizon = new THREE.Color(this.W.map.env.skyHorizon); this.rockFar = new THREE.Color(0x6a7280);
+    }
+    const I = this.I.far, o = new THREE.Object3D(), col = new THREE.Color(), D = 2200, cam = camera.position;
+    let n = 0;
+    for (const [px, py, r, h] of this.BIG) {
+      const d = Math.hypot(px - X, py - Y);
+      if (d < 3500 || d > 250000) continue;
+      const k = D / d, [lx, lz] = this.toLocal(px, py);
+      o.position.set(cam.x + (lx - cam.x) * k, cam.y + (h / 2 - cam.y) * k, cam.z + (lz - cam.z) * k);
+      o.scale.set(r * k, h * k, r * k); o.updateMatrix(); I.setMatrixAt(n, o.matrix);
+      I.setColorAt(n, col.copy(this.rockFar).lerp(this.horizon, Math.min(0.9, d / 260000))); n++;
+    }
+    I.count = n; I.instanceMatrix.needsUpdate = true; if (I.instanceColor) I.instanceColor.needsUpdate = true;
   },
 
   // ---------- 칸 불러오기/버리기: 충돌 상자(격자)와 와이어 판정 사본까지 ----------
@@ -3469,11 +3572,13 @@ const Field = {
       const v = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
       for (const f of [[0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6], [0, 4, 5], [0, 5, 1], [3, 2, 6], [3, 6, 7], [0, 3, 7], [0, 7, 4], [1, 5, 6], [1, 6, 2]]) for (const i of f) tris.push(...v[i]);
     };
-    const ch = { trees: [], houses: [], crops: [], roads: [] };
+    const ch = { trees: [], houses: [], crops: [], roads: [], water: [], sand: [], peaks: [] };
     for (const [X, Y, s] of g.trees) { const p = keep(X, Y); if (!p) continue; const h = 12 * s; ch.trees.push([p[0], p[1], s]); addBox(p[0] - 0.45, 0, p[1] - 0.45, p[0] + 0.45, h * 0.62, p[1] + 0.45); }
     for (const [X, Y, w, d, h, rot, col] of g.houses) { const p = keep(X, Y); if (!p) continue; ch.houses.push([p[0], p[1], w, d, h, rot, col]); const e = Math.max(w, d) * 0.5 * 0.8; addBox(p[0] - e, 0, p[1] - e, p[0] + e, h, p[1] + e); }
     for (const c of g.crops) { const p = keep(c[0], c[1]); if (p) ch.crops.push([p[0], p[1], ...c.slice(2)]); }
     for (const rd of g.roads) { const [x, z] = this.toLocal(rd[0], rd[1]); ch.roads.push([x, z, rd[2], rd[3]]); }
+    ch.water = g.water.map(([X, Y]) => this.toLocal(X, Y)); ch.sand = g.sand.map(([X, Y]) => this.toLocal(X, Y));
+    ch.peaks = g.peaks.map(([X, Y, r, h]) => [...this.toLocal(X, Y), r, h]);
     // 충돌 격자에 넣기
     const G = W.GRID; ch.cells = [];
     for (const b of boxes) for (let gx = Math.floor(b.min.x / G); gx <= Math.floor(b.max.x / G); gx++) for (let gz = Math.floor(b.min.z / G); gz <= Math.floor(b.max.z / G); gz++) {
@@ -3493,7 +3598,8 @@ const Field = {
   fill() {
     const I = this.I, o = new THREE.Object3D(), col = new THREE.Color(), greens = [0x4f7a3a, 0x5d8a44, 0x3f6b33, 0x6b9450];
     const put = (m, i, c) => { o.updateMatrix(); m.setMatrixAt(i, o.matrix); if (c !== undefined && m.instanceColor) m.setColorAt(i, col.setHex(c)); };
-    const n = { trunk: 0, leaf: 0, house: 0, roof: 0, crop: 0, road: 0 };
+    const n = { trunk: 0, leaf: 0, house: 0, roof: 0, crop: 0, road: 0, sea: 0, sand: 0, rock: 0, snow: 0 };
+    this.peaks = [];
     for (const ch of this.chunks.values()) {
       for (const [x, z, s] of ch.trees) {
         if (n.trunk >= 5000 || n.leaf + 3 > 15000) break;
@@ -3506,6 +3612,13 @@ const Field = {
         o.rotation.set(Math.PI / 4, rot, 0, 'YXZ'); o.position.set(x, h, z); o.scale.set(w + 0.8, d * 0.72, d * 0.72); put(I.roof, n.roof++, c); o.rotation.order = 'XYZ';
       }
       for (const [x, z, w, d, rot, c] of ch.crops) { if (n.crop >= 900) break; o.rotation.set(0, rot, 0); o.position.set(x, 0.03, z); o.scale.set(w, 0.06, d); put(I.crop, n.crop++, c); }
+      for (const [x, z] of ch.water) { if (n.sea >= 1700) break; o.rotation.set(0, 0, 0); o.position.set(x, 0.1, z); o.scale.set(100.5, 0.1, 100.5); put(I.sea, n.sea++); }
+      for (const [x, z] of ch.sand) { if (n.sand >= 900) break; o.rotation.set(0, 0, 0); o.position.set(x, 0.02, z); o.scale.set(100.5, 0.04, 100.5); put(I.sand, n.sand++); }
+      for (const [x, z, r, h] of ch.peaks) {
+        if (n.rock >= 300) break; this.peaks.push([x, z, r, h]);
+        o.rotation.set(0, x % 3, 0); o.position.set(x, h / 2, z); o.scale.set(r, h, r); put(I.rock, n.rock++);
+        o.position.set(x, h * 0.86, z); o.scale.set(r * 0.29, h * 0.28, r * 0.29); put(I.snow, n.snow++);
+      }
       for (const [x, z, len, a] of ch.roads) { if (n.road >= 400) break; o.rotation.set(0, a, 0); o.position.set(x, 0.04, z); o.scale.set(len, 0.05, 8); put(I.road, n.road++); }
     }
     for (const k in n) { const m = I[k]; m.count = n[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
@@ -3522,7 +3635,7 @@ const Field = {
     const I = this.I.wall; I.count = 0;
     if (!ring) { I.instanceMatrix.needsUpdate = true; return; }
     const R = ring.r * 1000, SEG = 300, H = 50, T = 30, o = new THREE.Object3D(), tris = [];
-    const n = Math.ceil(6000 / SEG);
+    const n = Math.ceil(10000 / SEG);   // 3단계: ±10km (먼 쪽은 안개에 묻혀 지평선까지 이어진 것처럼)
     for (let i = -n; i < n; i++) {
       const a0 = th + i * SEG / R, a1 = a0 + SEG / R;
       const [x0, z0] = this.toLocal(Math.cos(a0) * R, Math.sin(a0) * R), [x1, z1] = this.toLocal(Math.cos(a1) * R, Math.sin(a1) * R);
@@ -3565,7 +3678,7 @@ const Field = {
     // 0.5초마다: 장소 숨기기, 먼 거인 정리, 위치 표시, 다른 장소 도착
     if ((this.t -= dt) > 0) return;
     this.t = 0.5;
-    const dp = Math.hypot(p.x, p.z), outside = dp > this.placeR - 5;
+    const dp = Math.hypot(p.x, p.z), outside = this.W.mapId === 'wild' || dp > this.placeR - 5;   // 들판 장소는 처음부터 밖
     for (const o of this.placeObjs) o.visible = dp < this.placeR + 3800;
     if (!this.fog0) this.fog0 = [scene.fog.near, scene.fog.far];
     const f = outside ? this.FOG : this.fog0; scene.fog.near = f[0]; scene.fog.far = f[1];
@@ -3574,6 +3687,7 @@ const Field = {
     for (const t of Titans.list) if (!t.removed && !t.dead && (typeof Shifter === 'undefined' || t !== Shifter.titan) && Math.hypot(t.pos.x - p.x, t.pos.z - p.z) > 3600) { W.scene.remove(t.root); t.removed = true; }
     Titans.list = Titans.list.filter(t => !t.removed || t.dead); Titans._hooksDirty = true;
     this.hud(X, Y);
+    this.farPeaks(X, Y);
   },
   // 위치 표시: 어느 벽 영역인지 + 가까운 장소와 거리. 1.5km 안이면 G로 들어가기
   hud(X, Y) {
@@ -3666,6 +3780,16 @@ const Horse = {
       p.rig.legs.forEach((l, i) => { l.thigh.rotation.x = -1.15; l.thigh.rotation.z = (i ? 1 : -1) * 0.45; l.knee.rotation.x = 1.3; });
     }
   },
+};
+
+// ===== 3단계: '들판' 장소 — 세계 지도에서 고른 지점을 원점으로 하는 빈 장소 (해안·산맥까지 갈 수 있게) =====
+Maps.wild = {
+  name: 'PARADIS WILDS', sub: '파라디 섬 들판', desc: '세계 지도에서 고른 지점에서 시작하는 1:1 들판.',
+  noKit: true, bound: 30, start: [0, 0, 0], startYaw: 0,
+  env: { fog: 0xc8c4a8, fogNear: 500, fogFar: 3400, skyTop: 0x5a93c4, skyHorizon: 0xdfd6b8, sunGlow: 0xffe8b4,
+         sunDir: [0.4, 0.75, 0.3], sunColor: 0xffe6c0, sunI: 1.12, hemiSky: 0xccd8d8, hemiGround: 0x665234, hemiI: 0.52, clouds: 40, exposure: 1.12 },
+  spawn() { const a = Math.random() * Math.PI * 2, r = 300 + Math.random() * 400; return [Math.cos(a) * r, Math.sin(a) * r]; },
+  build() {},
 };
 
 </script>
