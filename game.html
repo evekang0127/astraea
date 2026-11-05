@@ -2095,7 +2095,7 @@ const Maps = {
   // ──────────────────────────────────────────────────────────────
   skyroot: {
     name: 'SKYROOT FOREST', sub: '하늘뿌리 거목 숲',
-    desc: '높이 80m가 넘는 거목들이 하늘을 가린 숲. 줄기와 가지 사이를 날아다니는 입체기동의 낙원.',
+    desc: '높이 100m가 넘는 거목들이 하늘을 가린 숲. 줄기와 가지 사이를 날아다니는 입체기동의 낙원.',
     env: { fog: 0x7d977a, fogNear: 45, fogFar: 600, skyTop: 0x5f93c4, skyHorizon: 0xb9ceb2, sunGlow: 0xfff0c0,
            sunDir: [0.3, 0.85, 0.25], sunColor: 0xfff1cf, sunI: 0.95, hemiSky: 0xc4dcb8, hemiGround: 0x2a3420, hemiI: 0.58,
            mountain: 0x6f8a76, cloudOpacity: 0.7,
@@ -2137,12 +2137,12 @@ const Maps = {
       // 거목 배치: 서로 34m 이상 떨어지게 빽빽하게, 출발 공터와 흙길은 비움
       const trees = [];
       const vineMat = new THREE.MeshLambertMaterial({ color: 0x2c4a22 });
-      for (let tries = 0; tries < 4000 && trees.length < 210; tries++) {
+      for (let tries = 0; tries < 12000 && trees.length < 380; tries++) {   // 39차: 더 빽빽하고 높게(원작 거대수의 숲)
         const a = Math.random() * Math.PI * 2, r = 46 + Math.sqrt(Math.random()) * 585;
         const x = Math.cos(a) * r, z = Math.sin(a) * r;
         if (Math.abs(x - pathX(z)) < 15) continue;
-        if (trees.some(t => Math.hypot(t.x - x, t.z - z) < 34)) continue;
-        trees.push({ x, z, H: 75 + Math.random() * 25, Rb: 5 + Math.random() * 3.5 });
+        if (trees.some(t => Math.hypot(t.x - x, t.z - z) < 24)) continue;
+        trees.push({ x, z, H: 95 + Math.random() * 40, Rb: 6 + Math.random() * 4.5 });
       }
       for (const t of trees) {
         const { x, z, H, Rb } = t;
@@ -4559,6 +4559,126 @@ Polish.add('ragako', W => {
     for (const sx of [-2, 2]) { W.batch('rgRail', W.unitBox, wood, bx + sx, 1.45, Z, 0.16, 0.16, 13, 0, null, 0, 0, { noShadow: true }); for (const k of [-6, -2, 2, 6]) W.batch('rgPost', W.unitBox, wood, bx + sx, 0.7, Z + k, 0.22, 1.6, 0.22, 0, null, 0, 0, { noShadow: true }); }
   }
 });
+
+// ===== 39차: 시간 흐름 — 새벽→아침→점심→오후→저녁→밤 순환(한 바퀴 20분). 하늘·안개·해/달·빛 색이 시간에 맞게, 밤엔 별·은하수·달 =====
+// 맵의 env(색감)는 '한낮' 기준으로 쓰고, 다른 시간대는 시간대 색 표로 보간. 동굴·'길'의 세계·카리파(땅울림 보랏빛)는 시간 고정.
+const DayNight = {
+  FIXED: { undercrypt: 1, underground: 1, paths: 1, saltmere: 1 },
+  DAY: 1200,                  // 하루(초)
+  KEY: 'astraea-time',
+  h: 8.5,                     // 지금 시각(0~24)
+  // 시간대 표: [시각, 하늘 위, 지평선, 안개, 해(달)빛 색, 해 세기, 반구광 세기, 노출, 햇무리 색] — null이면 맵 한낮 색
+  KEYS: [
+    [0, 0x02040c, 0x0c1428, 0x070b16, 0x8aa0d0, 0.28, 0.22, 1.0, 0x6a7aa8],
+    [4.6, 0x0a1230, 0x3a3050, 0x2a2638, 0x9a90c0, 0.3, 0.26, 1.0, 0x8a7aa0],
+    [5.8, 0x2c3e74, 0xf09868, 0xb88a7c, 0xffa070, 0.55, 0.34, 1.05, 0xffa060],
+    [7.5, 0x5c90c8, 0xf2d8b8, 0xd8ccb4, 0xffe2c0, 0.95, 0.46, 1.1, 0xffe0a8],
+    [12, null], [15.5, null],
+    [17.6, 0x4a6aa8, 0xf4b880, 0xd8b090, 0xffc080, 0.95, 0.44, 1.1, 0xffb070],
+    [18.8, 0x3a3270, 0xff7a48, 0xb87060, 0xff8040, 0.6, 0.34, 1.05, 0xff7038],
+    [19.9, 0x141a40, 0x6a3a5a, 0x3a2a40, 0xa08ab8, 0.32, 0.26, 1.0, 0x9a6a90],
+    [21.5, 0x03060e, 0x101a32, 0x0a0e1a, 0x8aa0d0, 0.28, 0.22, 1.0, 0x6a7aa8],
+  ],
+  init(W) {
+    this.W = W; this.on = !this.FIXED[W.mapId] && W.map && W.map.env;
+    if (!this.on) return;
+    try { const v = parseFloat(sessionStorage.getItem(this.KEY)); if (v >= 0 && v < 24) this.h = v; } catch (_) {}
+    const e = W.map.env;
+    this.base = { top: e.skyTop, hor: e.skyHorizon, fog: e.fog, sun: e.sunColor || 0xffffff, sunI: e.sunI || 1, hemiI: e.hemiI || 0.6, exp: e.exposure || 1.3, glow: e.sunGlow || 0xffffff };
+    this.hemi = W.scene.children.find(o => o.isHemisphereLight);
+    this.dome = W.sky && W.sky.children.find(o => o.material && o.material.uniforms && o.material.uniforms.top);
+    this.c = { top: new THREE.Color(), hor: new THREE.Color(), fog: new THREE.Color(), sun: new THREE.Color(), glow: new THREE.Color(), a: new THREE.Color(), b: new THREE.Color() };
+    this.cloudMats = []; W.sky.traverse(o => { if (o.isSprite && o.material && !this.cloudMats.includes(o.material)) this.cloudMats.push(o.material); });   // 구름: 밤엔 어둡게
+    this.buildNight(W);
+    this.clock = document.getElementById('dnClock') || Object.assign(document.createElement('div'), { id: 'dnClock' });
+    if (!this.clock.parentNode) { document.body.appendChild(this.clock); const s = document.createElement('style'); s.textContent = '#dnClock{position:fixed;right:22px;top:118px;z-index:6;font:600 13px "Noto Serif KR",serif;color:#fff;text-shadow:0 1px 4px #000;pointer-events:none}html.title #dnClock{display:none}'; document.head.appendChild(s); }
+    this.apply(0);
+  },
+  // 밤하늘: 별 4000개(크기·색 다르게, 반짝임은 셰이더 대신 투명도 출렁임) + 은하수 띠(기울어진 큰 원을 따라 촘촘한 빛 알갱이 + 넓은 안개 빛) + 달(원반 텍스처 + 달무리)
+  buildNight(W) {
+    const R = 2300, G = new THREE.Group(); this.night = G; W.sky.add(G);
+    const star = (n, spread, size, color, op) => {
+      const pos = new Float32Array(n * 3), col = new Float32Array(n * 3), c = new THREE.Color();
+      for (let i = 0; i < n; i++) {
+        let v;
+        if (spread) {   // 은하수: 기울어진 큰 원 둘레 ± 폭
+          const a = Math.random() * Math.PI * 2, off = (Math.random() + Math.random() + Math.random() - 1.5) * spread;
+          v = new THREE.Vector3(Math.cos(a), off, Math.sin(a)).normalize().applyAxisAngle(new THREE.Vector3(1, 0, 0.3).normalize(), 1.05);
+        } else { v = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 1.1 - 0.1, Math.random() * 2 - 1).normalize(); }
+        if (v.y < -0.05) v.y = -v.y;
+        pos.set([v.x * R, v.y * R, v.z * R], i * 3);
+        c.setHex(color[Math.floor(Math.random() * color.length)]).multiplyScalar(0.6 + Math.random() * 0.4); col.set([c.r, c.g, c.b], i * 3);
+      }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const m = new THREE.PointsMaterial({ size, vertexColors: true, transparent: true, opacity: op, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, sizeAttenuation: false });
+      const p = new THREE.Points(g, m); p.renderOrder = -0.5; G.add(p); return p;
+    };
+    this.stars = [star(3200, 0, 1.6, [0xffffff, 0xcfe0ff, 0xfff0d0, 0xffd8c0], 1), star(700, 0, 2.6, [0xffffff, 0xbfd4ff], 1), star(9000, 0.07, 1.3, [0xe8e0ff, 0xd0d8ff, 0xffe8f0], 0.75)];
+    // 은하수 빛 안개: 띠를 따라 큰 흐린 스프라이트
+    const glowT = W.canvasTex(128, (g, s) => { const gr = g.createRadialGradient(s / 2, s / 2, 2, s / 2, s / 2, s / 2); gr.addColorStop(0, 'rgba(210,200,255,.55)'); gr.addColorStop(0.5, 'rgba(150,140,220,.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, s, s); });
+    this.mw = [];
+    for (let i = 0; i < 46; i++) {
+      const a = i / 46 * Math.PI * 2, v = new THREE.Vector3(Math.cos(a), (Math.random() - 0.5) * 0.06, Math.sin(a)).normalize().applyAxisAngle(new THREE.Vector3(1, 0, 0.3).normalize(), 1.05);
+      if (v.y < 0.02) continue;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowT, color: i % 3 ? 0xb8b0ff : 0xffc8e8, transparent: true, opacity: 0.5, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
+      sp.position.copy(v).multiplyScalar(R * 0.98); const s = 500 + Math.random() * 400; sp.scale.set(s, s * 0.6, 1); sp.renderOrder = -0.6; G.add(sp); this.mw.push(sp);
+    }
+    // 달: 크레이터 원반 + 달무리
+    const moonT = W.canvasTex(256, (g, s) => {
+      const gr = g.createRadialGradient(s * 0.45, s * 0.42, 4, s / 2, s / 2, s / 2); gr.addColorStop(0, '#fffdf2'); gr.addColorStop(0.8, '#e8e2d0'); gr.addColorStop(0.97, '#cfc8b4'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(s / 2, s / 2, s / 2 - 2, 0, Math.PI * 2); g.fill();
+      for (let i = 0; i < 26; i++) { const r = 4 + Math.random() * 18, x = s / 2 + (Math.random() - 0.5) * s * 0.7, y = s / 2 + (Math.random() - 0.5) * s * 0.7; if (Math.hypot(x - s / 2, y - s / 2) + r > s / 2 - 6) continue; g.fillStyle = `rgba(150,145,130,${0.2 + Math.random() * 0.25})`; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+    });
+    this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonT, transparent: true, depthWrite: false, fog: false })); this.moon.scale.set(150, 150, 1); this.moon.renderOrder = -0.4; G.add(this.moon);
+    this.moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowT, color: 0xd8e4ff, transparent: true, opacity: 0.6, depthWrite: false, fog: false, blending: THREE.AdditiveBlending })); this.moonHalo.scale.set(700, 700, 1); G.add(this.moonHalo);
+  },
+  // 표에서 지금 시각의 색 섞기
+  sample(i, k) { const row = this.KEYS[i]; if (row[1] === null) return null; return row; },
+  apply(dt) {
+    const W = this.W; if (!this.on || !W) return;
+    this.h = (this.h + dt * 24 / this.DAY) % 24;
+    const K = this.KEYS; let i = K.length - 1;
+    for (let j = 0; j < K.length; j++) if (K[j][0] <= this.h) i = j;
+    const j = (i + 1) % K.length, h0 = K[i][0], h1 = j ? K[j][0] : 24, t0 = (this.h - h0) / (h1 - h0), t = t0 * t0 * (3 - 2 * t0);
+    const B = this.base, c = this.c;
+    const get = (row, idx, fb) => row[1] === null ? fb : row[idx];
+    const mixC = (out, idx, fb) => { out.setHex(get(K[i], idx, fb)).lerp(c.b.setHex(get(K[j], idx, fb)), t); return out; };
+    const mixN = (idx, fb) => get(K[i], idx, fb) * (1 - t) + get(K[j], idx, fb) * t;
+    mixC(c.top, 1, B.top); mixC(c.hor, 2, B.hor); mixC(c.fog, 3, B.fog); mixC(c.sun, 4, B.sun); mixC(c.glow, 8, B.glow);
+    const sunI = mixN(5, B.sunI), hemiI = mixN(6, B.hemiI), exp = mixN(7, B.exp);
+    // 해: 6시 동쪽 지평선 → 12시 높이 → 18시 서쪽. 밤엔 달이 반대편에서 떠서 빛(그림자)을 줌
+    const a = (this.h - 6) / 12 * Math.PI, sy = Math.sin(a), day = sy > -0.08;
+    const dir = W.SUN_DIR;
+    if (day) dir.set(Math.cos(a), Math.max(0.06, sy), 0.32).normalize();
+    else dir.set(-Math.cos(a), Math.max(0.15, -sy), -0.25).normalize();
+    const night = Math.min(1, Math.max(0, (-sy + 0.05) / 0.25));
+    if (this.dome) { const u = this.dome.material.uniforms; u.top.value.copy(c.top); u.horizon.value.copy(c.hor); u.sunCol.value.copy(c.glow).multiplyScalar(day ? 1 : 0.25); u.discPow.value = day ? 600 : 4000; u.stars.value = 0; }
+    W.scene.fog.color.copy(c.fog); if (W.scene.background && W.scene.background.isColor) W.scene.background.copy(c.fog);
+    W.sun.color.copy(c.sun); W.sun.intensity = sunI;
+    if (this.hemi) this.hemi.intensity = hemiI;
+    if (typeof renderer !== 'undefined') renderer.toneMappingExposure = exp;
+    const lum = Math.min(1, 0.22 + sunI * 0.85);
+    for (const m of this.cloudMats) m.color.setRGB(lum * (0.9 + c.hor.r * 0.1), lum * (0.9 + c.hor.g * 0.1), lum * (0.9 + c.hor.b * 0.1));
+    if (typeof Field !== 'undefined' && Field.I && Field.I.far) Field.I.far.material.color.setScalar(0.3 + 0.7 * Math.min(1, sunI));   // 먼 산 실루엣(안개 없는 재질)도 밤엔 어둡게
+    // 밤하늘 요소: 밤 정도에 따라 투명도, 별은 살짝 반짝
+    this.night.visible = night > 0.01;
+    if (this.night.visible) {
+      const tw = performance.now() / 1000;
+      this.stars[0].material.opacity = night; this.stars[1].material.opacity = night * (0.75 + 0.25 * Math.sin(tw * 2.3)); this.stars[2].material.opacity = night * 0.8;
+      for (const s of this.mw) s.material.opacity = night * 0.42;
+      const md = night > 0 ? (day ? new THREE.Vector3(-Math.cos(a), 0.4, -0.25).normalize() : dir) : dir;
+      this.moon.position.copy(md).multiplyScalar(2150); this.moonHalo.position.copy(this.moon.position);
+      this.moon.material.opacity = night; this.moonHalo.material.opacity = night * 0.55;
+    }
+    if (this.clock) { const hh = Math.floor(this.h), mm = Math.floor((this.h - hh) * 60), nm = this.h < 5 ? '새벽' : this.h < 7 ? '새벽' : this.h < 11 ? '아침' : this.h < 14 ? '점심' : this.h < 17.5 ? '오후' : this.h < 20 ? '저녁' : '밤'; this.clock.textContent = `${nm} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
+    this._save = (this._save || 0) + dt; if (this._save > 2) { this._save = 0; try { sessionStorage.setItem(this.KEY, this.h.toFixed(3)); } catch (_) {} }
+  },
+};
+{
+  const baseInit = World.init, baseUpd = World.update;
+  World.init = function (...args) { const r = baseInit.apply(this, args); try { DayNight.init(this); } catch (e) { console.warn('daynight', e); } return r; };
+  World.update = function (dt) { baseUpd.call(this, dt); if (DayNight.on) DayNight.apply(dt); };
+}
 
 </script>
 <script>
