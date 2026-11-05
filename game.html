@@ -4660,6 +4660,8 @@ const DayNight = {
     const lum = Math.min(1, 0.22 + sunI * 0.85);
     for (const m of this.cloudMats) m.color.setRGB(lum * (0.9 + c.hor.r * 0.1), lum * (0.9 + c.hor.g * 0.1), lum * (0.9 + c.hor.b * 0.1));
     if (typeof Field !== 'undefined' && Field.I && Field.I.far) Field.I.far.material.color.setScalar(0.3 + 0.7 * Math.min(1, sunI));   // 먼 산 실루엣(안개 없는 재질)도 밤엔 어둡게
+    // 밤에는 가로등·횃불 불빛(glowMat)이 더 밝게 빛남
+    if (W.glowMat && W.glowMat.color) { if (!this.glow0) this.glow0 = W.glowMat.color.clone(); W.glowMat.color.copy(this.glow0).multiplyScalar(1 + night * 1.6); }
     // 밤하늘 요소: 밤 정도에 따라 투명도, 별은 살짝 반짝
     this.night.visible = night > 0.01;
     if (this.night.visible) {
