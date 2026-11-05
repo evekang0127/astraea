@@ -2101,17 +2101,17 @@ const Maps = {
            sunDir: [0.3, 0.85, 0.25], sunColor: 0xfff1cf, sunI: 0.95, hemiSky: 0xc4dcb8, hemiGround: 0x2a3420, hemiI: 0.58,
            mountain: 0x6f8a76, cloudOpacity: 0.7,
            mist: { count: 55, color: 0xdde8d6, opacity: 0.16, height: 14 }, mistRadius: 600 },
-    bound: 650, start: [0, 0, -12], startYaw: 0,
-    spawn() { const a = Math.random() * Math.PI * 2, r = 110 + Math.random() * 510; return [Math.cos(a) * r, Math.sin(a) * r]; },
+    bound: 1000, start: [0, 0, -12], startYaw: 0,   // 40차: 숲 반지름 650 → 1000m
+    spawn() { const a = Math.random() * Math.PI * 2, r = 110 + Math.random() * 860; return [Math.cos(a) * r, Math.sin(a) * r]; },
 
     build(W) {
       const pathX = z => Math.sin(z / 120) * 60;                     // 숲을 남북으로 가로지르는 흙길
       // 바닥: 낙엽 섞인 숲 흙 + 흙길
       const floor = W.groundTexture('#2f3a22', ['#3a4529', '#26301c', '#4a3c26', '#56462c', '#222b18']);
-      floor.repeat.set(170, 170);
-      W.addGround(1500, new THREE.MeshLambertMaterial({ map: floor }), 0);
+      floor.repeat.set(260, 260);
+      W.addGround(2300, new THREE.MeshLambertMaterial({ map: floor }), 0);
       const dirt = new THREE.MeshLambertMaterial({ color: 0x7a6446 });
-      for (let z = -640; z < 640; z += 9) {
+      for (let z = -990; z < 990; z += 9) {
         const dx = pathX(z + 4.5) - pathX(z - 4.5);
         W.batch('path', W.unitBox, dirt, pathX(z), 0.04, z, 7, 0.08, 10, Math.atan2(dx, 9), null, 0, 0, { noShadow: true });
       }
@@ -2138,8 +2138,8 @@ const Maps = {
       // 거목 배치: 서로 34m 이상 떨어지게 빽빽하게, 출발 공터와 흙길은 비움
       const trees = [];
       const vineMat = new THREE.MeshLambertMaterial({ color: 0x2c4a22 });
-      for (let tries = 0; tries < 12000 && trees.length < 380; tries++) {   // 39차: 더 빽빽하고 높게(원작 거대수의 숲)
-        const a = Math.random() * Math.PI * 2, r = 46 + Math.sqrt(Math.random()) * 585;
+      for (let tries = 0; tries < 22000 && trees.length < 560; tries++) {   // 39~40차: 빽빽하게, 반지름 1000m까지
+        const a = Math.random() * Math.PI * 2, r = 46 + Math.sqrt(Math.random()) * 935;
         const x = Math.cos(a) * r, z = Math.sin(a) * r;
         if (Math.abs(x - pathX(z)) < 15) continue;
         if (trees.some(t => Math.hypot(t.x - x, t.z - z) < 24)) continue;
@@ -2201,18 +2201,18 @@ const Maps = {
 
       // 덤불·고사리, 이끼 낀 바위, 쓰러진 거목(충돌)
       const fernMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-      for (let i = 0; i < 1400; i++) {
-        const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 620, s = 0.8 + Math.random() * 1.8;
+      for (let i = 0; i < 3000; i++) {
+        const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 970, s = 0.8 + Math.random() * 1.8;
         W.batch('fern', W.unitRock, fernMat, Math.cos(a) * r, s * 0.25, Math.sin(a) * r, s * 1.4, s * 0.55, s * 1.4, Math.random() * 6,
           [0x2f5524, 0x3c6229, 0x284a20, 0x46682c][i % 4], 0, 0, { noShadow: true });
       }
       const mossMat = new THREE.MeshLambertMaterial({ color: 0x5f6b55 });
-      for (let i = 0; i < 220; i++) {
-        const a = Math.random() * Math.PI * 2, r = 30 + Math.random() * 610, s = 0.8 + Math.random() * 3;
+      for (let i = 0; i < 450; i++) {
+        const a = Math.random() * Math.PI * 2, r = 30 + Math.random() * 960, s = 0.8 + Math.random() * 3;
         W.batch('rock', W.unitRock, mossMat, Math.cos(a) * r, s * 0.4, Math.sin(a) * r, s, s * 0.7, s, Math.random() * 6, null, rand(0.3), rand(0.3));
       }
-      for (let i = 0; i < 16; i++) {
-        const a = Math.random() * Math.PI * 2, r = 80 + Math.random() * 520, x = Math.cos(a) * r, z = Math.sin(a) * r;
+      for (let i = 0; i < 36; i++) {
+        const a = Math.random() * Math.PI * 2, r = 80 + Math.random() * 880, x = Math.cos(a) * r, z = Math.sin(a) * r;
         if (Math.abs(x - pathX(z)) < 20 || trees.some(t => Math.hypot(t.x - x, t.z - z) < 30)) continue;
         const alongX = Math.random() < 0.5, L = 30 + Math.random() * 20, rr = 2 + Math.random();
         W.batch('log', W.unitCyl, barkMat, x, rr, z, rr, L, rr, alongX ? 0 : Math.PI / 2, null, 0, Math.PI / 2, { hook: true });
@@ -2256,8 +2256,8 @@ const Maps = {
            discPow: 260, stars: true, sunDir: [-0.45, 0.5, -0.55], sunColor: 0xa8c0ff, sunI: 0.9,
            hemiSky: 0x5a6c9a, hemiGround: 0x1a1f2a, hemiI: 0.62, mountain: 0x2b3550, cloudColor: 0x6a7590, cloudOpacity: 0.45, clouds: 30,
            mist: { count: 45, color: 0x8492b8, opacity: 0.2, height: 6 }, mistRadius: 560 },
-    bound: 600, start: [0, 14, 12], startYaw: 0,
-    spawn() { const a = Math.random() * Math.PI * 2, r = 140 + Math.random() * 420; return [Math.cos(a) * r, Math.sin(a) * r]; },
+    bound: 1000, start: [0, 14, 12], startYaw: 0,   // 40차: 둘레 들판 반지름 1000m
+    spawn() { const a = Math.random() * Math.PI * 2, r = 140 + Math.random() * 800; return [Math.cos(a) * r, Math.sin(a) * r]; },
 
     build(W) {
       const T = 14;                                                     // 성채가 서 있는 바위 언덕 높이
@@ -2269,7 +2269,7 @@ const Maps = {
       // 바닥: 밤 들판
       const grass = W.groundTexture('#2c3a2a', ['#253224', '#34442f', '#1f2a1d', '#3c4a34']);
       grass.repeat.set(150, 150);
-      W.addGround(1400, new THREE.MeshLambertMaterial({ map: grass }), 0);
+      W.addGround(2400, new THREE.MeshLambertMaterial({ map: grass }), 0);
 
       // 바위 언덕: 2단 받침 (아래 6m, 위 14m) + 가장자리 큰 바위로 자연스러운 절벽
       for (const [s, h] of [[130, 6], [100, T]]) {
@@ -2278,7 +2278,7 @@ const Maps = {
         W.mesh(geo, rockMat, 0, h / 2, 0);
         W.solid(-s / 2, 0, -s / 2, s / 2, h, s / 2).block = true;   // 거인도 언덕을 뚫고 지나가지 못함
       }
-      for (let i = 0; i < 70; i++) {
+      for (let i = 0; i < 160; i++) {
         const side = i % 4, t = rand(1), sc = 3 + Math.random() * 6, e = 66 + Math.random() * 4;
         const x = side < 2 ? t * 65 : (side === 2 ? -e : e), z = side < 2 ? (side === 0 ? -e : e) : t * 65;
         if (side === 1 && Math.abs(x) < 8) continue;                    // 계단 자리는 비움
@@ -2384,7 +2384,7 @@ const Maps = {
 
       // 들판: 죽은 나무, 돌 울타리, 선돌 무리, 무너진 예배당, 흩어진 바위
       for (let i = 0; i < 70; i++) {
-        const a = Math.random() * Math.PI * 2, r = 110 + Math.random() * 470, x = Math.cos(a) * r, z = Math.sin(a) * r, h = 6 + Math.random() * 8;
+        const a = Math.random() * Math.PI * 2, r = 110 + Math.random() * 860, x = Math.cos(a) * r, z = Math.sin(a) * r, h = 6 + Math.random() * 8;
         W.batch('dtrunk', W.unitCyl, deadWood, x, h / 2, z, 0.35, h, 0.35, 0, null, rand(0.12), rand(0.12));
         for (let k = 0; k < 3; k++) {
           const b = Math.random() * Math.PI * 2, L = 2 + Math.random() * 3, y = h * (0.55 + Math.random() * 0.4);
@@ -2396,15 +2396,15 @@ const Maps = {
         W.batch('stone', W.unitBox, rockMat, 230 + Math.cos(a) * 16, h / 2, -180 + Math.sin(a) * 16, 1.6, h, 0.9, a);
       }
       for (let i = 0; i < 9; i++) {                                      // 낮은 돌 울타리
-        const a = Math.random() * Math.PI * 2, r = 150 + Math.random() * 350, L = 20 + Math.random() * 30;
+        const a = Math.random() * Math.PI * 2, r = 150 + Math.random() * 780, L = 20 + Math.random() * 30;
         W.batch('fence', W.unitBox, rockMat, Math.cos(a) * r, 0.6, Math.sin(a) * r, L, 1.2, 0.8, Math.random() * Math.PI);
       }
       for (const [ox, oz, w, d, h] of [[0, -8, 14, 1.2, 9], [-7, 0, 1.2, 16, 7], [7, 2, 1.2, 12, 4.5]]) {   // 무너진 예배당
         W.batch('chapel', W.unitBox, keepMat, -260 + ox, h / 2, 200 + oz, w, h, d);
         W.solid(-260 + ox - w / 2, 0, 200 + oz - d / 2, -260 + ox + w / 2, h, 200 + oz + d / 2);
       }
-      for (let i = 0; i < 260; i++) {
-        const a = Math.random() * Math.PI * 2, r = 80 + Math.random() * 500, s = 0.6 + Math.random() * 2.4;
+      for (let i = 0; i < 600; i++) {
+        const a = Math.random() * Math.PI * 2, r = 80 + Math.random() * 900, s = 0.6 + Math.random() * 2.4;
         W.batch('rock', W.unitRock, rockMat, Math.cos(a) * r, s * 0.4, Math.sin(a) * r, s, s * 0.7, s, Math.random() * 6, null, rand(0.3), rand(0.3));
       }
     },
@@ -2995,24 +2995,24 @@ Object.assign(Maps, {
     env: { fog: 0x9aa3ab, fogNear: 160, fogFar: 1100, skyTop: 0x5f7187, skyHorizon: 0xa9b2ba, sunGlow: 0xe8e4da,
            sunDir: [0.35, 0.7, -0.4], sunColor: 0xe9e6df, sunI: 0.85, hemiSky: 0xc7cfd8, hemiGround: 0x4d4840, hemiI: 0.7,
            mountain: 0x7c8794, cloudColor: 0xc9ccd0, cloudOpacity: 0.9, clouds: 60 },
-    bound: 520, start: [0, 0, 0], startYaw: 0,
+    bound: 1020, start: [0, 0, 0], startYaw: 0,   // 40차: 수용 구역 320 → 600m, 바깥 성벽 505 → 1000m
     spawn() {
-      if (Math.random() < 0.6) { const a = Math.random() * Math.PI * 2, r = 220 + Math.random() * 260; return [Math.cos(a) * r, Math.sin(a) * r]; }
-      return Math.random() < 0.5 ? [rand(8), rand(140)] : [rand(140), rand(8)];   // 구역 안 큰길 (십자)
+      if (Math.random() < 0.6) { const a = Math.random() * Math.PI * 2, r = 400 + Math.random() * 560; return [Math.cos(a) * r, Math.sin(a) * r]; }
+      return Math.random() < 0.5 ? [rand(8), rand(280)] : [rand(280), rand(8)];   // 구역 안 큰길 (십자)
     },
     build(W) {
       W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
       const wallMat = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#8f8a82', '#5c5852') });
       const dirt = W.groundTexture('#7b766c', ['#6d685f', '#8a857a', '#5f5a52']);
-      dirt.repeat.set(140, 140);
-      W.addGround(1300, new THREE.MeshLambertMaterial({ map: dirt }), 0);
+      dirt.repeat.set(260, 260);
+      W.addGround(2400, new THREE.MeshLambertMaterial({ map: dirt }), 0);
       const cob = W.cobbleTexture('#8d877c');
-      cob.repeat.set(55, 55);
-      const yard = new THREE.Mesh(new THREE.PlaneGeometry(320, 320), new THREE.MeshLambertMaterial({ map: cob }));
+      cob.repeat.set(100, 100);
+      const yard = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshLambertMaterial({ map: cob }));
       yard.rotation.x = -Math.PI / 2; yard.position.y = 0.03; yard.receiveShadow = true;
       W.scene.add(yard);
       // 구역 담장: 300m 네모, 높이 40m, 남북 두 곳에 문
-      const S = 160, H = 40;
+      const S = 300, H = 40;
       W.addWallSegment(-S, -S, -14, -S, 8, H, wallMat, -1); W.addWallSegment(14, -S, S, -S, 8, H, wallMat, -1);
       W.addWallSegment(-S, S, -14, S, 8, H, wallMat, 1); W.addWallSegment(14, S, S, S, 8, H, wallMat, 1);
       W.addWallSegment(-S, -S, -S, S, 8, H, wallMat, 1); W.addWallSegment(S, -S, S, S, 8, H, wallMat, -1);
@@ -3030,9 +3030,9 @@ Object.assign(Maps, {
       }
       for (let d = -S + 6; d < S; d += 6) for (const [x, z] of [[d, -S + 6], [d, S - 6], [-S + 6, d], [S - 6, d]]) W.batch('fence', W.unitBox, W.darkIron, x, 1.5, z, 0.25, 3, 0.25);
       // 담 밖: 버려진 막사와 돌무더기, 바깥 큰 성벽(반지름 505m, 높이 50m)
-      W.fillBuildings((x, z) => { const r = Math.hypot(x, z); return Math.max(Math.abs(x), Math.abs(z)) > S + 40 && r < 470; }, 56, 2, 4, 1, 3, 0.35, { roofChance: 1, roofs: [1] });
-      for (let i = 0; i < 120; i++) { const a = Math.random() * Math.PI * 2, r = 200 + Math.random() * 280, s = 1 + Math.random() * 3; W.batch('rubble', W.unitRock, wallMat, Math.cos(a) * r, s * 0.4, Math.sin(a) * r, s, s * 0.7, s, Math.random() * 6); }
-      W.addRingWall(0, 0, 505, 12, 50, W.stoneMat);
+      W.fillBuildings((x, z) => { const r = Math.hypot(x, z); return Math.max(Math.abs(x), Math.abs(z)) > S + 40 && r < 960; }, 56, 2, 4, 1, 3, 0.35, { roofChance: 1, roofs: [1] });
+      for (let i = 0; i < 300; i++) { const a = Math.random() * Math.PI * 2, r = 360 + Math.random() * 600, s = 1 + Math.random() * 3; W.batch('rubble', W.unitRock, wallMat, Math.cos(a) * r, s * 0.4, Math.sin(a) * r, s, s * 0.7, s, Math.random() * 6); }
+      W.addRingWall(0, 0, 1000, 12, 50, W.stoneMat);
       Fx.smoke(W, -60, 30, 40, 1.5, 4, 2.5); Fx.smoke(W, 80, 26, -90, 1.2, 4, 2.5);
     },
   },
@@ -3153,16 +3153,16 @@ Object.assign(Maps, {
     env: { fog: 0x0c1324, fogNear: 60, fogFar: 520, skyTop: 0x05070d, skyHorizon: 0x0c1324, sunGlow: 0x000000,
            sunDir: [0.3, 0.9, 0.2], sunColor: 0x8fa8ff, sunI: 0.55, hemiSky: 0x7f95c8, hemiGround: 0x2a2433, hemiI: 0.95,
            mountain: 0x0c1324, clouds: 0, mist: { count: 50, color: 0x6f86b8, opacity: 0.16, height: 8 }, mistRadius: 330 },
-    bound: 360, start: [0, 0, 40], startYaw: 0,
+    bound: 620, start: [0, 0, 40], startYaw: 0,   // 40차: 결정 동굴 반지름 372 → 640m
     titanCap: 140,                                    // 천장(150m) 아래: 시조의 거인(160m)도 몸을 숙인 크기로
-    spawn() { const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 260; return [Math.cos(a) * r, Math.sin(a) * r]; },
+    spawn() { const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 500; return [Math.cos(a) * r, Math.sin(a) * r]; },
     build(W) {
       const rockMat = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#4e4a55', '#2c2932') });
       const floor = W.groundTexture('#3a3640', ['#2f2c35', '#45414c', '#26232b']);
       floor.repeat.set(90, 90);
-      W.addGround(900, new THREE.MeshLambertMaterial({ map: floor }), 0);
+      W.addGround(1500, new THREE.MeshLambertMaterial({ map: floor }), 0);
       // 동굴 벽(높이 160m, 톱니 없음)과 천장 (천장은 와이어가 걸리고 부딪힘. 그림자를 만들지 않아야 안이 보임)
-      const R = 372, n = 36;
+      const R = 640, n = 60;
       for (let i = 0; i < n; i++) {
         const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2;
         W.addWallSegment(Math.cos(a0) * R, Math.sin(a0) * R, Math.cos(a1) * R, Math.sin(a1) * R, 30, 160, rockMat, -1, false);
@@ -3172,14 +3172,14 @@ Object.assign(Maps, {
       ceil.userData.merge = false; ceil.castShadow = false;
       W.solid(-R - 30, 150, -R - 30, R + 30, 170, R + 30);
       // 종유석 (천장에서 매달림, 와이어 걸림) + 바닥 석순
-      for (let i = 0; i < 90; i++) {
-        const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 340, h = 10 + Math.random() * 30;
+      for (let i = 0; i < 260; i++) {
+        const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 610, h = 10 + Math.random() * 30;
         W.batch('stalactite', W.unitRock, rockMat, Math.cos(a) * r, 150 - h / 2, Math.sin(a) * r, 3 + Math.random() * 3, h / 2, 3 + Math.random() * 3, Math.random() * 6, null, Math.PI, 0, { hook: true, noShadow: true });
       }
-      for (let i = 0; i < 60; i++) { const a = Math.random() * Math.PI * 2, r = 80 + Math.random() * 260, h = 4 + Math.random() * 10; W.batch('rock', W.unitRock, rockMat, Math.cos(a) * r, h / 2, Math.sin(a) * r, 2 + Math.random() * 2, h / 2, 2 + Math.random() * 2, Math.random() * 6); }
+      for (let i = 0; i < 170; i++) { const a = Math.random() * Math.PI * 2, r = 80 + Math.random() * 530, h = 4 + Math.random() * 10; W.batch('rock', W.unitRock, rockMat, Math.cos(a) * r, h / 2, Math.sin(a) * r, 2 + Math.random() * 2, h / 2, 2 + Math.random() * 2, Math.random() * 6); }
       // 바닥에서 천장까지 이어진 거대한 돌기둥 (원기둥 충돌)
-      for (let i = 0; i < 14; i++) {
-        const a = i / 14 * Math.PI * 2 + rand(0.1), r = 150 + Math.random() * 170, x = Math.cos(a) * r, z = Math.sin(a) * r, pr = 7 + Math.random() * 5;
+      for (let i = 0; i < 30; i++) {
+        const a = i / 30 * Math.PI * 2 + rand(0.1), r = 150 + Math.random() * 440, x = Math.cos(a) * r, z = Math.sin(a) * r, pr = 7 + Math.random() * 5;
         W.mesh(new THREE.CylinderGeometry(pr * 0.7, pr * 1.3, 150, 12), rockMat, x, 75, z);
         W.cylinders.push({ x, z, r: pr, h: 150 });
       }
@@ -3197,7 +3197,7 @@ Object.assign(Maps, {
       // 지하 호수 + 빛나는 결정 (빛 3개)
       W.addWater(-150, 120, 160, 120);
       const crystal = new THREE.MeshBasicMaterial({ color: 0x7fd8ff });
-      for (let i = 0; i < 70; i++) { const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 290, h = 3 + Math.random() * 9; W.batch('crystal', W.cone || (W.cone = new THREE.ConeGeometry(1, 1, 6)), crystal, Math.cos(a) * r, h / 2, Math.sin(a) * r, 1 + Math.random(), h, 1 + Math.random(), Math.random() * 6, null, rand(0.3), rand(0.3), { noShadow: true }); }
+      for (let i = 0; i < 200; i++) { const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 560, h = 3 + Math.random() * 9; W.batch('crystal', W.cone || (W.cone = new THREE.ConeGeometry(1, 1, 6)), crystal, Math.cos(a) * r, h / 2, Math.sin(a) * r, 1 + Math.random(), h, 1 + Math.random(), Math.random() * 6, null, rand(0.3), rand(0.3), { noShadow: true }); }
       for (const [x, z] of [[0, -30], [-150, 120], [180, -140]]) { const l = new THREE.PointLight(0x7fd8ff, 2.2, 160, 2); l.position.set(x, 18, z); W.scene.add(l); }
       Fx.flame(W, -6, 3.2, -34, 1.2); Fx.flame(W, 6, 3.2, -34, 1.2);   // 제단 촛불
     },
@@ -3418,8 +3418,8 @@ Maps.slatoa = {
   env: { fog: 0xcfb894, fogNear: 260, fogFar: 1700, skyTop: 0x5f86b0, skyHorizon: 0xeed6a8, sunGlow: 0xffe0a0,
          sunDir: [0.5, 0.45, 0.4], sunColor: 0xffe2b4, sunI: 1.15, hemiSky: 0xd8d4c4, hemiGround: 0x6a5038, hemiI: 0.55,
          mountain: 0x9a8268, exposure: 1.1 },
-  noKit: true, bound: 620, start: [0, 0, 175], startYaw: 0,
-  spawn() { const a = Math.random() * Math.PI * 2, r = 330 + Math.random() * 260; return [Math.cos(a) * r, Math.sin(a) * r]; },
+  noKit: true, bound: 1000, start: [0, 0, 175], startYaw: 0,   // 40차: 둘레 황무지 반지름 1000m
+  spawn() { const a = Math.random() * Math.PI * 2, r = 330 + Math.random() * 620; return [Math.cos(a) * r, Math.sin(a) * r]; },
   // 나선 경사로 바닥 높이 (수식): 반지름 131~143m 띠에서, 지금 높이에서 0.6m 이내로 오를 수 있는 가장 높은 바퀴의 높이
   // (회전된 경사로를 축 맞춤 상자로 막으면 대각선에서 이어짐이 어긋나 중간에 막혔음)
   groundAt(x, z, y) {
@@ -3433,7 +3433,7 @@ Maps.slatoa = {
     W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
     Kit3.prep(W);
     const sand = W.groundTexture('#c2a878', ['#b49a6a', '#cdb486', '#a88e60']); sand.repeat.set(140, 140);
-    W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
+    W.addGround(2400, new THREE.MeshLambertMaterial({ map: sand }), 0);
     const rock = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b7a07e', '#7e6a50') });
     // 메사: 아래가 조금 넓은 원통 (꼭대기 110m 평지). 원기둥 충돌이라 꼭대기에 설 수 있음
     const R = 130, H = 110;
@@ -3468,11 +3468,11 @@ Maps.slatoa = {
     for (const o of W.scene.children) if (o.isMesh && o.geometry.type !== 'PlaneGeometry' && o.position.y < 30 && Math.hypot(o.position.x, o.position.z) < R - 5 && o !== mesa) o.position.y += H;
     for (const k in W.batches) for (const it of W.batches[k].items) if (it.y < 30 && Math.hypot(it.x, it.z) < R - 5 && !['ramp', 'rampRail', 'runway', 'mast', 'mastLeg'].includes(k)) it.y += H;
     // 주변: 깎인 바위 기둥과 낮은 모래 언덕, 산맥 가장자리, 피난민 천막
-    for (let k = 0; k < 40; k++) {
-      const a = Math.random() * Math.PI * 2, r = 200 + Math.random() * 380, h = 20 + Math.random() * 70;
+    for (let k = 0; k < 110; k++) {
+      const a = Math.random() * Math.PI * 2, r = 200 + Math.random() * 780, h = 20 + Math.random() * 70;
       W.batch('butte', W.unitRock, rock, Math.cos(a) * r, h / 2, Math.sin(a) * r, 10 + Math.random() * 18, h / 2, 10 + Math.random() * 18, Math.random() * 6, null, 0, 0, { hook: true, solid: true });
     }
-    for (let k = 0; k < 30; k++) { const a = Math.random() * Math.PI * 2, r = 180 + Math.random() * 400; W.batch('dune', W.unitSphere || W.unitRock, rock, Math.cos(a) * r, 0, Math.sin(a) * r, 30 + Math.random() * 40, 4 + Math.random() * 5, 20 + Math.random() * 30, Math.random() * 6, null, 0, 0, { noShadow: true }); }
+    for (let k = 0; k < 80; k++) { const a = Math.random() * Math.PI * 2, r = 180 + Math.random() * 800; W.batch('dune', W.unitSphere || W.unitRock, rock, Math.cos(a) * r, 0, Math.sin(a) * r, 30 + Math.random() * 40, 4 + Math.random() * 5, 20 + Math.random() * 30, Math.random() * 6, null, 0, 0, { noShadow: true }); }
     const tent = new THREE.MeshLambertMaterial({ color: 0xd8cbb0 });
     for (let k = 0; k < 36; k++) { const a = Math.PI * 0.35 + Math.random() * 0.6, r = 175 + Math.random() * 40; W.batch('tent', W.unitCone || W.unitBox, tent, Math.cos(a) * r, 2, Math.sin(a) * r, 3, 4, 3, Math.random() * 6, null, 0, 0, { noShadow: true }); }
   },
@@ -3488,28 +3488,28 @@ Maps.mourning = {
   env: { fog: 0xd8c4a0, fogNear: 300, fogFar: 1800, skyTop: 0x5a94c4, skyHorizon: 0xf0dcb0, sunGlow: 0xfff0c0,
          sunDir: [-0.5, 0.5, -0.3], sunColor: 0xfff0d0, sunI: 1.15, hemiSky: 0xd0e0e8, hemiGround: 0x8a7050, hemiI: 0.55,
          mountain: 0xa08a70, exposure: 1.1 },
-  noKit: true, bound: 640, start: [-200, 38, -4], startYaw: Math.PI / 2,
+  noKit: true, bound: 1000, start: [-200, 38, -4],   /* 40차: 해안 벽 길이 1090 → 1470m, 둘레 반지름 1000m */ startYaw: Math.PI / 2,
   water: { level: 2.4, depth: (x, z) => 6 + Math.min(14, Math.max(0, z - 40) * 0.04), at: (x, z) => z > 36 && !(x > 470) },
-  spawn() { if (Math.random() < 0.7) return [rand(420), 300 + Math.random() * 280]; return [rand(480), -150 - Math.random() * 400]; },
+  spawn() { if (Math.random() < 0.7) return [-260 + rand(690), 300 + Math.random() * 620]; return [rand(900), -150 - Math.random() * 780]; },
   build(W) {
     W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
     Kit3.prep(W);
     const sand = W.groundTexture('#d6bd88', ['#c9ae78', '#e0c894', '#bda26c']); sand.repeat.set(150, 150);
-    W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
-    W.addWater(-60, 360, 1100, 650, 2.4);
+    W.addGround(2400, new THREE.MeshLambertMaterial({ map: sand }), 0);
+    W.addWater(-265, 600, 1510, 1130, 2.4);
     const wallMat = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#c9c3b0', '#8e877a') });
     // 방파 성벽: 높이 30m(나무위키 파라디 섬: 해안선을 따라 30m 벽) · 두께 16m, z=0을 따라 동서로. 위를 걸어 다님
     const H = 30;
-    W.addWallSegment(-620, 0, 470, 0, 16, H, wallMat, 1, false);
+    W.addWallSegment(-1000, 0, 470, 0, 16, H, wallMat, 1, false);
     W.batch('wallCap', W.unitBox, wallMat, -75, H + 0.6, 0, 1090, 1.2, 18, 0, null, 0, 0, { hook: true, noShadow: true });
     // 바다 쪽 사선 버팀벽: 40m마다 벽에 기대어 비스듬히 내려오는 콘크리트 부벽 (와이어 걸림)
-    for (let x = -600; x <= 450; x += 40) {
+    for (let x = -980; x <= 450; x += 40) {
       W.batch('buttress', W.unitBox, wallMat, x, H * 0.48, 15, 5, H * 1.12, 5, 0, null, -0.62, 0, { hook: true });
       W.solid(x - 2.5, 0, 8, x + 2.5, H * 0.45, 22);
     }
     // 성벽 아래 부두(2.6m) + 직사각형 선거: 바다로 뻗은 콘크리트 잔교와 사이 물길
     W.batch('quayLow', W.unitBox, W.trimMat || wallMat, -75, 1.3, 26, 1090, 2.6, 20, 0, null, 0, 0, { solid: true, hook: true });
-    for (let x = -540; x <= 400; x += 120) {
+    for (let x = -900; x <= 400; x += 120) {
       W.batch('jetty', W.unitBox, W.trimMat || wallMat, x, 1.3, 36 + 85, 12, 2.6, 170, 0, null, 0, 0, { solid: true, hook: true });
       W.batch('jettyEnd', W.unitBox, W.trimMat || wallMat, x + 30, 1.3, 206, 72, 2.6, 10, 0, null, 0, 0, { solid: true, hook: true });
       for (let z = 50; z < 200; z += 22) W.batch('bollard', W.unitCyl, W.darkIron, x + 5, 3, z, 0.4, 1, 0.4, 0, null, 0, 0, { noShadow: true });
@@ -3517,7 +3517,7 @@ Maps.mourning = {
     }
     MapKit.ship(W, -380, 150, Math.PI / 2, 46); MapKit.ship(W, 100, 140, Math.PI / 2, 40);
     // 사막 쪽: 부드러운 모래 언덕과 성벽으로 오르는 계단탑
-    for (let k = 0; k < 45; k++) W.batch('dune', W.unitSphere || W.unitRock, new THREE.MeshLambertMaterial({ color: 0xd8bf88 }), rand(600), 0, -80 - Math.random() * 520, 40 + Math.random() * 60, 6 + Math.random() * 10, 30 + Math.random() * 40, Math.random() * 6, null, 0, 0, { noShadow: true });
+    for (let k = 0; k < 110; k++) W.batch('dune', W.unitSphere || W.unitRock, new THREE.MeshLambertMaterial({ color: 0xd8bf88 }), rand(950), 0, -80 - Math.random() * 880, 40 + Math.random() * 60, 6 + Math.random() * 10, 30 + Math.random() * 40, Math.random() * 6, null, 0, 0, { noShadow: true });
     for (const x of [-480, -160, 160]) W.addTower(x, -20, 9, H + 10, wallMat, W.roofMats[2], 12);
     // 동쪽 끝: 성벽이 기댄 바위 절벽과 뒤 산맥
     const rock = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#a8927a', '#6e5c4a') });
@@ -3631,14 +3631,14 @@ Maps.orvud = {
 Maps.ragako = {
   env: { fog: 0xc8c4a8, fogNear: 300, fogFar: 1700, skyTop: 0x5a93c4, skyHorizon: 0xdfd6b8, sunGlow: 0xffe8b4, sunDir: [0.4, 0.75, 0.3], sunColor: 0xffe6c0, sunI: 1.12, hemiSky: 0xccd8d8, hemiGround: 0x665234, hemiI: 0.52, exposure: 1.12 },
   name: 'RAGAKO VILLAGE', sub: '라가코 마을', desc: '월 로제 안 조용한 농촌. 울타리와 짚가리, 농가 사이로 숨어든 거인을 찾아라.',
-  bound: 560, start: [0, 0, 40], startYaw: Math.PI, noKit: true,
-  spawn() { const a = Math.random() * Math.PI * 2, r = 200 + Math.random() * 320; return [Math.cos(a) * r, Math.sin(a) * r]; },
+  bound: 1000, start: [0, 0, 40], startYaw: Math.PI, noKit: true,   // 40차: 마을 둘레 밭 반지름 1000m
+  spawn() { const a = Math.random() * Math.PI * 2, r = 200 + Math.random() * 750; return [Math.cos(a) * r, Math.sin(a) * r]; },
   build(W) {
     Kit4.mats(W);
-    const g = W.groundTexture('#86954e', ['#7a8844', '#93a25a']); g.repeat.set(150, 150); W.addGround(1400, new THREE.MeshLambertMaterial({ map: g }), 0);
+    const g = W.groundTexture('#86954e', ['#7a8844', '#93a25a']); g.repeat.set(260, 260); W.addGround(2400, new THREE.MeshLambertMaterial({ map: g }), 0);
     const crop = [0xc8b060, 0x8aa050, 0x9a7a52];
-    for (let i = 0; i < 26; i++) {
-      const x = rand(480), z = rand(480); if (Math.hypot(x, z) < 110) continue;
+    for (let i = 0; i < 80; i++) {
+      const x = rand(940), z = rand(940); if (Math.hypot(x, z) < 110 || Math.abs(z - 150) < 40) continue;   // 개울 자리 비움
       const w = 50 + Math.random() * 60, d = 40 + Math.random() * 50;
       W.batch('field', W.unitBox, new THREE.MeshLambertMaterial({ color: crop[i % 3] }), x, 0.04, z, w, 0.08, d, 0, null, 0, 0, { noShadow: true });
       for (let k = -d / 2 + 3; k < d / 2; k += 4) W.batch('furrow', W.unitBox, Kit4.mats(W).dirt, x, 0.1, z + k, w, 0.06, 0.6, 0, null, 0, 0, { noShadow: true });
@@ -3648,19 +3648,19 @@ Maps.ragako = {
     for (let i = 0; i < 22; i++) { const a = i / 22 * Math.PI * 2, r = 30 + (i % 3) * 22; W.addBuilding(Math.cos(a) * r, Math.sin(a) * r, 9 + Math.random() * 4, 8 + Math.random() * 4, 5 + Math.floor(Math.random() * 2) * 3, { roofChance: 1, roofs: [0, 1], crates: 0.3 }); }
     Kit4.well(W, 0, 0);
     for (let i = 0; i < 6; i++) Kit4.cart(W, rand(90), rand(90), Math.random() * 3);
-    for (let i = 0; i < 60; i++) W.addTree(rand(540), rand(540), 1.2);
+    for (let i = 0; i < 200; i++) W.addTree(rand(980), rand(980), 1.2);
   },
 };
 
 // ── 다우퍼 마을 (산악 숲의 사냥꾼 마을): 빽빽한 숲 속 통나무 오두막, 좁은 빈터
 Maps.dauper = {
   name: 'DAUPER VILLAGE', sub: '다우퍼 마을', desc: '산속 숲에 고립된 사냥꾼 마을. 좁은 오두막과 나무 사이에서 거인을 피하라.',
-  bound: 520, start: [0, 0, 20], startYaw: Math.PI, noKit: true,
+  bound: 950, start: [0, 0, 20], startYaw: Math.PI, noKit: true,   // 40차: 산골 숲 반지름 950m
   env: { fog: 0x7e8f74, fogNear: 60, fogFar: 700, skyTop: 0x6f97b8, skyHorizon: 0xc8d2b0, sunGlow: 0xfff0c0, sunDir: [0.3, 0.7, 0.3], sunColor: 0xffecc0, sunI: 1, hemiSky: 0xc0d4b0, hemiGround: 0x2e3220, hemiI: 0.6 },
   spawn() { const a = Math.random() * Math.PI * 2, r = 150 + Math.random() * 300; return [Math.cos(a) * r, Math.sin(a) * r]; },
   build(W) {
     const M = Kit4.mats(W);
-    const g = W.groundTexture('#5a6a3c', ['#4e5e34', '#667644', '#5a5030']); g.repeat.set(150, 150); W.addGround(1400, new THREE.MeshLambertMaterial({ map: g }), 0);
+    const g = W.groundTexture('#5a6a3c', ['#4e5e34', '#667644', '#5a5030']); g.repeat.set(260, 260); W.addGround(2300, new THREE.MeshLambertMaterial({ map: g }), 0);
     // 통나무 오두막: 가로로 쌓은 통나무 + 경사 지붕 + 돌 굴뚝
     for (let i = 0; i < 9; i++) {
       const a = i / 9 * Math.PI * 2 + 0.3, r = 26 + (i % 2) * 14, x = Math.cos(a) * r, z = Math.sin(a) * r;
@@ -3670,7 +3670,7 @@ Maps.dauper = {
       W.batch('chimney', W.unitBox, W.stoneMat, x + 3, 5.5, z, 1.2, 4, 1.2, 0, null, 0, 0, { noShadow: true });
     }
     for (let i = 0; i < 6; i++) { W.batch('rack', W.unitBox, M.wood, rand(50), 1.2, rand(50), 4, 0.15, 0.15); }   // 사냥감 건조대
-    for (let i = 0; i < 520; i++) { const x = rand(500), z = rand(500); if (Math.hypot(x, z) > 60) W.addTree(x, z, 1.6 + Math.random() * 0.8, [0x3f6b33, 0x355c2c, 0x4f7a3a]); }
+    for (let i = 0; i < 1400; i++) { const x = rand(930), z = rand(930); if (Math.hypot(x, z) > 60 && !(Math.abs(x) < 5 && z < -40 && z > -125)) W.addTree(x, z, 1.6 + Math.random() * 0.8, [0x3f6b33, 0x355c2c, 0x4f7a3a]); }
   },
 };
 
@@ -3706,45 +3706,45 @@ Maps.mitras = {
 // ── 왕도 지하 도시: 거대한 천연 암석 동굴, 천장을 받치는 바위 기둥 숲, 수직 환기창으로 내리는 빛, 철제 계단·와이어 공중 슬럼
 Maps.underground = {
   name: 'UNDERGROUND CITY', sub: '왕도 지하 도시', desc: '미트라스 아래 거대한 동굴 도시. 바위 기둥과 공중 슬럼 사이를 날며 어둠 속 거인을 베어라.',
-  bound: 420, start: [0, 0, 60], startYaw: Math.PI, noKit: true,
+  bound: 900, start: [0, 0, 60], startYaw: Math.PI, noKit: true,   // 40차: 동굴 반지름 420 → 900m
   env: { fog: 0x1a1612, fogNear: 60, fogFar: 520, skyTop: 0x050403, skyHorizon: 0x1a1612, sunGlow: 0x000000, sunDir: [0.2, 0.95, 0.1], sunColor: 0xffe2b0, sunI: 0.7, hemiSky: 0x8a7a68, hemiGround: 0x241c16, hemiI: 0.9, clouds: 0 },
-  spawn() { const a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 260; return [Math.cos(a) * r, Math.sin(a) * r]; },
+  spawn() { const a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 720; return [Math.cos(a) * r, Math.sin(a) * r]; },
   build(W) {
     const M = Kit4.mats(W);
-    const g = W.groundTexture('#4a4036', ['#3e352c', '#564a3e']); g.repeat.set(120, 120); W.addGround(1200, new THREE.MeshLambertMaterial({ map: g }), 0);
+    const g = W.groundTexture('#4a4036', ['#3e352c', '#564a3e']); g.repeat.set(200, 200); W.addGround(2000, new THREE.MeshLambertMaterial({ map: g }), 0);
     const rock = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#6a5e50', '#3e362e'), side: THREE.DoubleSide });
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(1100, 1100), rock); ceil.rotation.x = Math.PI / 2; ceil.position.y = 140; W.scene.add(ceil); W.hookables.push(ceil);
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), rock); ceil.rotation.x = Math.PI / 2; ceil.position.y = 140; W.scene.add(ceil); W.hookables.push(ceil);
     // 바위 기둥 숲 (천장까지)
-    for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 330, x = Math.cos(a) * r, z = Math.sin(a) * r, rr = 8 + Math.random() * 12; W.batch('pillar', W.unitCyl, rock, x, 70, z, rr, 140, rr, 0, null, 0, 0, { hook: true }); W.cylinders.push({ x, z, r: rr, h: 140, block: true }); }
+    for (let i = 0; i < 90; i++) { const a = Math.random() * Math.PI * 2, r = 60 + Math.random() * 820, x = Math.cos(a) * r, z = Math.sin(a) * r, rr = 8 + Math.random() * 12; W.batch('pillar', W.unitCyl, rock, x, 70, z, rr, 140, rr, 0, null, 0, 0, { hook: true }); W.cylinders.push({ x, z, r: rr, h: 140, block: true }); }
     // 수직 환기창: 천장 구멍 대신 위에서 내려오는 빛기둥
-    for (let i = 0; i < 5; i++) { const x = rand(300), z = rand(300); const m = new THREE.Mesh(new THREE.CylinderGeometry(9, 14, 140, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide })); m.position.set(x, 70, z); W.scene.add(m); }
+    for (let i = 0; i < 14; i++) { const x = rand(750), z = rand(750); const m = new THREE.Mesh(new THREE.CylinderGeometry(9, 14, 140, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide })); m.position.set(x, 70, z); W.scene.add(m); }
     // 바닥의 판잣집 골목 + 공중 슬럼(기둥에 매단 판자집과 철제 계단·와이어 다리)
-    W.fillBuildings((x, z) => Math.hypot(x, z) > 40 && Math.hypot(x, z) < 380, 18, 2, 4, 2, 4, 0.05, { roofs: [2, 1] });
-    for (let i = 0; i < 40; i++) { const x = rand(320), z = rand(320), y = 20 + Math.random() * 70; W.batch('shack', W.unitBox, M.wood, x, y, z, 7 + Math.random() * 5, 5, 6 + Math.random() * 4, Math.random() * 3, null, 0, 0, { solid: true, hook: true }); W.batch('stilt', W.unitCyl, W.darkIron, x, y / 2, z, 0.3, y, 0.3); }
-    for (let i = 0; i < 25; i++) { const x = rand(300), z = rand(300), y = 30 + Math.random() * 60; W.batch('bridgeW', W.unitBox, M.wood, x, y, z, 30, 0.3, 2, Math.random() * 3, null, 0, 0, { hook: true }); }
-    for (let i = 0; i < 30; i++) { const x = rand(330), z = rand(330); if (typeof Fx !== 'undefined') Fx.flame(W, x, 3, z, 1.2); }
+    W.fillBuildings((x, z) => Math.hypot(x, z) > 40 && Math.hypot(x, z) < 860, 24, 2, 4, 2, 4, 0.05, { roofs: [2, 1] });
+    for (let i = 0; i < 150; i++) { const x = rand(780), z = rand(780), y = 20 + Math.random() * 70; W.batch('shack', W.unitBox, M.wood, x, y, z, 7 + Math.random() * 5, 5, 6 + Math.random() * 4, Math.random() * 3, null, 0, 0, { solid: true, hook: true }); W.batch('stilt', W.unitCyl, W.darkIron, x, y / 2, z, 0.3, y, 0.3); }
+    for (let i = 0; i < 90; i++) { const x = rand(760), z = rand(760), y = 30 + Math.random() * 60; W.batch('bridgeW', W.unitBox, M.wood, x, y, z, 30, 0.3, 2, Math.random() * 3, null, 0, 0, { hook: true }); }
+    for (let i = 0; i < 60; i++) { const x = rand(780), z = rand(780); if (typeof Fx !== 'undefined') Fx.flame(W, x, 3, z, 1.2); }
   },
 };
 
 // ── 슬라바 요새 (마레 vs 중동연합): 콘크리트 벙커, 격자 참호(깊이 2.5m), 회전 포대, 해안 요새와 전함
 Maps.slava = {
   name: 'FORT SLAVA', sub: '슬라바 요새', desc: '해안 언덕의 근대 요새. 참호와 벙커, 포대 사이에서 거인과 포격을 견뎌라.',
-  bound: 620, start: [0, 0, 120], startYaw: Math.PI, noKit: true,
+  bound: 1000, start: [0, 0, 120], startYaw: Math.PI, noKit: true,   // 40차: 전선 폭 1000 → 1800m
   env: { fog: 0x8a8678, fogNear: 200, fogFar: 1400, skyTop: 0x5a6878, skyHorizon: 0xb0aa98, sunGlow: 0xe8dcc0, sunDir: [-0.4, 0.4, -0.5], sunColor: 0xe8dcc8, sunI: 0.95, hemiSky: 0xb8b8b0, hemiGround: 0x4a4236, hemiI: 0.7 },
   water: { level: 2.4, depth: () => 12, at: (x, z) => z < -380 },
-  spawn() { return Math.random() < 0.6 ? [rand(520), 300 + Math.random() * 280] : [rand(520), -420 - Math.random() * 150]; },
+  spawn() { return Math.random() < 0.6 ? [rand(900), 300 + Math.random() * 600] : [rand(900), -420 - Math.random() * 450]; },
   build(W) {
     const M = Kit4.mats(W);
-    const g = W.groundTexture('#7a6e58', ['#6c624e', '#857a62', '#5e5444']); g.repeat.set(150, 150); W.addGround(1400, new THREE.MeshLambertMaterial({ map: g }), 0);
-    W.addWater(0, -560, 1400, 360, 2.4);
+    const g = W.groundTexture('#7a6e58', ['#6c624e', '#857a62', '#5e5444']); g.repeat.set(260, 260); W.addGround(2400, new THREE.MeshLambertMaterial({ map: g }), 0);
+    W.addWater(0, -700, 2400, 640, 2.4);
     // 참호: 흙 둔덕(높이 2.5m) 두 줄 사이를 걷는 격자형 통로 → 둔덕을 상자로 쌓고 모래주머니
     for (let row = 0; row < 4; row++) { const z = 60 + row * 70;
-      for (const o of [-3, 3]) W.batch('berm', W.unitBox, M.dirt, 0, 1.25, z + o, 1000, 2.5, 2, 0, null, 0, 0, { solid: true, hook: true });
-      for (let x = -480; x <= 480; x += 6) W.batch('sandbag', W.unitBox, M.straw, x, 2.8, z - 4, 5, 0.6, 1.2, 0, null, 0, 0, { noShadow: true });
+      for (const o of [-3, 3]) W.batch('berm', W.unitBox, M.dirt, 0, 1.25, z + o, 1800, 2.5, 2, 0, null, 0, 0, { solid: true, hook: true });
+      for (let x = -880; x <= 880; x += 6) W.batch('sandbag', W.unitBox, M.straw, x, 2.8, z - 4, 5, 0.6, 1.2, 0, null, 0, 0, { noShadow: true });
     }
-    for (let x = -450; x <= 450; x += 150) for (const o of [-3, 3]) W.batch('bermX', W.unitBox, M.dirt, x + o, 1.25, 165, 2, 2.5, 210, 0, null, 0, 0, { solid: true, hook: true });
+    for (let x = -900; x <= 900; x += 150) for (const o of [-3, 3]) W.batch('bermX', W.unitBox, M.dirt, x + o, 1.25, 165, 2, 2.5, 210, 0, null, 0, 0, { solid: true, hook: true });
     // 콘크리트 벙커(낮고 두꺼운 상자, 총안구) + 회전 포대
-    for (const [x, z] of [[-300, -40], [-100, -80], [120, -60], [320, -30]]) {
+    for (const [x, z] of [[-700, -50], [-500, -60], [-300, -40], [-100, -80], [120, -60], [320, -30], [520, -50], [720, -40]]) {
       W.batch('bunker', W.unitBox, M.concrete, x, 4, z, 30, 8, 20, 0, null, 0, 0, { solid: true, hook: true });
       W.batch('slit', W.unitBox, W.darkIron, x, 5, z + 10.1, 18, 0.8, 0.3, 0, null, 0, 0, { noShadow: true });
       W.batch('turret', W.unitCyl, M.concrete, x, 9.5, z, 6, 3, 6, 0, null, 0, 0, { hook: true });
@@ -3752,9 +3752,9 @@ Maps.slava = {
     }
     // 요새 본관 (해안 절벽 위) + 철조망 말뚝 + 앞바다 전함
     W.batch('fortCore', W.unitBox, M.concrete, 0, 12, -250, 220, 24, 70, 0, null, 0, 0, { solid: true, hook: true });
-    for (let x = -500; x <= 500; x += 5) W.batch('wire', W.unitBox, W.darkIron, x, 0.8, 370, 0.15, 1.6, 0.15, 0, null, 0.3, 0, { noShadow: true });
-    Kit3.warship(W, -200, -480, 0, 130); Kit3.warship(W, 220, -500, 0, 120);
-    for (let i = 0; i < 40; i++) W.batch('crater', W.unitSphere, M.dirt, rand(500), -0.6, 300 + Math.random() * 280, 6 + Math.random() * 6, 1.2, 6 + Math.random() * 6, 0, null, 0, 0, { noShadow: true });
+    for (let x = -900; x <= 900; x += 5) W.batch('wire', W.unitBox, W.darkIron, x, 0.8, 370, 0.15, 1.6, 0.15, 0, null, 0.3, 0, { noShadow: true });
+    Kit3.warship(W, -200, -480, 0, 130); Kit3.warship(W, 220, -500, 0, 120); Kit3.warship(W, -620, -560, 0, 120); Kit3.warship(W, 640, -600, 0, 125);
+    for (let i = 0; i < 110; i++) W.batch('crater', W.unitSphere, M.dirt, rand(900), -0.6, 300 + Math.random() * 600, 6 + Math.random() * 6, 1.2, 6 + Math.random() * 6, 0, null, 0, 0, { noShadow: true });
   },
 };
 
@@ -3762,11 +3762,13 @@ Maps.slava = {
 Maps.lakua = {
   env: { fog: 0xc8c4a8, fogNear: 300, fogFar: 1700, skyTop: 0x5a93c4, skyHorizon: 0xdfd6b8, sunGlow: 0xffe8b4, sunDir: [0.4, 0.75, 0.3], sunColor: 0xffe6c0, sunI: 1.12, hemiSky: 0xccd8d8, hemiGround: 0x665234, hemiI: 0.52, exposure: 1.12 },
   name: 'MARLEY BASE LAKUA', sub: '마레군 기지 라쿠아', desc: '붉은 벽돌 막사가 둘러싼 넓은 연병장. 담장을 넘어오는 거인을 막아라.',
-  bound: 560, start: [0, 0, 160], startYaw: Math.PI,
-  spawn() { const a = Math.random() * Math.PI * 2, r = 330 + Math.random() * 200; return [Math.cos(a) * r, Math.sin(a) * r]; },
+  bound: 1000, start: [0, 0, 160], startYaw: Math.PI,   // 40차: 기지 둘레 마레 시가지까지 반지름 1000m
+  spawn() { const a = Math.random() * Math.PI * 2, r = 330 + Math.random() * 600; return [Math.cos(a) * r, Math.sin(a) * r]; },
   build(W) {
     const M = Kit4.mats(W);
-    const sand = W.groundTexture('#c8b48a', ['#bca67c', '#d2be94']); sand.repeat.set(140, 140); W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
+    const sand = W.groundTexture('#c8b48a', ['#bca67c', '#d2be94']); sand.repeat.set(260, 260); W.addGround(2400, new THREE.MeshLambertMaterial({ map: sand }), 0);
+    { const cob = W.cobbleTexture('#8e887c'); cob.repeat.set(4, 60); const av = new THREE.Mesh(new THREE.PlaneGeometry(24, 640), new THREE.MeshLambertMaterial({ map: cob })); av.rotation.x = -Math.PI / 2; av.position.set(0, 0.04, 630); W.scene.add(av); }
+    W.fillBuildings((x, z) => { const r = Math.hypot(x, z); return r > 345 && r < 930 && !(Math.abs(x) < 20 && z > 300); }, 30, 3, 5, 2, 5, 0.08, { roofs: [2, 0] });   // 기지 밖 마레 시가지
     W.addRingWall(0, 0, 300, 2, 6, M.brick, [{ a: Math.PI / 2, w: 30 }]);                                       // 기지 담장 + 정문
     W.batch('gateHouse', W.unitBox, M.brick, 0, 5, 300, 24, 10, 12, 0, null, 0, 0, { solid: true, hook: true });   // 위병소
     // 막사·관사 (붉은 벽돌, 기와 지붕) 사각형으로 둘러쌈
@@ -3783,17 +3785,17 @@ Maps.lakua = {
 Maps.odiha = {
   env: { fog: 0xc8c4a8, fogNear: 300, fogFar: 1700, skyTop: 0x5a93c4, skyHorizon: 0xdfd6b8, sunGlow: 0xffe8b4, sunDir: [0.4, 0.75, 0.3], sunColor: 0xffe6c0, sunI: 1.12, hemiSky: 0xccd8d8, hemiGround: 0x665234, hemiI: 0.52, exposure: 1.12 },
   name: 'ODIHA PORT', sub: '오디하 항구', desc: '절벽 아래 작은 항구. 비행정 격납고와 크레인, 히즈루 저택 사이에서 다가오는 거인을 막아라.',
-  bound: 560, start: [0, 3, 30], startYaw: Math.PI,
+  bound: 1000, start: [0, 3, 30], startYaw: Math.PI,   // 40차: 해안 시가지 폭 약 1900m
   water: { level: 2.4, depth: (x, z) => 4 + Math.max(0, z - 60) * 0.05, at: (x, z) => z > 60 },
-  spawn() { return Math.random() < 0.6 ? [rand(480), 300 + Math.random() * 240] : [rand(480), -330 - Math.random() * 180]; },
+  spawn() { return Math.random() < 0.6 ? [rand(900), 300 + Math.random() * 600] : [rand(900), -330 - Math.random() * 400]; },
   build(W) {
     const M = Kit4.mats(W);
-    const cob = W.cobbleTexture('#9a9080'); cob.repeat.set(120, 120); W.addGround(1400, new THREE.MeshLambertMaterial({ map: cob }), 0);
-    W.addWater(0, 330, 1400, 540, 2.4);
-    W.batch('quayO', W.unitBox, M.concrete, 0, 1.3, 50, 1000, 2.6, 20, 0, null, 0, 0, { solid: true, hook: true });
+    const cob = W.cobbleTexture('#9a9080'); cob.repeat.set(220, 220); W.addGround(2400, new THREE.MeshLambertMaterial({ map: cob }), 0);
+    W.addWater(0, 600, 2400, 1080, 2.4);
+    W.batch('quayO', W.unitBox, M.concrete, 0, 1.3, 50, 1900, 2.6, 20, 0, null, 0, 0, { solid: true, hook: true });
     // 뒤쪽 절벽 (도시를 감싸는 높은 바위 벽)
     const rock = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#8a7e6c', '#5a5044') });
-    for (let x = -560; x <= 560; x += 40) W.batch('cliffO', W.unitRock, rock, x + rand(10), 40, -300 + rand(20), 40, 60 + Math.random() * 30, 40, Math.random() * 6, null, 0, 0, { hook: true, solid: true });
+    for (let x = -980; x <= 980; x += 40) W.batch('cliffO', W.unitRock, rock, x + rand(10), 40, -300 + rand(20), 40, 60 + Math.random() * 30, 40, Math.random() * 6, null, 0, 0, { hook: true, solid: true });
     // 격납고: 반원통 철제 지붕 (안이 비어 와이어로 들어갈 수 있음) + 비행정(동체·날개·엔진 4개)
     const hang = W.mesh(new THREE.CylinderGeometry(30, 30, 90, 28, 1, true, 0, Math.PI), new THREE.MeshStandardMaterial({ color: 0x6a6e72, metalness: 0.5, roughness: 0.5, side: THREE.DoubleSide }), 120, 0, -20);
     hang.rotation.set(0, Math.PI / 2, Math.PI / 2); hang.rotation.order = 'YXZ';
@@ -3809,8 +3811,9 @@ Maps.odiha = {
       W.batch('engawa', W.unitBox, W.woodMat, x, 0.6, z + 12, 32, 0.4, 4, 0, null, 0, 0, { solid: true });
       for (const o of [-14, 14]) W.batch('lantern', W.unitBox, M.cloth, x + o, 4.5, z + 13, 1, 1.4, 1, 0, null, 0, 0, { noShadow: true });
     }
-    W.fillBuildings((x, z) => z < 20 && z > -250 && x < 40 && !(x < -120 && z < -40), 24, 3, 5, 2, 5, 0.1, { roofs: [0, 3] });
-    for (const x of [-300, -150, 0]) MapKit.pier(W, x, 60, 80, 8);
+    W.fillBuildings((x, z) => z < 20 && z > -250 && Math.abs(x) < 930 && !(x > 60 && x < 210) && !(x < -120 && x > -250 && z < -40), 24, 3, 5, 2, 5, 0.1, { roofs: [0, 3] });
+    for (const x of [-750, -600, -450, -300, -150, 0, 300, 450, 600, 750]) MapKit.pier(W, x, 60, 80, 8);
+    MapKit.ship(W, 520, 160, Math.PI / 2, 40); MapKit.ship(W, -620, 150, Math.PI / 2, 36);
     MapKit.ship(W, -230, 140, Math.PI / 2, 38);
   },
 };
@@ -4351,13 +4354,13 @@ Polish.add('embergate', W => {
   for (let i = 0; i < 8; i++) W.batch('crate', B, W.crateMat, X + 14 + (i % 4) * 1.3, 0.55 + Math.floor(i / 4) * 1.1, Z + 22, 1.1, 1.1, 1.1, Math.random());
 });
 // 레벨리오: 기차역 — 수용 구역 밖 남쪽 철로, 승강장·지붕·역사(시계) + 증기기관차와 객차 4량 (마레 근대 철도)
-Polish.pre('ashward', [[-480, -362, 480, -328], [-130, -390, 130, -300]]);
+Polish.pre('ashward', [[-980, -362, 980, -328], [-130, -390, 130, -300]]);   // 40차: 구역이 커져 철로도 길게
 Polish.add('ashward', W => {
   const Z = -345, B = W.unitBox, C = W.unitCyl;
   const steel = W.darkIron, sleeper = new THREE.MeshLambertMaterial({ color: 0x4a3a2c }), plat = new THREE.MeshLambertMaterial({ color: 0x9a948a });
   const brick = (W._arch && W._arch.marley) ? W._arch.marley.facade[0] : W.stoneMat, roofM = new THREE.MeshLambertMaterial({ color: 0x3e4448 });
-  for (const o of [-1.4, 1.4]) W.batch('lbRail', B, steel, 0, 0.15, Z + o, 960, 0.2, 0.25, 0, null, 0, 0, { noShadow: true });
-  for (let x = -478; x <= 478; x += 2.4) W.batch('lbSleeper', B, sleeper, x, 0.05, Z, 0.5, 0.1, 4.4, 0, null, 0, 0, { noShadow: true });
+  for (const o of [-1.4, 1.4]) W.batch('lbRail', B, steel, 0, 0.15, Z + o, 1960, 0.2, 0.25, 0, null, 0, 0, { noShadow: true });
+  for (let x = -978; x <= 978; x += 2.4) W.batch('lbSleeper', B, sleeper, x, 0.05, Z, 0.5, 0.1, 4.4, 0, null, 0, 0, { noShadow: true });
   W.batch('lbPlat', B, plat, 0, 0.6, Z - 9, 200, 1.2, 10, 0, null, 0, 0, { solid: true, hook: true });             // 승강장
   for (let x = -90; x <= 90; x += 15) W.batch('lbPost', C, steel, x, 4.7, Z - 9, 0.25, 7, 0.25, 0, null, 0, 0, { solid: true, hook: true });
   W.batch('lbCanopy', B, roofM, 0, 8.4, Z - 8, 196, 0.4, 13, 0, null, 0.12, 0, { hook: true });                  // 승강장 지붕
@@ -4533,7 +4536,7 @@ Polish.add('dauper', W => {
     if (Math.abs(z % 6) < 1.2) for (const s of [-1, 1]) W.batch('dpEdge', W.unitRock, rockM, s * 2.4, y + 0.3, z, 0.9, 0.6, 0.9, z, null, 0, 0, { noShadow: true });
   }
   // 이끼 낀 바위 봉우리 7개: 아래가 넓고 위로 좁아지는 바위 덩이를 쌓고 꼭대기에 이끼 — 와이어를 걸 수 있는 높은 지형
-  const spires = [[-95, -60, 34], [80, -95, 42], [-140, 40, 28], [120, 30, 38], [-60, -170, 46], [60, -190, 36], [150, -150, 30]];
+  const spires = [[-95, -60, 34], [80, -95, 42], [-140, 40, 28], [120, 30, 38], [-60, -170, 46], [60, -190, 36], [150, -150, 30], [-420, -300, 52], [380, -420, 48], [-600, 200, 40], [560, 260, 44], [-250, 520, 38], [300, 600, 50], [700, -100, 42], [-750, -500, 46]];
   for (const [x, z, H] of spires) {
     let y = 0, s = H * 0.32;
     while (y < H) {
@@ -4548,14 +4551,14 @@ Polish.add('dauper', W => {
 
 // ===== 38차(5): 라가코 마을 — 마을 남쪽을 가로지르는 개울(폭 10m, 깊이 1.6m) + 나무 다리 2개 + 물가 돌·갈대 =====
 Polish.add('ragako', W => {
-  const Z = 150, L = 1000;
+  const Z = 150, L = 1900;   // 40차: 마을이 넓어져 개울도 길게
   W.addWater(0, Z, L, 10, 0.18, 1.6);
   const bankM = new THREE.MeshLambertMaterial({ color: 0x6e5a3e }), rockM = new THREE.MeshLambertMaterial({ color: 0x8e8a7e, flatShading: true }), reed = new THREE.MeshLambertMaterial({ color: 0x8a9a4a });
   const wood = new THREE.MeshLambertMaterial({ color: 0x6a4a30 });
   for (const s of [-1, 1]) W.batch('rgBank', W.unitBox, bankM, 0, 0.12, Z + s * 5.6, L, 0.24, 1.4, 0, null, 0, 0, { noShadow: true });
-  for (let i = 0; i < 90; i++) { const x = rand(480), s = Math.random() < 0.5 ? 1 : -1; W.batch('rgStone', W.unitRock, rockM, x, 0.2, Z + s * (5 + Math.random() * 1.5), 0.6 + Math.random() * 0.9, 0.4, 0.7, Math.random() * 6, null, 0, 0, { noShadow: true }); }
-  for (let i = 0; i < 160; i++) { const x = rand(480), s = Math.random() < 0.5 ? 1 : -1; W.batch('rgReed', W.unitCyl, reed, x, 0.7, Z + s * (4.3 + Math.random() * 2), 0.05, 1.4 + Math.random(), 0.05, 0, null, rand(0.2), rand(0.2), { noShadow: true }); }
-  for (const bx of [0, -220]) {   // 나무 다리: 판자 + 기둥 + 난간 (사람·말이 건넘)
+  for (let i = 0; i < 180; i++) { const x = rand(940), s = Math.random() < 0.5 ? 1 : -1; W.batch('rgStone', W.unitRock, rockM, x, 0.2, Z + s * (5 + Math.random() * 1.5), 0.6 + Math.random() * 0.9, 0.4, 0.7, Math.random() * 6, null, 0, 0, { noShadow: true }); }
+  for (let i = 0; i < 320; i++) { const x = rand(940), s = Math.random() < 0.5 ? 1 : -1; W.batch('rgReed', W.unitCyl, reed, x, 0.7, Z + s * (4.3 + Math.random() * 2), 0.05, 1.4 + Math.random(), 0.05, 0, null, rand(0.2), rand(0.2), { noShadow: true }); }
+  for (const bx of [0, -220, 420, -620]) {   // 나무 다리: 판자 + 기둥 + 난간 (사람·말이 건넘)
     for (let k = -6; k <= 6; k++) W.batch('rgPlank', W.unitBox, wood, bx, 0.75, Z + k * 1.0, 4.2, 0.18, 0.9, 0, null, 0, 0, { hook: true });
     W.solid(bx - 2.1, 0, Z - 6.5, bx + 2.1, 0.84, Z + 6.5);
     for (const sx of [-2, 2]) { W.batch('rgRail', W.unitBox, wood, bx + sx, 1.45, Z, 0.16, 0.16, 13, 0, null, 0, 0, { noShadow: true }); for (const k of [-6, -2, 2, 6]) W.batch('rgPost', W.unitBox, wood, bx + sx, 0.7, Z + k, 0.22, 1.6, 0.22, 0, null, 0, 0, { noShadow: true }); }
