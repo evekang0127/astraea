@@ -5229,8 +5229,17 @@ const Field = {
   sea(x, z) { const [X, Y] = this.toWorld(x, z); return this.seaW(X, Y); },   // 게임 좌표
   peakAt(peaks, x, y) { return peaks.some(([px, py, r]) => Math.hypot(x - px, y - py) < r); },
   // 산 위 땅 높이 (원뿔): 플레이어가 산비탈을 딛고 오를 수 있게
+  // 38차: 그려진 땅 메시(150x150 격자, 40m)의 삼각형 위 높이. PlaneGeometry 삼각형 분할(a,b,d)/(b,c,d)과 똑같이 보간
+  meshH(x, z) {
+    const G = this.ground; if (!G || !this.shaped) return null;
+    const pa = G.geometry.attributes.position, N = 150, S = 6000 / N;
+    const fx = (x - G.position.x + 3000) / S, fy = (z - G.position.z + 3000) / S, ix = Math.floor(fx), iy = Math.floor(fy);
+    if (ix < 0 || iy < 0 || ix >= N || iy >= N) return null;
+    const u = fx - ix, v = fy - iy, W1 = N + 1, ha = pa.getZ(ix + W1 * iy), hb = pa.getZ(ix + W1 * (iy + 1)), hc = pa.getZ(ix + 1 + W1 * (iy + 1)), hd = pa.getZ(ix + 1 + W1 * iy);
+    return (u + v <= 1 ? ha + (hd - ha) * u + (hb - ha) * v : hc + (hb - hc) * (1 - u) + (hd - hc) * (1 - v)) + G.position.y;
+  },
   height(x, z) {
-    const t = this.tl(x, z);
+    const mh = this.meshH(x, z), t = mh === null ? this.tl(x, z) : mh;
     let h = 0;
     if (this.peaks) for (const [px, pz, r, ph] of this.peaks) { const d = Math.hypot(x - px, z - pz); if (d < r) h = Math.max(h, ph * (1 - d / r)); }
     return t + h;
@@ -5255,7 +5264,7 @@ const Field = {
   tl(x, z) { if (!this.flat) return 0; const [X, Y] = this.toWorld(x, z); return this.terrW(X, Y) - this.h0; },   // 지금 장소 기준 상대 높이
   initTerrain(W) {
     this.flat = [];
-    for (const id in Atlas.PLACES) { const q = Atlas.PLACES[id], m = Maps[id]; if (!m) continue; const X = q.pos[0] * 1000, Y = q.pos[1] * 1000, r0 = Math.max((m.bound || 600) + 60, 720); this.flat.push({ X, Y, r0, r1: r0 + 500, hc: this.rawTerr(X, Y) }); }
+    for (const id in Atlas.PLACES) { const q = Atlas.PLACES[id], m = Maps[id]; if (!m) continue; const X = q.pos[0] * 1000, Y = q.pos[1] * 1000, r0 = (m.bound || 600) + 40; this.flat.push({ X, Y, r0, r1: r0 + 320,   /* 38차: 평평한 원판을 경계 바로 밖까지로 줄임(장소 둘레도 구릉) */ hc: this.rawTerr(X, Y) }); }
     if (W.mapId === 'wild') { const X = this.ox, Y = this.oy; this.flat.push({ X, Y, r0: 40, r1: 140, hc: this.rawTerr(X, Y) }); }
     this.h0 = this.terrW(this.ox, this.oy);
     this.shaped = false;
@@ -5620,7 +5629,7 @@ const Horse = {
     if (this.state !== 'gone' && this.pos.distanceTo(Player.pos) < 6) { this.mount(); return; }
     // 휘파람: 뒤쪽 70m에서 달려옴
     const f = Player.forward();
-    this.pos.copy(Player.pos).addScaledVector(f, -70); this.pos.y = 0;
+    this.pos.copy(Player.pos).addScaledVector(f, -70); this.pos.y = World.open ? Field.height(this.pos.x, this.pos.z) : 0;
     this.state = 'coming'; this.mesh.visible = true;
     Game.toast('휘파람 · 말이 달려온다', '#f0d890');
   },
@@ -5630,7 +5639,8 @@ const Horse = {
     if (Field.rideOnStart && Game.running) { Field.rideOnStart = false; if (!this.mesh) this.build(); this.pos.copy(Player.pos); this.pos.y = 0; this.mesh.visible = true; this.mount(); }
     if (!this.mesh || this.state === 'gone') return;
     const p = Player;
-    if (this.riding && (p.isHooked() || Shifter.active || p.pos.y > 3 || Game.over)) this.dismount();
+    const gy = World.open ? Field.height(p.pos.x, p.pos.z) : 0;   // 38차: 지형 높이 기준
+    if (this.riding && (p.isHooked() || Shifter.active || p.pos.y - gy > 3 || Game.over)) this.dismount();
     let sp = 0;
     if (this.state === 'coming') {
       const d = new THREE.Vector3(p.pos.x - this.pos.x, 0, p.pos.z - this.pos.z), L = d.length();
@@ -6400,8 +6410,9 @@ const Player = {
     const eye = this.pos.clone();
     eye.y += this.EYE - this.camDip * 0.6;   // 착지하면 시선이 잠깐 내려앉음
     // 공중에서 옆으로 휘어 날면 카메라가 그쪽으로 기울어짐 (비행기 선회처럼)
-    const side = this.onGround ? 0 : this.vel.dot(this.right());
-    const rollTarget = -Math.max(-0.35, Math.min(0.35, side / 70));
+    // 38차: 언덕 지형에서 잠깐씩 뜰 때마다 화면이 기울던 문제 → 와이어로 선회할 때만, 작게
+    const side = this.isHooked && this.isHooked() ? this.vel.dot(this.right()) : 0;
+    const rollTarget = -Math.max(-0.14, Math.min(0.14, side / 120));
     this.camRoll = (this.camRoll || 0) + (rollTarget - (this.camRoll || 0)) * 0.08;
     camera.rotation.set(this.pitch, this.yaw, this.camRoll);
     // 속도가 빠를수록 시야각을 넓혀 속도감 표현
@@ -8429,6 +8440,7 @@ const Shifter = {
       t.head.getWorldPosition(eye);
       off.copy(p.lookDir()).multiplyScalar(-t.height * 0.2); off.y += t.height * 0.13;
     }
+    off.multiplyScalar(p.camZoom || 1);   // 38차: 마우스 휠로 거인 시점 거리 조절(0.25~2.5배)
     let dist = off.length();
     const dir = off.divideScalar(dist);
     const ray = this._camRay || (this._camRay = new THREE.Raycaster());
@@ -10105,6 +10117,8 @@ document.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('cl
 // 마우스 휠: 앞으로 굴리면 1인칭, 뒤로 굴리면 3인칭
 addEventListener('wheel', e => {
   if (!Game.running) return;
+  // 38차: 거인일 때는 휠로 카메라 거리를 점점 당기고 밀기(시조처럼 큰 거인이 화면을 가리지 않게)
+  if (typeof Shifter !== 'undefined' && Shifter.active) { Player.camZoom = Math.max(0.25, Math.min(2.5, (Player.camZoom || 1) * Math.pow(1.0015, Math.max(-200, Math.min(200, e.deltaY))))); Player.thirdPerson = true; return; }
   Player.thirdPerson = e.deltaY > 0;
 });
 document.addEventListener('keydown', e => {
