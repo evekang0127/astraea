@@ -1601,6 +1601,7 @@ const World = {
   // ---------- 물 (바다 맵): map.water = { level: 수면 높이, at(x, z): 물인 곳인지 } ----------
   waterLevel(x, z) {
     if (this.open && Field.sea(x, z)) return 0.15 - (Field.h0 || 0);   // 바다 수면 (지형 기준 높이 반영)
+    if (this.open && Field.riverLevel) { const rv = Field.riverLevel(x, z); if (rv !== null) return rv; }   // 40차: 들판 강
     const w = this.map && this.map.water;
     if (w) return w.at(x, z) ? w.level : null;
     for (const p of this.pools) if (x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1) return p.level;
@@ -2095,7 +2096,7 @@ const Maps = {
   // ──────────────────────────────────────────────────────────────
   skyroot: {
     name: 'SKYROOT FOREST', sub: '하늘뿌리 거목 숲',
-    desc: '높이 100m가 넘는 거목들이 하늘을 가린 숲. 줄기와 가지 사이를 날아다니는 입체기동의 낙원.',
+    desc: '높이 80m에 달하는 거목들이 하늘을 가린 숲. 줄기와 가지 사이를 날아다니는 입체기동의 낙원.',
     env: { fog: 0x7d977a, fogNear: 45, fogFar: 600, skyTop: 0x5f93c4, skyHorizon: 0xb9ceb2, sunGlow: 0xfff0c0,
            sunDir: [0.3, 0.85, 0.25], sunColor: 0xfff1cf, sunI: 0.95, hemiSky: 0xc4dcb8, hemiGround: 0x2a3420, hemiI: 0.58,
            mountain: 0x6f8a76, cloudOpacity: 0.7,
@@ -2142,7 +2143,7 @@ const Maps = {
         const x = Math.cos(a) * r, z = Math.sin(a) * r;
         if (Math.abs(x - pathX(z)) < 15) continue;
         if (trees.some(t => Math.hypot(t.x - x, t.z - z) < 24)) continue;
-        trees.push({ x, z, H: 95 + Math.random() * 40, Rb: 6 + Math.random() * 4.5 });
+        trees.push({ x, z, H: 72 + Math.random() * 18, Rb: 5.5 + Math.random() * 4 });   // 나무위키: 높이 80m에 달하는 거대한 나무
       }
       for (const t of trees) {
         const { x, z, H, Rb } = t;
@@ -3101,45 +3102,45 @@ Object.assign(Maps, {
     desc: '높이 50m 거대 성벽이 들판과 도시를 가른다. 성벽 꼭대기에서 출발해, 관문을 노리고 몰려오는 거인을 막아라.',
     env: { fog: 0xbcd3e6, fogNear: 300, fogFar: 1800, skyTop: 0x2f6fc0, skyHorizon: 0xbcd3e6, sunGlow: 0xfff0c8,
            sunDir: [-0.4, 0.8, 0.35], sunColor: 0xfff3dc, sunI: 1.1, hemiSky: 0xcfe2ff, hemiGround: 0x5f6a45, hemiI: 0.65 },
-    bound: 620, start: [0, 50, -6], startYaw: Math.PI,
+    bound: 1250, start: [0, 50, -6], startYaw: Math.PI,   // 40차: 구역 반지름 615 → 1225m(넓이 약 4배)
     spawn() {
-      if (Math.random() < 0.8) { const x = rand(560), z = 90 + Math.random() * 480; return [x, z]; }   // 성벽 바깥 들판
+      if (Math.random() < 0.8) { const x = rand(1100), z = 90 + Math.random() * 1000; return [x, z]; }   // 성벽 바깥 들판
       return [rand(40), -60 - Math.random() * 120];                                                      // 관문을 뚫고 들어온 거인
     },
     build(W) {
       W.darkIron = new THREE.MeshLambertMaterial({ color: 0x55595f });
       const grass = W.groundTexture('#6f8f4a', ['#61803f', '#7d9b55', '#56733a']);
-      grass.repeat.set(160, 160);
-      W.addGround(1400, new THREE.MeshLambertMaterial({ map: grass }), 0);
+      grass.repeat.set(320, 320);
+      W.addGround(2800, new THREE.MeshLambertMaterial({ map: grass }), 0);
       const wallMat = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b5ab98', '#77705f') });
       // 거대 성벽 (z = 0, 두께 30m, 높이 50m). 가운데 관문 자리 40m는 따로 지음 (문 높이 30m: 15m급 거인까지 지나감)
       const H = 50;
-      W.addWallSegment(-640, 0, -20, 0, 30, H, wallMat, 1);
-      W.addWallSegment(20, 0, 640, 0, 30, H, wallMat, 1);
+      W.addWallSegment(-1290, 0, -20, 0, 30, H, wallMat, 1);
+      W.addWallSegment(20, 0, 1290, 0, 30, H, wallMat, 1);
       W.mesh(new THREE.BoxGeometry(40, 20, 30), wallMat, 0, H - 10, 0);                 // 관문 위 아치 덩어리
       W.walls.push({ cx: 0, cz: 0, tx: 1, tz: 0, half: 20, thick: 15, h: H, y0: H - 20 });
       const gateMat = new THREE.MeshLambertMaterial({ map: W.canvasTex(128, (g, s) => { g.fillStyle = '#4a3a2c'; g.fillRect(0, 0, s, s); g.fillStyle = '#2b2622'; for (let i = 0; i < 8; i++) { g.fillRect(i * 16 + 6, 0, 5, s); g.fillRect(0, i * 16 + 6, s, 4); } }) });
       W.mesh(new THREE.BoxGeometry(36, 12, 2), gateMat, 0, 24, 12);                       // 반쯤 내려온 쇠창살 문 (아래로 거인이 지나감)
       W.walls.push({ cx: 0, cz: 12, tx: 1, tz: 0, half: 18, thick: 1, h: 30, y0: 18 });  // 사람만 부딪힘 (y0 > 2라 거인은 무시)
       // 성벽 앞뒤 계단탑 (위로 올라가는 길) + 성벽 위 대포
-      for (const x of [-480, -240, 240, 480]) for (const z of [-26, 26]) W.addTower(x, z, 10, H + 14, wallMat, W.roofMats[2], 16);
-      for (let x = -600; x <= 600; x += 30) if (Math.abs(x) > 26) {
+      for (const x of [-1080, -720, -480, -240, 240, 480, 720, 1080]) for (const z of [-26, 26]) W.addTower(x, z, 10, H + 14, wallMat, W.roofMats[2], 16);
+      for (let x = -1230; x <= 1230; x += 30) if (Math.abs(x) > 26) {
         W.batch('cannon', W.unitCyl, W.darkIron, x, H + 1.3, 12, 0.42, 4.2, 0.42, 0, null, Math.PI / 2 - 0.1, 0);
         W.batch('carriage', W.unitBox, W.woodMat, x, H + 0.5, 10, 1.8, 1, 2.6);
       }
       // 성벽 양면에 늘어뜨린 긴 깃발 (붉은 천 + 금빛 테)
       const flag = new THREE.MeshLambertMaterial({ color: 0x7a1d1d, side: THREE.DoubleSide }), trimG = new THREE.MeshLambertMaterial({ color: 0xc9a646 });
-      for (let x = -560; x <= 560; x += 70) if (Math.abs(x) > 40) for (const z of [-15.3, 15.3]) {
+      for (let x = -1190; x <= 1190; x += 70) if (Math.abs(x) > 40) for (const z of [-15.3, 15.3]) {
         W.batch('wallflag', W.unitBox, flag, x, H - 22, z, 9, 36, 0.2, 0, null, 0, 0, { noShadow: true });
         W.batch('flagtrim', W.unitBox, trimG, x, H - 4.5, z * 1.01, 9.6, 1, 0.3, 0, null, 0, 0, { noShadow: true });
       }
       // 남쪽 도시 (성벽 안), 북쪽 들판의 폐허와 숲
       // 37차: 원작 전경처럼 지붕이 빽빽한 도시 — 돌길 바닥 + 촘촘한 칸(24m), 공원 적게
-      { const cob = W.cobbleTexture('#9a8a76'); cob.repeat.set(160, 160); const disc = new THREE.Mesh(new THREE.CircleGeometry(600, 72, Math.PI, Math.PI), new THREE.MeshLambertMaterial({ map: cob })); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.1; disc.receiveShadow = true; W.scene.add(disc); }
-      W.fillBuildings((x, z) => z < -50 && Math.hypot(x, z) < 590 && !(Math.abs(x) < 14 && z > -250), 24, 3, 5, 3, 6, 0.03);
-      for (let i = 0; i < 18; i++) { const x = rand(520), z = 140 + Math.random() * 400; W.addBuilding(x, z, 8 + Math.random() * 8, 8 + Math.random() * 8, 4 + Math.floor(Math.random() * 3) * 4, { roofChance: 0.3, crates: 0.6 }); }
-      for (let i = 0; i < 160; i++) W.addTree(rand(600), 80 + Math.random() * 520, 1.5);
-      W.addRingWall(0, 0, 615, 12, 50, W.stoneMat, [], Math.PI, Math.PI * 2);
+      { const cob = W.cobbleTexture('#9a8a76'); cob.repeat.set(160, 160); const disc = new THREE.Mesh(new THREE.CircleGeometry(1215, 96, Math.PI, Math.PI), new THREE.MeshLambertMaterial({ map: cob })); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.1; disc.receiveShadow = true; W.scene.add(disc); }
+      W.fillBuildings((x, z) => z < -50 && Math.hypot(x, z) < 1195 && !(Math.abs(x) < 14 && z > -540), 24, 3, 5, 3, 6, 0.03);
+      for (let i = 0; i < 40; i++) { const x = rand(1100), z = 140 + Math.random() * 1000; W.addBuilding(x, z, 8 + Math.random() * 8, 8 + Math.random() * 8, 4 + Math.floor(Math.random() * 3) * 4, { roofChance: 0.3, crates: 0.6 }); }
+      for (let i = 0; i < 420; i++) W.addTree(rand(1220), 80 + Math.random() * 1120, 1.5);
+      W.addRingWall(0, 0, 1225, 12, 50, W.stoneMat, [], Math.PI, Math.PI * 2);
     },
   },
 
@@ -3497,8 +3498,8 @@ Maps.mourning = {
     W.addGround(1400, new THREE.MeshLambertMaterial({ map: sand }), 0);
     W.addWater(-60, 360, 1100, 650, 2.4);
     const wallMat = new THREE.MeshLambertMaterial({ map: W.stoneTexture('#c9c3b0', '#8e877a') });
-    // 방파 성벽: 높이 36m · 두께 16m, z=0을 따라 동서로. 위를 걸어 다님
-    const H = 36;
+    // 방파 성벽: 높이 30m(나무위키 파라디 섬: 해안선을 따라 30m 벽) · 두께 16m, z=0을 따라 동서로. 위를 걸어 다님
+    const H = 30;
     W.addWallSegment(-620, 0, 470, 0, 16, H, wallMat, 1, false);
     W.batch('wallCap', W.unitBox, wallMat, -75, H + 0.6, 0, 1090, 1.2, 18, 0, null, 0, 0, { hook: true, noShadow: true });
     // 바다 쪽 사선 버팀벽: 40m마다 벽에 기대어 비스듬히 내려오는 콘크리트 부벽 (와이어 걸림)
@@ -4425,8 +4426,8 @@ Polish.castle = function (W, X, Z, S = 1) {
   tower(-30, -24, 5, Y, 30, 12); tower(30, -24, 5, Y, 30, 12);
 };
 // 시간시나 구: 도시 한가운데 언덕 위 성 (원작 1화 전경 참고)
-Polish.pre('gateward', [[-75, -405, 75, -255]]);
-Polish.add('gateward', W => { Polish.castle(W, 0, -330, 1); W.batch('gwAvenue', W.unitBox, W._castleMat, 0, 0.06, -152, 22, 0.1, 210, 0, null, 0, 0, { noShadow: true }); });   // 관문→성 큰길 돌바닥
+Polish.pre('gateward', [[-75, -695, 75, -545]]);   // 40차: 구역이 커져 성을 구역 한가운데(z=-620)로
+Polish.add('gateward', W => { Polish.castle(W, 0, -620, 1.15); W.batch('gwAvenue', W.unitBox, W._castleMat, 0, 0.06, -300, 22, 0.1, 500, 0, null, 0, 0, { noShadow: true }); });   // 관문→성 큰길 돌바닥
 // 트로스트 구: 운하와 안쪽 성벽 사이 성 (원작 전경 참고 — 정확한 위치는 확인 필요)
 Polish.pre('embergate', [[-235, -142, -105, -12]]);
 Polish.add('embergate', W => Polish.castle(W, -170, -77, 0.85));
@@ -4516,8 +4517,8 @@ Polish.hill = function (W, id, X, Z, r, H) {
   const map = Maps[id], prev = map.groundAt;
   map.groundAt = function (x, z, y) { const h = hf(x, z), p = prev ? prev.call(this, x, z, y) : null; return h > 0.05 ? Math.max(h, p ?? -1e9) : p; };
 };
-Polish.pre('gateward', [[-325, -525, -135, -335]]);
-Polish.add('gateward', W => Polish.hill(W, 'gateward', -230, -430, 95, 24));
+Polish.pre('gateward', [[-680, -1000, -440, -760]]);
+Polish.add('gateward', W => Polish.hill(W, 'gateward', -560, -880, 115, 28));
 
 // ===== 38차(3): 다우퍼 마을 — 사진 ②(이끼 낀 바위 봉우리 사이, 언덕을 오르는 돌계단 길) =====
 Polish.add('dauper', W => {
@@ -4702,6 +4703,118 @@ Polish.add('skyroot', W => {
     for (let k = 0; k < n; k++) { const a = Math.random() * Math.PI * 2, d = c.r + 2 + Math.random() * 7, s = 1 + Math.random() * 1.6; W.batch('srBush', W.unitRock || W.unitBox, bush, c.x + Math.cos(a) * d, s * 0.6, c.z + Math.sin(a) * d, s * 1.4, s, s * 1.3, Math.random() * 6, greens[k % 4], 0, 0, { noShadow: true }); }
   }
 });
+
+// ===== 40차: 거리 디테일 — 건물마다 둘레에 생활 소품(양식별). 모두 InstancedMesh 묶음이라 그리기 수는 소품 종류 수만큼만 =====
+// 파라디: 문 옆 벽등, 나무통, 창가 화단, 매달린 가게 간판, 벤치, 짐수레, 시장 천막, 모퉁이 가로등
+// 마레: 쇠 가로등, 벽보, 벤치, 우편함·소화전 같은 근대 소품 / 시골: 장작더미, 짚단, 나무 울타리 토막
+const Street = {
+  mats(W) {
+    if (W._st) return W._st;
+    const L = c => new THREE.MeshLambertMaterial({ color: c });
+    return (W._st = {
+      wood: L(0x6a4a30), dark: L(0x3a2a1c), iron: W.darkIron || L(0x3a3d42), green: L(0x4a7a3a), flower: L(0xffffff),
+      sign: L(0x8a5a34), paper: L(0xe0d6c0), hay: L(0xc8a85a), stone: L(0x9a9284),
+      awn: [0x8a2a24, 0x2f5a6c, 0x6a5a2a, 0x7a3a5a].map(L),
+    });
+  },
+  around(W, st, x, z, w, d, h) {
+    const S = this.mats(W), B = W.unitBox, C = W.unitCyl, R = Math.random;
+    const side = R() < 0.5 ? 1 : -1, fz = z + side * (d / 2), out = side;   // 소품을 놓을 앞면(z쪽)
+    const px = () => x + (R() - 0.5) * (w - 2);
+    if (st === 'paradis' || st === 'royal') {
+      // 문 옆 벽등(밤에 밝아지는 glowMat) + 쇠 받침
+      if (R() < 0.55) { const lx = px(); W.batch('stLampB', B, S.iron, lx, 2.9, fz + out * 0.25, 0.12, 0.12, 0.5); W.batch('lamp', B, W.glowMat, lx, 2.7, fz + out * 0.5, 0.35, 0.5, 0.35, 0, null, 0, 0, { noShadow: true }); }
+      // 창가 화단(2층 창 아래) + 꽃
+      if (R() < 0.5) for (let k = 0; k < 2; k++) { const lx = x + (k ? 1 : -1) * w * 0.22; W.batch('stBox', B, S.dark, lx, 5.4, fz + out * 0.35, 1.6, 0.35, 0.5, 0, null, 0, 0, { noShadow: true }); W.batch('stFlower', B, S.flower, lx, 5.7, fz + out * 0.35, 1.5, 0.3, 0.42, 0, [0xd84a4a, 0xf0c040, 0xe07ab0, 0x7aa0e0][Math.floor(R() * 4)], 0, 0, { noShadow: true }); }
+      // 매달린 가게 간판
+      if (R() < 0.3) { const lx = px(); W.batch('stSignArm', B, S.iron, lx, 3.9, fz + out * 0.7, 0.08, 0.08, 1.4); W.batch('stSign', B, S.sign, lx, 3.3, fz + out * 1.2, 0.08, 0.9, 1.1, 0, null, 0, 0, { noShadow: true }); }
+      // 나무통 무리
+      if (R() < 0.4) { const bx = x + (R() < 0.5 ? -1 : 1) * (w / 2 + 0.8), n = 1 + Math.floor(R() * 3); for (let k = 0; k < n; k++) W.batch('stBarrel', C, S.wood, bx, 0.6, fz + out * (1 + k * 1.1), 0.5, 1.2, 0.5, 0, null, 0, 0, { noShadow: true }); }
+      // 시장 천막(1층 가게 앞, 기울어진 천)
+      if (R() < 0.18) { const ai = Math.floor(R() * 4), lx = px(); W.batch('stAwn' + ai, B, S.awn[ai], lx, 2.9, fz + out * 1.1, Math.min(6, w * 0.6), 0.12, 2.2, 0, null, out * 0.28, 0, { noShadow: true }); for (const s of [-1, 1]) W.batch('stPole', C, S.wood, lx + s * Math.min(3, w * 0.3), 1.4, fz + out * 2.1, 0.06, 2.8, 0.06, 0, null, 0, 0, { noShadow: true }); }
+      // 벤치·짐수레
+      if (R() < 0.14) { const lx = px(); W.batch('stBench', B, S.wood, lx, 0.45, fz + out * 1.6, 2, 0.12, 0.5); for (const s of [-0.8, 0.8]) W.batch('stLeg', B, S.dark, lx + s, 0.22, fz + out * 1.6, 0.12, 0.45, 0.45, 0, null, 0, 0, { noShadow: true }); }
+      if (R() < 0.06) { const lx = px(), cz = fz + out * 2.6; W.batch('stCart', B, S.wood, lx, 1.0, cz, 3, 0.8, 1.6); for (const s of [-1, 1]) W.batch('stWheel', C, S.dark, lx + s * 0.9, 0.6, cz + 0.85, 0.6, 0.12, 0.6, 0, null, Math.PI / 2, 0, { noShadow: true }); W.batch('stShaft', B, S.wood, lx - 2.4, 0.7, cz, 2.2, 0.1, 0.1, 0, null, 0, -0.25, { noShadow: true }); }
+      // 모퉁이 가로등(기둥 + 등)
+      if (R() < 0.12) { const cx = x + (R() < 0.5 ? -1 : 1) * (w / 2 + 1.5), cz = fz + out * 1.5; W.batch('lpost', C, S.iron, cx, 2.3, cz, 0.14, 4.6, 0.14); W.batch('lamp', B, W.glowMat, cx, 4.8, cz, 0.55, 0.75, 0.55, 0, null, 0, 0, { noShadow: true }); }
+    } else if (st === 'marley') {
+      if (R() < 0.35) { const cx = x + (R() < 0.5 ? -1 : 1) * (w / 2 + 1.2), cz = fz + out * 1.4; W.batch('stIronPost', C, S.iron, cx, 2.8, cz, 0.12, 5.6, 0.12); W.batch('stIronArm', B, S.iron, cx, 5.5, cz + out * 0.5, 0.08, 0.08, 1.0); W.batch('lamp', B, W.glowMat, cx, 5.2, cz + out * 0.9, 0.4, 0.5, 0.4, 0, null, 0, 0, { noShadow: true }); }
+      if (R() < 0.4) { const lx = px(); W.batch('stPoster', B, S.paper, lx, 1.8, fz + out * 0.08, 1.0, 1.4, 0.04, 0, null, 0, 0, { noShadow: true }); }
+      if (R() < 0.15) { const lx = px(); W.batch('stBench', B, S.wood, lx, 0.45, fz + out * 1.6, 2, 0.12, 0.5); }
+      if (R() < 0.1) { const lx = px(); W.batch('stHydrant', C, L2(W, 0x7a2a22), lx, 0.45, fz + out * 1.2, 0.18, 0.9, 0.18, 0, null, 0, 0, { noShadow: true }); }
+    } else if (st === 'village') {
+      if (R() < 0.5) { const bx = x + (R() < 0.5 ? -1 : 1) * (w / 2 + 0.7); for (let k = 0; k < 4; k++) W.batch('stLog', C, S.wood, bx, 0.25 + Math.floor(k / 2) * 0.45, fz + out * (0.6 + (k % 2) * 0.5), 0.22, 1.8, 0.22, 0, null, Math.PI / 2, 0, { noShadow: true }); }
+      if (R() < 0.35) { const lx = px(); W.batch('stHay', C, S.hay, lx, 0.6, fz + out * 2.5, 0.8, 1.2, 0.8, 0, null, Math.PI / 2, 0, { noShadow: true }); }
+    }
+  },
+};
+const L2 = (W, c) => (W._l2 = W._l2 || {})[c] || (W._l2[c] = new THREE.MeshLambertMaterial({ color: c }));
+{
+  const base = Arch.deco;
+  Arch.deco = function (W, st, A, x, z, w, d, h, box) {
+    base.call(this, W, st, A, x, z, w, d, h, box);
+    try { Street.around(W, st, x, z, w, d, h); } catch (e) { console.warn('street', e); }
+  };
+}
+
+// ===== 40차(2): 마을 사람들 — 도시·마을 길을 걸어 다니는 주민(옷 색 여러 가지), 거인이 80m 안에 오면 반대로 도망 =====
+// 몸통·머리·다리를 InstancedMesh 3개로(그리기 3번). 건물 충돌 상자 안으로는 걸어 들어가지 않음. 동굴·바다·길의 세계엔 없음
+const Citizens = {
+  N: { paradis: 160, royal: 120, marley: 140, village: 50 },
+  init(W) {
+    this.list = []; this.W = W;
+    const st = typeof Arch !== 'undefined' && Arch.OF[W.mapId]; if (!st || { skyroot: 1, slava: 1, slatoa: 1 }[W.mapId]) return;   // 숲·전장 요새엔 주민 없음
+    const R = Math.min(W.BOUND - 30, 1250), n = Math.min(500, Math.round((this.N[st] || 0) * Math.max(1, (R / 560) ** 2)));   // 넓은 구역은 넓이만큼 주민 늘림(최대 500)
+    const free = (x, z) => { if (W.waterLevel && W.waterLevel(x, z) !== null) return false; for (const b of W.near(x - 0.6, z - 0.6, x + 0.6, z + 0.6)) if (x > b.min.x - 0.6 && x < b.max.x + 0.6 && z > b.min.z - 0.6 && z < b.max.z + 0.6 && b.max.y > 0.7) return false; return true; };
+    const cloth = st === 'marley' ? [0x4a4a52, 0x5a4a3a, 0x3a4a5a, 0x6a6a62, 0x7a5a4a] : st === 'royal' ? [0x6a2a3a, 0x2a3a6a, 0x5a5a2a, 0xd8d0c0, 0x3a5a3a] : [0x8a6a4a, 0x6a7a5a, 0xa89a7a, 0x5a6a7a, 0x8a4a3a, 0xc8b898];
+    for (let tries = 0; tries < n * 30 && this.list.length < n; tries++) {
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R, x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (!free(x, z)) continue;
+      this.list.push({ x, z, tx: x, tz: z, sp: 0.9 + Math.random() * 0.6, ph: Math.random() * 6, col: cloth[Math.floor(Math.random() * cloth.length)], wait: Math.random() * 3, run: 0, s: 0.92 + Math.random() * 0.14 });
+    }
+    const L = c => new THREE.MeshLambertMaterial({ color: c });
+    const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, this.list.length)); m.frustumCulled = false; m.castShadow = true; W.scene.add(m); return m; };
+    this.body = mk(new THREE.CylinderGeometry(0.22, 0.3, 0.95, 7), L(0xffffff));
+    this.head = mk(new THREE.SphereGeometry(0.15, 8, 6), L(0xe0b896));
+    this.legs = mk(new THREE.BoxGeometry(0.3, 0.75, 0.18), L(0x3a3028));
+    const c = new THREE.Color(); this.list.forEach((p, i) => this.body.setColorAt(i, c.setHex(p.col)));
+    this.free = free; this.m = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.e = new THREE.Euler(); this.v = new THREE.Vector3(); this.sc = new THREE.Vector3(1, 1, 1);
+    this.update(0);
+  },
+  ground(x, z) { return World.open && typeof Field !== 'undefined' ? Field.height(x, z) : 0; },
+  update(dt) {
+    if (!this.list || !this.list.length) return;
+    const W = this.W, T = typeof Titans !== 'undefined' ? Titans.list : [];
+    for (let i = 0; i < this.list.length; i++) {
+      const p = this.list[i];
+      // 가까운 거인 → 반대 방향으로 달림
+      let fx = 0, fz = 0;
+      for (const t of T) { if (t.dead || !t.root) continue; const dx = p.x - t.root.position.x, dz = p.z - t.root.position.z, d = Math.hypot(dx, dz); if (d < 80) { fx += dx / (d + 1); fz += dz / (d + 1); } }
+      if (fx || fz) { const L = Math.hypot(fx, fz); p.tx = p.x + fx / L * 20; p.tz = p.z + fz / L * 20; p.run = 1; p.wait = 0; }
+      if (p.wait > 0) { p.wait -= dt; }
+      else {
+        const dx = p.tx - p.x, dz = p.tz - p.z, d = Math.hypot(dx, dz), sp = p.sp * (p.run ? 4 : 1);
+        if (d < 0.5) { p.run = 0; p.wait = 1 + Math.random() * 5; const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 22; p.tx = p.x + Math.cos(a) * r; p.tz = p.z + Math.sin(a) * r; }
+        else {
+          const nx = p.x + dx / d * sp * dt, nz = p.z + dz / d * sp * dt;
+          if (Math.hypot(nx, nz) < W.BOUND - 20 && this.free(nx, nz)) { p.x = nx; p.z = nz; p.yaw = Math.atan2(dx, dz); p.ph += dt * sp * 4; }
+          else { p.tx = p.x - dx; p.tz = p.z - dz; p.wait = 0.3; }
+        }
+      }
+      const y = this.ground(p.x, p.z), bob = p.wait > 0 ? 0 : Math.abs(Math.sin(p.ph)) * 0.06, s = p.s;
+      this.q.setFromEuler(this.e.set(0, p.yaw || 0, 0));
+      this.body.setMatrixAt(i, this.m.compose(this.v.set(p.x, y + (1.2 + bob) * s, p.z), this.q, this.sc.set(s, s, s)));
+      this.head.setMatrixAt(i, this.m.compose(this.v.set(p.x, y + (1.82 + bob) * s, p.z), this.q, this.sc.set(s, s, s)));
+      this.legs.setMatrixAt(i, this.m.compose(this.v.set(p.x, y + 0.38 * s, p.z), this.q, this.sc.set(s, s * (1 - Math.abs(Math.sin(p.ph)) * 0.08), s)));
+    }
+    this.body.instanceMatrix.needsUpdate = true; this.head.instanceMatrix.needsUpdate = true; this.legs.instanceMatrix.needsUpdate = true;
+  },
+};
+{
+  const bi = World.init, bu = World.update;
+  World.init = function (...a) { const r = bi.apply(this, a); try { Citizens.init(this); } catch (e) { console.warn('citizens', e); } return r; };
+  World.update = function (dt) { bu.call(this, dt); try { Citizens.update(dt); } catch (e) {} };
+}
 
 </script>
 <script>
@@ -5245,6 +5358,9 @@ const Field = {
     this.initTerrain(W);
     this.ground.rotation.x = -Math.PI / 2; this.ground.position.y = -0.05; this.ground.receiveShadow = true;
     scene.add(this.ground); W.hookables.push(this.ground);
+    // 40차: 강 수면(땅과 같은 150x150 격자)
+    this.river = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000, 150, 150), new THREE.MeshPhongMaterial({ color: 0x2f6f84, shininess: 90, specular: 0x9ab8c8, transparent: true, opacity: 0.9 }));
+    this.river.rotation.x = -Math.PI / 2; this.river.position.y = -500; scene.add(this.river);
     this.ground.userData.moving = true;                                   // 따라 움직이는 땅: 와이어는 고정 기준점(anchor)에 박음
     this.anchor = new THREE.Object3D(); this.anchor.updateMatrixWorld();
     // 칸 물체: 종류마다 InstancedMesh 하나 (칸이 바뀔 때 다시 채움). 그림자는 끔(성능)
@@ -5260,6 +5376,7 @@ const Field = {
       wall: inst(box, new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b5ab98', '#77705f') }), 160),
       sea: inst(box, new THREE.MeshPhongMaterial({ color: 0x3f7f98, shininess: 90, specular: 0x88aabb }), 1700),
       sand: inst(box, new THREE.MeshLambertMaterial({ color: 0xd8c89c }), 900),
+      bridge: inst(box, new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b0a48c', '#6d6152') }), 3000),   // 40차: 강 돌다리
       stone: inst(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0x8c877c, flatShading: true }), 2400),
       rock: inst(new THREE.ConeGeometry(1, 1, 7, 1), new THREE.MeshStandardMaterial({ color: 0x7a7266, flatShading: true, roughness: 1 }), 300),
       snow: inst(new THREE.ConeGeometry(1, 1, 7, 1), new THREE.MeshStandardMaterial({ color: 0xf2f0ea, flatShading: true, roughness: 0.9 }), 300),
@@ -5398,12 +5515,31 @@ const Field = {
     const yk = Y / 1000; if (yk > 520) h += sm((yk - 520) / 80) * 80 * this.noise(X / 2500 + 3, Y / 2500 + 1);
     return h;
   },
+  // 40차: 강 — 큰 노이즈의 0 등고선을 따라 폭 약 60~90m로 굽이침. k=1 강 한가운데, 0 강 밖
+  riverK(X, Y) {
+    const n = this.noise(X / 3600 + 31, Y / 3600 + 47) - 0.5, a = Math.abs(n), w = 0.0032;
+    if (a > w * 2.4) return 0; const t = Math.min(1, (w * 2.4 - a) / (w * 1.6)); return t * t * (3 - 2 * t);
+  },
+  terrBase(X, Y) {
+    let h = this.rawTerr(X, Y), inFlat = false;
+    for (const f of this.flat) { const d = Math.hypot(X - f.X, Y - f.Y); if (d < f.r1) { inFlat = true; const q = Math.max(0, (d - f.r0) / (f.r1 - f.r0)), k = q * q * (3 - 2 * q); h = f.hc + (h - f.hc) * k; } }
+    return [h, inFlat];
+  },
   terrW(X, Y) {
     if (this.seaW(X, Y)) return -8;
-    let h = this.rawTerr(X, Y);
-    for (const f of this.flat) { const d = Math.hypot(X - f.X, Y - f.Y); if (d < f.r1) { const q = Math.max(0, (d - f.r0) / (f.r1 - f.r0)), k = q * q * (3 - 2 * q); h = f.hc + (h - f.hc) * k; } }
-    return h;
+    const [h, inFlat] = this.terrBase(X, Y);
+    if (inFlat) return h;
+    const k = this.riverK(X, Y);
+    return k > 0 ? h - k * 9 : h;   // 강바닥은 9m 아래로 파임
   },
+  // 강 수면(세계 높이) — 강 안쪽이면 둑 높이보다 6.3m 아래, 아니면 null
+  riverLevelW(X, Y) {
+    if (this.seaW(X, Y)) return null;
+    const k = this.riverK(X, Y); if (k < 0.74) return null;   // 수면(둑-6.3m)이 강바닥(둑-9k m)보다 위인 곳만
+    const [h, inFlat] = this.terrBase(X, Y); return inFlat ? null : h - 6.3;
+  },
+  riverLevel(x, z) { if (!this.flat) return null; const [X, Y] = this.toWorld(x, z), v = this.riverLevelW(X, Y); return v === null ? null : v - this.h0; },
+  tlBase(x, z) { if (!this.flat) return 0; const [X, Y] = this.toWorld(x, z); return this.seaW(X, Y) ? -8 - this.h0 : this.terrBase(X, Y)[0] - this.h0; },
   tl(x, z) { if (!this.flat) return 0; const [X, Y] = this.toWorld(x, z); return this.terrW(X, Y) - this.h0; },   // 지금 장소 기준 상대 높이
   initTerrain(W) {
     this.flat = [];
@@ -5415,7 +5551,7 @@ const Field = {
   // budget: 이번 프레임에 계산할 꼭짓점 수. 결과는 job 배열에 모았다가 다 끝나면 한 번에 반영
   reshape(gx, gz, budget) {
     const g = this.ground.geometry, pa = g.attributes.position;
-    const J = this.job && this.job.gx === gx && this.job.gz === gz && this.job.zs ? this.job : (this.job = { gx, gz, i: 0, zs: new Float32Array(pa.count), cs: new Float32Array(pa.count * 3) });
+    const J = this.job && this.job.gx === gx && this.job.gz === gz && this.job.zs ? this.job : (this.job = { gx, gz, i: 0, zs: new Float32Array(pa.count), ws: new Float32Array(pa.count), cs: new Float32Array(pa.count * 3) });
     let ca = g.attributes.color;
     if (!ca) { ca = new THREE.Float32BufferAttribute(new Float32Array(pa.count * 3), 3); g.setAttribute('color', ca); this.ground.material.vertexColors = true; this.ground.material.needsUpdate = true; }
     const crop = [[1, 0.9, 0.52], [0.84, 1, 0.66], [0.96, 0.78, 0.58], [1, 0.95, 0.7]];
@@ -5423,17 +5559,20 @@ const Field = {
     for (let i = J.i; i < end; i++) {
       const x = gx + pa.getX(i), z = gz - pa.getY(i), [X, Y] = this.toWorld(x, z);
       J.zs[i] = this.tl(x, z) + 0.05;
+      { const lv = this.riverLevelW(X, Y); J.ws[i] = lv === null ? J.zs[i] - 3 : lv - this.h0; }
       // 밭 조각보: 벽 안(반지름 480km)의 숲이 아닌 곳은 140x110m 칸마다 밀·초록·갈색 밭, 나머지는 풀빛 그대로
       let c = [1, 1, 1];
       const inW = Math.hypot(X, Y) < 480000, fo = this.noise(X / 3200, Y / 3200);
       if (inW && fo < 0.6 && Y < 560000) { const hh = this.hash(Math.floor(X / 140), Math.floor(Y / 110)); if (hh < 0.62) c = crop[Math.floor(hh * 6.4) % 4]; }
       if (this.seaW(X, Y)) c = [0.95, 0.9, 0.75];
+      { const rk = this.riverK(X, Y); if (rk > 0.12) { const m = Math.min(1, rk * 1.4); c = [c[0] * (1 - m) + 0.72 * m, c[1] * (1 - m) + 0.62 * m, c[2] * (1 - m) + 0.46 * m]; } }
       { const sh = 0.78 + 0.42 * this.noise(X / 380 + 4, Y / 380 + 2) - Math.max(0, this.noise(X / 620 + 21, Y / 620 + 17) - 0.6) * 0.6; c = [c[0] * sh, c[1] * sh, c[2] * sh]; }   // 37차: 구릉 꼭대기는 밝게, 파인 곳은 어둡게(원작 들판의 밝고 짙은 초록 띠)
       J.cs[i * 3] = c[0]; J.cs[i * 3 + 1] = c[1]; J.cs[i * 3 + 2] = c[2];
     }
     J.i = end;
     if (J.i < pa.count) return;
     for (let i = 0; i < pa.count; i++) pa.setZ(i, J.zs[i]);
+    if (this.river) { const rp = this.river.geometry.attributes.position; for (let i = 0; i < rp.count; i++) rp.setZ(i, J.ws[i]); rp.needsUpdate = true; this.river.geometry.computeBoundingSphere(); this.river.position.set(gx, 0, gz); }
     ca.array.set(J.cs); this.job = null;
     this.ground.position.set(gx, -0.05, gz);
     ca.needsUpdate = true;
@@ -5485,7 +5624,11 @@ const Field = {
     ch.hay = []; for (const [X, Y, s] of g.hay) { const p = keep(X, Y); if (p) { ch.hay.push([p[0], p[1], s]); addBox(p[0] - 2 * s, 0, p[1] - 2 * s, p[0] + 2 * s, 2.6 * s, p[1] + 2 * s); } }
     ch.stones = []; for (const [X, Y, s] of (g.stones || [])) { const p = keep(X, Y); if (p) { ch.stones.push([p[0], p[1], s]); if (s > 1.2) addBox(p[0] - s * 0.8, 0, p[1] - s * 0.8, p[0] + s * 0.8, s * 1.1, p[1] + s * 0.8); } }
     ch.wells = []; for (const [X, Y] of g.wells) { const p = keep(X, Y); if (p) { ch.wells.push(p); addBox(p[0] - 1.4, 0, p[1] - 1.4, p[0] + 1.4, 1, p[1] + 1.4); } }
-    for (const rd of g.roads) { const [x, z] = this.toLocal(rd[0], rd[1]); ch.roads.push([x, z, rd[2], rd[3]]); }
+    for (const rd of g.roads) { const [x, z] = this.toLocal(rd[0], rd[1]); ch.roads.push([x, z, rd[2], rd[3]]);
+      // 40차: 강 위 다리 상판 충돌(3m 간격 작은 상자) — 다리 위를 걸어 건넘
+      const ca = Math.cos(rd[3]), sa = Math.sin(rd[3]);
+      for (let t = -rd[2] / 2; t <= rd[2] / 2; t += 3) { const px = x + ca * t, pz = z - sa * t; if (this.riverK(...this.toWorld(px, pz)) <= 0.15) continue; const top = this.tlBase(px, pz) - this.tl(px, pz) + 1.5; addBox(px - 2.2, top - 1.2, pz - 2.2, px + 2.2, top, pz + 2.2); }
+    }
     ch.water = g.water.map(([X, Y]) => this.toLocal(X, Y)); ch.sand = g.sand.map(([X, Y]) => this.toLocal(X, Y));
     ch.peaks = g.peaks.map(([X, Y, r, h]) => [...this.toLocal(X, Y), r, h]);
     this.bake(ch);
@@ -5558,12 +5701,20 @@ const Field = {
     // 38차: 길을 12m 조각으로 나눠 지형 경사를 따라 기울임(굴곡이 커져 100m 토막이 뜨거나 묻히던 문제)
     for (const [x, z, len, a] of ch.roads) { const n = Math.max(4, Math.round(len / 12)), L = len / n, ca = Math.cos(a), sa = Math.sin(a);
       for (let k = 0; k < n; k++) { const t = (k + 0.5) * L - len / 2, px = x + ca * t, pz = z - sa * t, h1 = this.tl(px - ca * L / 2, pz + sa * L / 2), h2 = this.tl(px + ca * L / 2, pz - sa * L / 2);
+        const rk = this.riverK(...this.toWorld(px, pz));
+        if (rk > 0.15) {   // 40차: 강 위 → 돌다리(둑 높이로 평평) + 난간 + 교각
+          const b1 = this.tlBase(px - ca * L / 2, pz + sa * L / 2), b2 = this.tlBase(px + ca * L / 2, pz - sa * L / 2), bc = (b1 + b2) / 2, lift = bc - this.tl(px, pz) + 0.9;
+          o.rotation.set(0, a, Math.atan2(b2 - b1, L), 'YZX'); o.position.set(px, lift, pz); o.scale.set(L + 0.6, 1.2, 9); put('bridge');
+          for (const sd of [-1, 1]) { o.position.set(px + sa * sd * 4.3, lift + 1.1, pz + ca * sd * 4.3); o.scale.set(L + 0.6, 1.0, 0.5); put('bridge'); }
+          if (k % 2 === 0) { o.rotation.set(0, a, 0, 'YZX'); o.position.set(px, lift - 5, pz); o.scale.set(2.2, 10, 7); put('bridge'); }
+          continue;
+        }
         o.rotation.set(0, a, Math.atan2(h2 - h1, L), 'YZX'); o.position.set(px, 0.3, pz); o.scale.set(L + 0.6, 0.6, 8); put('road'); }
       o.rotation.order = 'XYZ'; }   // 길은 100m 토막으로 지형을 따라
     ch.buf = {};
     for (const k in B) ch.buf[k] = { m: new Float32Array(B[k].m), c: B[k].c.length ? new Float32Array(B[k].c) : null, n: B[k].m.length / 16 };
   },
-  CAP: { trunk: 8000, leaf: 24000, house: 900, roof: 900, crop: 900, road: 4000, sea: 1700, sand: 900, rock: 300, stone: 2400, snow: 300, trim: 12000, win: 5000, chim: 900, post: 9000, hay: 700, hayTop: 700, well: 120 },
+  CAP: { trunk: 8000, leaf: 24000, house: 900, roof: 900, crop: 900, road: 4000, sea: 1700, sand: 900, rock: 300, stone: 2400, bridge: 3000, snow: 300, trim: 12000, win: 5000, chim: 900, post: 9000, hay: 700, hayTop: 700, well: 120 },
   LEAF_NEAR: 1100,   // 이보다 먼 칸의 나무는 잎 덩어리 1개
   // 활성 칸의 물체를 InstancedMesh에 다시 채움 (배열 복사)
   fill() {
