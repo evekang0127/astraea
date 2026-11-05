@@ -2175,7 +2175,7 @@ const Maps = {
           // 가지 끝에서 늘어진 덩굴
           for (let k = 0; k < 2; k++) {
             const vl = 6 + Math.random() * 12;
-            W.batch('vine', W.unitCyl, vineMat, tx + rand(3), ty - vl / 2, tz + rand(3), 0.09, vl, 0.09, 0, null, rand(0.08), rand(0.08), { noShadow: true });
+            W.batch('vine', W.unitBox, vineMat, tx + rand(3), ty - vl / 2, tz + rand(3), 0.09, vl, 0.09, 0, null, rand(0.08), rand(0.08), { noShadow: true });
           }
         }
         // 꼭대기 수관 (큰 잎 덩어리 여러 개 → 하늘을 거의 가림)
@@ -2203,7 +2203,7 @@ const Maps = {
       const fernMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
       for (let i = 0; i < 3000; i++) {
         const a = Math.random() * Math.PI * 2, r = 20 + Math.random() * 970, s = 0.8 + Math.random() * 1.8;
-        W.batch('fern', W.unitRock, fernMat, Math.cos(a) * r, s * 0.25, Math.sin(a) * r, s * 1.4, s * 0.55, s * 1.4, Math.random() * 6,
+        W.batch('fern', W._octa || (W._octa = new THREE.OctahedronGeometry(1, 0)), fernMat, Math.cos(a) * r, s * 0.25, Math.sin(a) * r, s * 1.4, s * 0.55, s * 1.4, Math.random() * 6,
           [0x2f5524, 0x3c6229, 0x284a20, 0x46682c][i % 4], 0, 0, { noShadow: true });
       }
       const mossMat = new THREE.MeshLambertMaterial({ color: 0x5f6b55 });
@@ -4114,7 +4114,7 @@ const Arch = {
     const B = W.unitBox, r = Math.random();
     if (st === 'paradis') {
       W.batch('arJetty', B, A.beam, x, 4.15, z, w + 0.7, 0.45, d + 0.7, 0, null, 0, 0, { noShadow: true });       // 2층 돌출 띠
-      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) W.batch('arPost', B, A.beam, x + sx * (w / 2 + 0.05), h / 2, z + sz * (d / 2 + 0.05), 0.6, h, 0.6, 0, null, 0, 0, { noShadow: true });
+      // 41차: 모서리 기둥 상자는 뺌(벽 무늬에 기둥이 그려져 있고, 도시 전체에서 삼각형 16만 개를 차지했음)
       if (box.roof && r < 0.55) {   // 지붕창(도머)
         const ax = box.roof.axis === 'z', off = box.roof.half * 0.45, s = Math.random() < 0.5 ? 1 : -1;
         const dx = ax ? 0 : s * off, dz = ax ? s * off : 0;
@@ -4704,7 +4704,7 @@ Polish.add('skyroot', W => {
   const greens = [0x2f4a26, 0x3a5a2c, 0x45662f, 0x2a4020];
   for (const c of W.cylinders) {
     const n = 6 + Math.floor(Math.random() * 5);
-    for (let k = 0; k < n; k++) { const a = Math.random() * Math.PI * 2, d = c.r + 2 + Math.random() * 7, s = 1 + Math.random() * 1.6; W.batch('srBush', W.unitRock || W.unitBox, bush, c.x + Math.cos(a) * d, s * 0.6, c.z + Math.sin(a) * d, s * 1.4, s, s * 1.3, Math.random() * 6, greens[k % 4], 0, 0, { noShadow: true }); }
+    for (let k = 0; k < n; k++) { const a = Math.random() * Math.PI * 2, d = c.r + 2 + Math.random() * 7, s = 1 + Math.random() * 1.6; W.batch('srBush', W._octa || (W._octa = new THREE.OctahedronGeometry(1, 0)), bush, c.x + Math.cos(a) * d, s * 0.6, c.z + Math.sin(a) * d, s * 1.4, s, s * 1.3, Math.random() * 6, greens[k % 4], 0, 0, { noShadow: true }); }
   }
 });
 
@@ -4722,14 +4722,15 @@ const Street = {
     });
   },
   around(W, st, x, z, w, d, h) {
-    const S = this.mats(W), B = W.unitBox, C = W.unitCyl, R = Math.random;
+    const S = this.mats(W), B = W.unitBox, C = W._cyl6 || (W._cyl6 = new THREE.CylinderGeometry(1, 1, 1, 6)), R = Math.random;   // 41차: 소품 원기둥은 6각
+    if (typeof Quality !== 'undefined' && Quality.mode === 'low' && R() < 0.6) return;   // 41차: 낮은 품질이면 소품 40%만
     const side = R() < 0.5 ? 1 : -1, fz = z + side * (d / 2), out = side;   // 소품을 놓을 앞면(z쪽)
     const px = () => x + (R() - 0.5) * (w - 2);
     if (st === 'paradis' || st === 'royal') {
       // 문 옆 벽등(밤에 밝아지는 glowMat) + 쇠 받침
       if (R() < 0.55) { const lx = px(); W.batch('stLampB', B, S.iron, lx, 2.9, fz + out * 0.25, 0.12, 0.12, 0.5); W.batch('lamp', B, W.glowMat, lx, 2.7, fz + out * 0.5, 0.35, 0.5, 0.35, 0, null, 0, 0, { noShadow: true }); }
       // 창가 화단(2층 창 아래) + 꽃
-      if (R() < 0.5) for (let k = 0; k < 2; k++) { const lx = x + (k ? 1 : -1) * w * 0.22; W.batch('stBox', B, S.dark, lx, 5.4, fz + out * 0.35, 1.6, 0.35, 0.5, 0, null, 0, 0, { noShadow: true }); W.batch('stFlower', B, S.flower, lx, 5.7, fz + out * 0.35, 1.5, 0.3, 0.42, 0, [0xd84a4a, 0xf0c040, 0xe07ab0, 0x7aa0e0][Math.floor(R() * 4)], 0, 0, { noShadow: true }); }
+      if (R() < 0.5) for (let k = 0; k < 2; k++) { const lx = x + (k ? 1 : -1) * w * 0.22; W.batch('stFlower', B, S.flower, lx, 5.55, fz + out * 0.35, 1.6, 0.6, 0.5, 0, [0xd84a4a, 0xf0c040, 0xe07ab0, 0x7aa0e0][Math.floor(R() * 4)], 0, 0, { noShadow: true }); }
       // 매달린 가게 간판
       if (R() < 0.3) { const lx = px(); W.batch('stSignArm', B, S.iron, lx, 3.9, fz + out * 0.7, 0.08, 0.08, 1.4); W.batch('stSign', B, S.sign, lx, 3.3, fz + out * 1.2, 0.08, 0.9, 1.1, 0, null, 0, 0, { noShadow: true }); }
       // 나무통 무리
@@ -4768,7 +4769,7 @@ const Citizens = {
   init(W) {
     this.list = []; this.W = W;
     const st = typeof Arch !== 'undefined' && Arch.OF[W.mapId]; if (!st || { skyroot: 1, slava: 1, slatoa: 1 }[W.mapId]) return;   // 숲·전장 요새엔 주민 없음
-    const R = Math.min(W.BOUND - 30, 1250), n = Math.min(500, Math.round((this.N[st] || 0) * Math.max(1, (R / 560) ** 2)));   // 넓은 구역은 넓이만큼 주민 늘림(최대 500)
+    const R = Math.min(W.BOUND - 30, 1250), low = typeof Quality !== 'undefined' && Quality.mode === 'low', n = Math.round(Math.min(500, Math.round((this.N[st] || 0) * Math.max(1, (R / 560) ** 2))) * (low ? 0.35 : 1));   // 넓은 구역은 넓이만큼 주민 늘림(최대 500)
     const free = (x, z) => { if (W.waterLevel && W.waterLevel(x, z) !== null) return false; for (const b of W.near(x - 0.6, z - 0.6, x + 0.6, z + 0.6)) if (x > b.min.x - 0.6 && x < b.max.x + 0.6 && z > b.min.z - 0.6 && z < b.max.z + 0.6 && b.max.y > 0.7) return false; return true; };
     const cloth = st === 'marley' ? [0x4a4a52, 0x5a4a3a, 0x3a4a5a, 0x6a6a62, 0x7a5a4a] : st === 'royal' ? [0x6a2a3a, 0x2a3a6a, 0x5a5a2a, 0xd8d0c0, 0x3a5a3a] : [0x8a6a4a, 0x6a7a5a, 0xa89a7a, 0x5a6a7a, 0x8a4a3a, 0xc8b898];
     for (let tries = 0; tries < n * 30 && this.list.length < n; tries++) {
@@ -5409,7 +5410,7 @@ const Field = {
     scene.add(this.ground); W.hookables.push(this.ground);
     // 40차: 강 수면(땅과 같은 150x150 격자)
     this.river = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000, 150, 150), new THREE.MeshPhongMaterial({ color: 0x2f6f84, shininess: 90, specular: 0x9ab8c8, transparent: true, opacity: 0.9 }));
-    this.river.rotation.x = -Math.PI / 2; this.river.position.y = -500; scene.add(this.river);
+    this.river.rotation.x = -Math.PI / 2; this.river.position.y = -500; this.river.visible = false; scene.add(this.river);
     this.ground.userData.moving = true;                                   // 따라 움직이는 땅: 와이어는 고정 기준점(anchor)에 박음
     this.anchor = new THREE.Object3D(); this.anchor.updateMatrixWorld();
     // 칸 물체: 종류마다 InstancedMesh 하나 (칸이 바뀔 때 다시 채움). 그림자는 끔(성능)
@@ -5608,7 +5609,7 @@ const Field = {
     for (let i = J.i; i < end; i++) {
       const x = gx + pa.getX(i), z = gz - pa.getY(i), [X, Y] = this.toWorld(x, z);
       J.zs[i] = this.tl(x, z) + 0.05;
-      { const lv = this.riverLevelW(X, Y); J.ws[i] = lv === null ? J.zs[i] - 3 : lv - this.h0; }
+      { const lv = this.riverLevelW(X, Y); J.ws[i] = lv === null ? J.zs[i] - 3 : lv - this.h0; if (lv !== null) J.anyRiver = true; }
       // 밭 조각보: 벽 안(반지름 480km)의 숲이 아닌 곳은 140x110m 칸마다 밀·초록·갈색 밭, 나머지는 풀빛 그대로
       let c = [1, 1, 1];
       const inW = Math.hypot(X, Y) < 480000, fo = this.noise(X / 3200, Y / 3200);
@@ -5621,7 +5622,7 @@ const Field = {
     J.i = end;
     if (J.i < pa.count) return;
     for (let i = 0; i < pa.count; i++) pa.setZ(i, J.zs[i]);
-    if (this.river) { const rp = this.river.geometry.attributes.position; for (let i = 0; i < rp.count; i++) rp.setZ(i, J.ws[i]); rp.needsUpdate = true; this.river.geometry.computeBoundingSphere(); this.river.position.set(gx, 0, gz); }
+    if (this.river) { const rp = this.river.geometry.attributes.position; for (let i = 0; i < rp.count; i++) rp.setZ(i, J.ws[i]); rp.needsUpdate = true; this.river.geometry.computeBoundingSphere(); this.river.position.set(gx, 0, gz); this.river.visible = !!J.anyRiver; }   // 41차: 근처에 강이 없으면 수면 메시(삼각형 4.5만)를 그리지 않음
     ca.array.set(J.cs); this.job = null;
     this.ground.position.set(gx, -0.05, gz);
     ca.needsUpdate = true;
