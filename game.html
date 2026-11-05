@@ -4544,6 +4544,22 @@ Polish.add('dauper', W => {
   }
 });
 
+// ===== 38차(5): 라가코 마을 — 마을 남쪽을 가로지르는 개울(폭 10m, 깊이 1.6m) + 나무 다리 2개 + 물가 돌·갈대 =====
+Polish.add('ragako', W => {
+  const Z = 150, L = 1000;
+  W.addWater(0, Z, L, 10, 0.18, 1.6);
+  const bankM = new THREE.MeshLambertMaterial({ color: 0x6e5a3e }), rockM = new THREE.MeshLambertMaterial({ color: 0x8e8a7e, flatShading: true }), reed = new THREE.MeshLambertMaterial({ color: 0x8a9a4a });
+  const wood = new THREE.MeshLambertMaterial({ color: 0x6a4a30 });
+  for (const s of [-1, 1]) W.batch('rgBank', W.unitBox, bankM, 0, 0.12, Z + s * 5.6, L, 0.24, 1.4, 0, null, 0, 0, { noShadow: true });
+  for (let i = 0; i < 90; i++) { const x = rand(480), s = Math.random() < 0.5 ? 1 : -1; W.batch('rgStone', W.unitRock, rockM, x, 0.2, Z + s * (5 + Math.random() * 1.5), 0.6 + Math.random() * 0.9, 0.4, 0.7, Math.random() * 6, null, 0, 0, { noShadow: true }); }
+  for (let i = 0; i < 160; i++) { const x = rand(480), s = Math.random() < 0.5 ? 1 : -1; W.batch('rgReed', W.unitCyl, reed, x, 0.7, Z + s * (4.3 + Math.random() * 2), 0.05, 1.4 + Math.random(), 0.05, 0, null, rand(0.2), rand(0.2), { noShadow: true }); }
+  for (const bx of [0, -220]) {   // 나무 다리: 판자 + 기둥 + 난간 (사람·말이 건넘)
+    for (let k = -6; k <= 6; k++) W.batch('rgPlank', W.unitBox, wood, bx, 0.75, Z + k * 1.0, 4.2, 0.18, 0.9, 0, null, 0, 0, { hook: true });
+    W.solid(bx - 2.1, 0, Z - 6.5, bx + 2.1, 0.84, Z + 6.5);
+    for (const sx of [-2, 2]) { W.batch('rgRail', W.unitBox, wood, bx + sx, 1.45, Z, 0.16, 0.16, 13, 0, null, 0, 0, { noShadow: true }); for (const k of [-6, -2, 2, 6]) W.batch('rgPost', W.unitBox, wood, bx + sx, 0.7, Z + k, 0.22, 1.6, 0.22, 0, null, 0, 0, { noShadow: true }); }
+  }
+});
+
 </script>
 <script>
 // ===== 세계 지도 (22차): 맵 9개를 하나의 1:1 세계 안 "장소"로 =====
