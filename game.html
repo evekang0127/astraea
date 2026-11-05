@@ -4680,6 +4680,27 @@ const DayNight = {
   World.update = function (dt) { baseUpd.call(this, dt); if (DayNight.on) DayNight.apply(dt); };
 }
 
+// ===== 39차(2): 거대수의 숲 — 사진처럼 나무 사이로 비치는 빛줄기 + 밑동을 덮는 빽빽한 덤불층 =====
+Polish.add('skyroot', W => {
+  const rayT = W.canvasTex(64, (g, s) => { const gr = g.createLinearGradient(0, 0, s, 0); gr.addColorStop(0, 'rgba(255,250,220,0)'); gr.addColorStop(0.5, 'rgba(255,248,210,.55)'); gr.addColorStop(1, 'rgba(255,250,220,0)'); g.fillStyle = gr; g.fillRect(0, 0, s, s); const v = g.createLinearGradient(0, 0, 0, s); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(0.2, 'rgba(0,0,0,1)'); v.addColorStop(1, 'rgba(0,0,0,0.2)'); g.globalCompositeOperation = 'destination-in'; g.fillStyle = v; g.fillRect(0, 0, s, s); });
+  const rays = [];
+  for (let i = 0; i < 34; i++) {
+    const m = new THREE.MeshBasicMaterial({ map: rayT, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: true });
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(10 + Math.random() * 14, 110), m);
+    const a = Math.random() * Math.PI * 2, r = 30 + Math.random() * 520;
+    pl.position.set(Math.cos(a) * r, 52, Math.sin(a) * r); pl.rotation.set(0, Math.random() * Math.PI, 0.32);   // 해 쪽으로 비스듬히
+    pl.userData.ph = Math.random() * 6; W.scene.add(pl); rays.push(pl);
+  }
+  W.animated.push(dt => { const t = performance.now() / 1000, day = typeof DayNight !== 'undefined' && DayNight.on ? Math.max(0, Math.min(1, (W.sun.intensity - 0.35) / 0.5)) : 1; for (const p of rays) p.material.opacity = (0.14 + 0.08 * Math.sin(t * 0.4 + p.userData.ph)) * day; });
+  // 덤불층: 거목 밑동 둘레와 숲 바닥에 작은 잎 덩어리 2,400개(높이 1~3m)
+  const bush = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const greens = [0x2f4a26, 0x3a5a2c, 0x45662f, 0x2a4020];
+  for (const c of W.cylinders) {
+    const n = 6 + Math.floor(Math.random() * 5);
+    for (let k = 0; k < n; k++) { const a = Math.random() * Math.PI * 2, d = c.r + 2 + Math.random() * 7, s = 1 + Math.random() * 1.6; W.batch('srBush', W.unitRock || W.unitBox, bush, c.x + Math.cos(a) * d, s * 0.6, c.z + Math.sin(a) * d, s * 1.4, s, s * 1.3, Math.random() * 6, greens[k % 4], 0, 0, { noShadow: true }); }
+  }
+});
+
 </script>
 <script>
 // ===== 세계 지도 (22차): 맵 9개를 하나의 1:1 세계 안 "장소"로 =====
