@@ -412,7 +412,7 @@ class Particles {
           vAlpha = alpha;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           // 멀수록 작게. 다 사라진 입자는 크기 0 (투명한 큰 사각형을 계속 그리던 낭비 제거), 화면 가까이 와도 260px까지만 (겹쳐 그리기 부담 제한)
-          gl_PointSize = alpha > 0.0 ? min(size * scale / -mv.z, 260.0) : 0.0;
+          gl_PointSize = alpha > 0.0 ? min(size * scale / -mv.z, 110.0) : 0.0;
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
@@ -815,6 +815,11 @@ const World = {
     this.START.set(...(map.start || [0, 0, 0]));
     this.START_YAW = map.startYaw || 0;
     this.buildSky(env);
+    // 43차: 안개에 완전히 묻히는 곳 너머는 그리지 않음(실측 1.7ms 절약). 하늘 돔(반지름 2500)·별·구름은 그 안에 들어가게 비율로 줄임
+    if (typeof camera !== 'undefined') {
+      camera.far = this.mapId === 'paths' ? 4000 : Math.max(1000, Math.min(4000, (env.fogFar || 1500) + 200)); camera.updateProjectionMatrix();
+      if (this.sky) this.sky.scale.setScalar(Math.min(1, camera.far * 0.9 / 2500));
+    }
     this.updateSun(this.START);
     this.makeMaterials();
     map.build(this);
@@ -949,7 +954,14 @@ const World = {
     }
   },
 
-  update(dt) { for (const f of this.animated) f(dt); },
+  update(dt) { for (const f of this.animated) f(dt); this.cullInstCells(); },
+  cullInstCells() {
+    const L = this.instCells; if (!L || !L.length || typeof camera === 'undefined') return;
+    camera.updateMatrixWorld();
+    const F = this._fr || (this._fr = new THREE.Frustum()), M = this._frm || (this._frm = new THREE.Matrix4()), cp = camera.position;
+    F.setFromProjectionMatrix(M.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    for (const c of L) c.mesh.visible = c.sphere.center.distanceTo(cp) - c.sphere.radius < c.cull && F.intersectsSphere(c.sphere);
+  },
 
   // 태양과 그림자 범위를 플레이어 위치로 옮김 (매 프레임)
   updateSun(center) {
@@ -1002,7 +1014,7 @@ const World = {
         g.fillRect(0, 0, s, s);
       }
     });
-    for (let i = 0; i < (env.clouds ?? 46); i++) {
+    for (let i = 0; i < Math.round((env.clouds ?? 46) * 0.56); i++) {   // 43차: 구름 겹침(반투명 덧그리기)이 GPU 4ms → 수를 줄임
       const c = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, fog: false, depthWrite: false,
         color: new THREE.Color(env.cloudColor || 0xf2f5fa), opacity: env.cloudOpacity ?? 0.85 }));
       const a = Math.random() * Math.PI * 2, r = 300 + Math.random() * 1500, w = 220 + Math.random() * 380;
@@ -1258,11 +1270,22 @@ const World = {
   flushBatches() {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     const p = new THREE.Vector3(), s = new THREE.Vector3(), col = new THREE.Color();
+    // 43차: 300개 넘는 묶음(거리 소품·나무 등)은 600m 칸으로 나눠, 칸마다 화면 밖·그릴 거리 밖이면 통째로 건너뜀
+    // (실측: 인스턴스 묶음이 GPU 8.1ms 중 5.3ms — 멀리 있어 안 그리는 것도 꼭짓점 셰이더는 전부 돌았음)
+    this.instCells = [];
+    for (const key of Object.keys(this.batches)) {
+      const b = this.batches[key]; if (b.items.length <= 300 || b.flags.wall) continue;
+      const cells = new Map();
+      for (const it of b.items) { const ck = Math.floor(it.x / 600) + ',' + Math.floor(it.z / 600); let c = cells.get(ck); if (!c) cells.set(ck, c = []); c.push(it); }
+      if (cells.size < 2) continue;
+      delete this.batches[key];
+      for (const [ck, items] of cells) this.batches[key + '#' + ck] = { geo: b.geo, mat: b.mat, items, flags: Object.assign({}, b.flags, { cell: true }) };
+    }
     for (const key in this.batches) {
       const b = this.batches[key];
       const mesh = new THREE.InstancedMesh(b.geo, b.mat, b.items.length);
       // 소품이면 각 개체의 모양 상자를 돌리고 늘린 뒤 감싸는 충돌 상자를 만듦 (작은 것은 생략)
-      const solid = this.SOLID_KEYS.has(key) || b.flags.solid;
+      const solid = this.SOLID_KEYS.has(key.split('#')[0]) || b.flags.solid;
       if (solid && !b.geo.boundingBox) b.geo.computeBoundingBox();
       b.items.forEach((it, i) => {
         q.setFromEuler(e.set(it.rx, it.ry, it.rz, 'YXZ'));
@@ -1284,6 +1307,12 @@ const World = {
       mesh.userData.full = { mat: b.mat, shadow: !b.flags.noShadow };   // 성능 비교용 원래 설정
       mesh.castShadow = !b.flags.noShadow && ext >= 3;
       mesh.material = this.cullMat(b.mat, Math.round(b.flags.hook ? Math.max(cull, 220) : cull));
+      if (b.flags.cell) {   // 칸의 중심·반지름(물체 크기 포함)
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (const it of b.items) { x0 = Math.min(x0, it.x); x1 = Math.max(x1, it.x); y0 = Math.min(y0, it.y); y1 = Math.max(y1, it.y); z0 = Math.min(z0, it.z); z1 = Math.max(z1, it.z); }
+        const c = new THREE.Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+        this.instCells.push({ mesh, sphere: new THREE.Sphere(c, Math.hypot(x1 - x0, y1 - y0, z1 - z0) / 2 + ext), cull: b.flags.hook ? Math.max(cull, 220) : cull });
+      }
       mesh.onBeforeRender = this._cullOBR || (this._cullOBR = (r, sc, cam) => this.cullCam.value.setFromMatrixPosition(cam.matrixWorld));   // 그리기 직전 카메라 위치
       if (mesh.castShadow) mesh.customDepthMaterial = this.shadowDepthMat();   // 그림자 상자에서 먼 소품은 그림자 패스에서 뺌
       mesh.receiveShadow = true;
@@ -5669,7 +5698,7 @@ const Field = {
       }
       this.horizon = new THREE.Color(this.W.map.env.skyHorizon); this.rockFar = new THREE.Color(0x6a7280);
     }
-    const I = this.I.far, o = new THREE.Object3D(), col = new THREE.Color(), D = 2200, cam = camera.position;
+    const I = this.I.far, o = new THREE.Object3D(), col = new THREE.Color(), D = Math.min(2200, camera.far * 0.85), cam = camera.position;   // 43차: 그릴 거리 안쪽에
     let n = 0;
     for (const [px, py, r, h] of this.BIG) {
       const d = Math.hypot(px - X, py - Y);
@@ -8895,7 +8924,7 @@ Object.assign(Effects, {
     const add = () => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     this.flashes = []; this.pillars = [];
     for (let i = 0; i < 10; i++) {
-      const m = new THREE.Mesh(sphere, add()); m.visible = false; scene.add(m); this.flashes.push({ mesh: m, t: 0, life: 1, r: 1 });
+      const m = new THREE.Mesh(sphere, add()); m.material.side = THREE.FrontSide; m.visible = false; scene.add(m); this.flashes.push({ mesh: m, t: 0, life: 1, r: 1 });   // 43차: 빛 구체는 바깥면만(덧그리기 절반)
       const c = new THREE.Mesh(cyl, add()); c.visible = false; scene.add(c); this.pillars.push({ mesh: c, t: 0, life: 1, h: 1, r: 1 });
     }
     // 충격파 고리를 8 → 32개로 (큰 기술은 여러 겹을 동시에 씀)
@@ -8925,6 +8954,34 @@ Object.assign(Effects, {
     this.shake(Math.min(2.2, 0.6 + radius / 70));
     this.hitStop = Math.max(this.hitStop, o.stop ?? 0.06);
     if (o.flash !== false) this.screenFlash(o.flashColor || color, o.flashAmt || Math.min(0.7, 0.25 + radius / 300));
+  },
+  // 43차: 초대형 거인 대폭발 — 흰 섬광 핵 → 주황 불덩이(반지름 0.85R) → 충격파 5겹(최대 2.8R) → 버섯구름(기둥 + 넓은 갓) → 땅을 쓸고 퍼지는 흙먼지 고리 → 파편·긴 흔들림
+  nuke(at, R, color = 0xffa860) {
+    if (!this.flashes) return;
+    const p = new THREE.Vector3(at.x, at.y || 0, at.z), y0 = p.y, v = this._v;
+    this.blast(p, Math.min(R, 260), 0xfff2d8, { life: 2.4, stop: 0.22, flashAmt: 0.95 });
+    const f = this.flashes.find(x => !x.mesh.visible);
+    if (f) { f.t = 0; f.life = 3.4; f.r = R * 0.85; f.mesh.material.color.set(color); f.mesh.position.set(p.x, y0 + R * 0.12, p.z); f.mesh.scale.setScalar(0.1); f.mesh.visible = true; }
+    this.pillar(p, R * 3, R * 0.15, 0xffc080, 2.6); this.pillar(p, R * 1.5, R * 0.32, 0xff8a40, 1.9); this.pillar(p, R * 4, R * 0.05, 0xfff4e0, 1.4);
+    [[R * 0.6, 0xffffff, 0.6], [R, color, 1.1], [R * 1.6, 0xffd0a0, 1.7], [R * 2.2, color, 2.3], [R * 2.8, 0xfff0e0, 3.0]].forEach(([r, c, l]) => this.shockwave(p, r, c, l));
+    const cap = y0 + R * 1.25;
+    for (let i = 0; i < 220; i++) {   // 버섯구름 갓: 높은 곳에서 옆으로 둥글게 퍼짐
+      const a = Math.random() * Math.PI * 2, rr = Math.random() * R * 0.35, sp = 8 + Math.random() * R * 0.12;
+      v.set(Math.cos(a) * sp, 2 + Math.random() * 8, Math.sin(a) * sp);
+      this.steam.emit(this._p.set(p.x + Math.cos(a) * rr, cap + this.rand(R * 0.12), p.z + Math.sin(a) * rr), v, 3 + Math.random() * 3, R * 0.08, R * 0.22);
+    }
+    for (let i = 0; i < 140; i++) {   // 기둥: 땅에서 갓까지 솟구침
+      v.set(this.rand(4), 20 + Math.random() * 40, this.rand(4));
+      this.steam.emit(this._p.set(p.x + this.rand(R * 0.08), y0 + Math.random() * R * 1.1, p.z + this.rand(R * 0.08)), v, 2.5 + Math.random() * 2.5, R * 0.05, R * 0.14);
+    }
+    for (let i = 0; i < 160; i++) {   // 땅을 쓸고 퍼지는 흙먼지 고리
+      const a = i / 160 * Math.PI * 2, sp = 40 + Math.random() * 50;
+      v.set(Math.cos(a) * sp, 2 + Math.random() * 4, Math.sin(a) * sp);
+      this.steam.emit(this._p.set(p.x + Math.cos(a) * R * 0.2, y0 + 3, p.z + Math.sin(a) * R * 0.2), v, 3 + Math.random() * 2, R * 0.05, R * 0.12);
+    }
+    this.debris(p, 4, 160);
+    for (let i = 0; i < 80; i++) { v.set(this.rand(60), 20 + Math.random() * 60, this.rand(60)); this.sparks.emit(p, v, 0.8 + Math.random() * 0.8, 0.8); }
+    this.shake(3); this.hitStop = Math.max(this.hitStop, 0.22);
   },
   // 빛 기둥 (소환·땅울림·포효)
   pillar(at, height, radius, color = 0xbfe6ff, life = 1.2) {
@@ -9118,10 +9175,9 @@ Object.assign(Shifter, {
         if (a.t < 0.7) for (let i = 0; i < 8; i++) Effects.steam.emit(t.pos.clone().add(new THREE.Vector3(Effects.rand(20), H * Math.random(), Effects.rand(20))), Effects._v.set(Effects.rand(4), 6, Effects.rand(4)), 1.5, 6, 18);
         if (once('boom', 0.7)) {
           Effects.lightning(t.pos.clone(), H);
-          Effects.blast(t.pos, 170, 0xffa860, { life: 1.8, stop: 0.15, flashAmt: 0.85 });
-          Effects.pillar(t.pos, 600, 40, 0xffc080, 1.6);
-          for (const e of Titans.list) if (!e.dead && Math.hypot(e.pos.x - t.pos.x, e.pos.z - t.pos.z) < 70) this.execute(e);
-          this.areaHit(t.pos, 170, { mul: 2.5, bonus: 0.4, knock: 40, stun: 2.5 });
+          Effects.nuke(t.pos, 420);   // 43차: 지름 340 → 840m, 버섯구름·충격파 5겹
+          for (const e of Titans.list) if (!e.dead && Math.hypot(e.pos.x - t.pos.x, e.pos.z - t.pos.z) < 180) this.execute(e);
+          this.areaHit(t.pos, 420, { mul: 2.5, bonus: 0.4, knock: 60, stun: 3 });
         }
         break;
       }
@@ -9459,7 +9515,17 @@ Object.assign(Shifter, {
     for (const s of this.summons) if (s.titan && !s.gone) out.push(s.titan);
     return out;
   };
-  S.transform = function () { const was = this.active; baseTransform.call(this); if (!was && this.active) { this.cds = [0.5, 1.5, 1.5]; this.heavyCd = 0; } };
+  S.transform = function () {
+    const was = this.active; baseTransform.call(this);
+    if (!was && this.active) {
+      this.cds = [0.5, 1.5, 1.5]; this.heavyCd = 0;
+      if (this.kind === 'colossal') {   // 43차: 초대형 변신 = 대폭발(반지름 260m). 90m 안 거인은 확정 처치, 260m 안은 날려 보내고 기절
+        const tp = this.titan.pos; Effects.nuke(tp, 260);
+        for (const e of Titans.list) if (!e.dead && e !== this.titan && Math.hypot(e.pos.x - tp.x, e.pos.z - tp.z) < 90) this.execute(e);
+        this.areaHit(tp, 260, { mul: 2, bonus: 0.3, knock: 50, stun: 2.5 });
+      }
+    }
+  };
   S.attack = function () { const before = this.attackT; baseAttack.call(this); if (before < 0 && this.attackT >= 0) this.lungeT = 0.16; };
 }
 
@@ -10244,7 +10310,7 @@ const TitanRenderer = {
 const Quality = {
   mode:'auto', ratio:1, acc:0, n:0, cpu:0, recover:0, lastShadow:0, degraded:false, hz:20,
   gpuAcc:0, gpuN:0, gpuMs:0, cpuMs:0, query:null, ext:null,
-  profiles:{auto:{dpr:1.1,pixels:1250000,shadow:1024,hz:15},low:{dpr:.8,pixels:900000,shadow:0,hz:0},high:{dpr:2,pixels:Infinity,shadow:2048,hz:Infinity}},
+  profiles:{auto:{dpr:1.1,pixels:1100000,shadow:1024,hz:15},low:{dpr:.8,pixels:900000,shadow:0,hz:0},high:{dpr:2,pixels:Infinity,shadow:2048,hz:Infinity}},
   load(){try{const value=localStorage.getItem('astraea-quality');if(this.profiles[value])this.mode=value;}catch(_){};this.profile=this.profiles[this.mode];this.hz=this.profile.hz;},
   maxRatio(){return Math.min(devicePixelRatio,this.profile.dpr,Math.sqrt(this.profile.pixels/(innerWidth*innerHeight)));},
   attach(r){
@@ -10290,14 +10356,14 @@ const Quality = {
     const max=this.maxRatio(),min=Math.min(max,.6);
     // GPU 시간을 모르면 CPU 작업 시간이 프레임의 60% 미만일 때 GPU 병목으로 봄
     const gpuBound=gpu>=0?gpu>avg*1000*.7:this.cpuMs<avg*1000*.6;
-    if(avg>1/42){
+    if(avg>1/54){   // 43차: 60fps 유지 기준(18.5ms 넘으면 해상도부터 낮춤; 전투 효과로 GPU가 밀릴 때)
       this.recover=0;
       const next=Math.max(min,this.ratio-.15);
       if(gpuBound&&next!==this.ratio){this.ratio=next;this.resize();}
       else if(this.renderer.shadowMap.enabled&&this.hz>5){this.hz/=2;}
       else if(avg>1/30&&!this.degraded&&this.profile.shadow>0){this.degraded=true;this.applyShadows();}
     }else if(avg<1/57){
-      if(++this.recover>=10){this.recover=0;
+      if(++this.recover>=15){this.recover=0;
         if(this.degraded){this.degraded=false;this.applyShadows();}
         else if(this.hz<this.profile.hz){this.hz=Math.min(this.profile.hz,this.hz*2);}
         else if(this.ratio<max){this.ratio=Math.min(max,this.ratio+.1);this.resize();}}
@@ -10325,7 +10391,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'h
 Quality.attach(renderer);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = Quality.profile.shadow > 0;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;          // 그림자 가장자리를 부드럽게
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;          // 그림자 가장자리를 부드럽게 (43차 A/B 실측: PCF와 차이가 측정 오차 안이라 유지)
 renderer.toneMapping = THREE.ACESFilmicToneMapping;        // 영화처럼 밝은 곳·어두운 곳을 자연스럽게
 renderer.toneMappingExposure = 1.3;
 document.body.appendChild(renderer.domElement);
