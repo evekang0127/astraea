@@ -5534,6 +5534,7 @@ const Field = {
     this.placeR = W.BOUND;
     // 장소에서 만든 물체 (멀리 가면 숨김. 하늘·빛은 제외)
     this.placeObjs = W.scene.children.filter(o => !W._before.has(o) && o !== W.sky && !o.isLight && o !== (W.sun && W.sun.target));
+    this.clipGrounds(W);
     const scene = W.scene;
     // 땅: 9km 판 하나가 플레이어를 따라감 (텍스처는 180m 단위로 맞춰 움직여 미끄러져 보이지 않음)
     const tex = W.groundTexture('#728f4c', ['#65823f', '#7f9b57', '#5b7539', '#8a9a5a']);
@@ -5592,6 +5593,27 @@ const Field = {
       const a = Math.random() * Math.PI * 2, r = 300 + Math.random() * 400;
       return [Player.pos.x + Math.cos(a) * r, Player.pos.z + Math.sin(a) * r];
     };
+  },
+  // 46차: 장소 바닥판(성 밖까지 넓게 깐 평면)을 장소 반지름에서 잘라냄 — 들판이 켜지면 성 밖은 굴곡 지형이 맡는데,
+  // 높이 0의 평면이 그대로 남아 지형과 엇갈리며 땅이 깨진 것처럼 보였음(시간시나 성벽 밖). 들판이 꺼지면(스토리) 자르지 않음
+  clipGrounds(W) {
+    const U = W.groundClip || (W.groundClip = { value: 1e9 }), R = this.placeR + 40;
+    this.clipR = R;
+    for (const root of this.placeObjs) root.traverse(o => {
+      const t = o.isMesh && !o.isInstancedMesh && o.geometry && o.geometry.type;
+      if (t !== 'PlaneGeometry' && t !== 'CircleGeometry' || o.userData.gclip || !o.material || Array.isArray(o.material)) return;
+      if (Math.abs(o.rotation.x + Math.PI / 2) > 1e-3 || Math.abs(o.position.y) > 1) return;
+      const gp = o.geometry.parameters, half = t === 'PlaneGeometry' ? Math.hypot(gp.width, gp.height) / 2 : gp.radius;
+      if (Math.hypot(o.position.x, o.position.z) + half * Math.max(o.scale.x, o.scale.y) <= R) return;
+      const m = o.material.clone();
+      m.onBeforeCompile = sh => {
+        sh.uniforms.gclipR = U;
+        sh.vertexShader = 'varying vec2 vGclip;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvGclip = (modelMatrix * vec4(transformed, 1.0)).xz;');
+        sh.fragmentShader = 'uniform float gclipR;\nvarying vec2 vGclip;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\nif (dot(vGclip, vGclip) > gclipR * gclipR) discard;');
+      };
+      m.customProgramCacheKey = () => 'gclip';
+      o.material = m; o.userData.gclip = true;
+    });
   },
   enabled() { return this.on && !(typeof Story !== 'undefined' && Story.active); },
   // 화질 '낮음'(Quality.mode)이면 칸 반경 3(2.8km 사방)·안개 2.6km, 아니면 4칸·3.4km
@@ -5750,11 +5772,11 @@ const Field = {
       if ((i & 63) === 0 && budget !== Infinity && performance.now() - t0 > 2.5) break;
       const x = gx + pa.getX(i), z = gz - pa.getY(i), [X, Y] = this.toWorld(x, z);
       const sea = this.seaW(X, Y), rk = sea ? 0 : this.riverK(X, Y);
-      if (sea) { J.zs[i] = -8 - h0 + 0.05; J.ws[i] = J.zs[i] - 3; }
+      if (sea) { J.zs[i] = -8 - h0 + 0.05; J.ws[i] = J.zs[i] - 30; }   // 46차: 강이 아닌 곳의 강물판은 땅 30m 아래(3m면 먼 언덕에서 땅을 뚫고 파란 줄무늬로 비쳤음)
       else {
         const [h, inFlat] = this.terrBase(X, Y);
         J.zs[i] = (!inFlat && rk > 0 ? h - rk * 9 : h) - h0 + 0.05;   // = tl(x, z) + 0.05
-        if (!inFlat && rk >= 0.74) { J.ws[i] = h - 6.3 - h0; J.anyRiver = true; } else J.ws[i] = J.zs[i] - 3;   // = riverLevelW
+        if (!inFlat && rk >= 0.74) { J.ws[i] = h - 6.3 - h0; J.anyRiver = true; } else J.ws[i] = J.zs[i] - (rk > 0.3 ? 3 : 30);   // = riverLevelW
       }
       // 밭 조각보: 벽 안(반지름 480km)의 숲이 아닌 곳은 140x110m 칸마다 밀·초록·갈색 밭, 나머지는 풀빛 그대로
       let c = [1, 1, 1];
@@ -5986,6 +6008,7 @@ const Field = {
     if (!this.on) { this.exitCheck(); return; }
     const W = this.W, p = Player.pos, en = this.enabled();
     W.open = en;
+    if (W.groundClip) W.groundClip.value = en ? this.clipR : 1e9;
     if (W.sky) W.sky.position.set(camera.position.x, 0, camera.position.z);   // 하늘은 늘 머리 위
     if (!en) return;
     // 땅 모양: 600m 단위로 따라감. 처음엔 바로, 그 뒤엔 여러 프레임에 나눠 뒤에서 계산하고 다 되면 바꿈(멈칫 방지)
@@ -8500,7 +8523,7 @@ const Shifter = {
     warhammer: { hp: 1100, dur: 50, speed: 12, cd: 4,   taken: 0.6,  ability: '경화창 부채꼴', aim: 80, aimR: 7, reach: 1.35, hammer: true, trait: '경화 전퇴 · 결정 생성' },
     founding:  { hp: 3000, dur: 45, speed: 30,  cd: 12,  taken: 0.45, ability: '시조의 포효', reach: 1.2, regen: 15, trait: '좌표 · 재생' },
   },
-  vel: new THREE.Vector3(), airY: 0, airV: 0, attackT: -1, side: 1, combo: 0, ab: null, cd: 0, cannonT: 0,
+  vel: new THREE.Vector3(), airY: 0, airV: 0, baseY: 0, climbing: false, climbHold: 0, attackT: -1, side: 1, combo: 0, ab: null, cd: 0, cannonT: 0,
 
   init(scene) {
     this.scene = scene;
@@ -8534,8 +8557,8 @@ const Shifter = {
     t.isShifter = true;
     this.titan = t; this.active = true;
     this.hp = this.maxHp = s.hp; this.timeLeft = s.dur; this.charge = 0; this.cd = 0.5; this.cannonT = 1;
-    this.attackT = -1; this.combo = 0; this.ab = null; this.airY = 0; this.airV = 0; this.vel.set(0, 0, 0);
-    p.pos.y = 0; p.vel.set(0, 0, 0);
+    this.attackT = -1; this.combo = 0; this.ab = null; this.airY = 0; this.airV = 0; this.vel.set(0, 0, 0); this.climbing = false; this.climbHold = 0;
+    this.baseY = this.groundAt(p.pos.x, p.pos.z, p.pos.y, t.height * 0.5, t); p.pos.y = this.baseY; p.vel.set(0, 0, 0);
     this.savedRadius = p.RADIUS; p.RADIUS = 1.9 * t.scale;   // 적 거인이 내 거인 몸에 겹치지 않게
     p.model.visible = false;
     if (p.viewModel) p.viewModel.visible = false;
@@ -8647,21 +8670,38 @@ const Shifter = {
     this.vel.lerp(target, 1 - Math.exp(-8 * dt));
     const face = this.attackT >= 0 || (a && !a.sprint) ? p.forward() : wish.lengthSq() > 0 ? wish : null;
     if (face) t.turnTo(t.pos.x + face.x, t.pos.z + face.z, 6, dt);
+    // 46차: 발 높이 = 디딘 곳(들판 지형·언덕·건물·성벽 위) + 공중 높이. 무릎(키 25%) 이하 턱은 밟고 올라서고,
+    // 예전처럼 낮은 건물(55%)·벽(35%)은 지나가며, 더 높은 벽·건물은 그쪽으로 밀면 기어오름(예전엔 늘 높이 0이라 언덕·성벽에 못 올라갔음)
+    const step = t.height * 0.25, r = 1.3 * t.scale;
     if (!(a && a.leap)) {
       p.pos.x += this.vel.x * dt; p.pos.z += this.vel.z * dt;
-      // 점프 (착지하면 땅 울림 + 가까운 거인 비틀)
-      if (k.Space && this.airY <= 0 && !a) this.airV = (10 + t.scale * 2) * (s.jump || 1);
-      this.airV -= 30 * dt;
-      this.airY += this.airV * dt;
+    }
+    const feet0 = this.baseY + this.airY;
+    const wall = this.pushBody(p.pos, r, feet0, step, t.height, a && a.leap ? null : wish);
+    // 기어오르기: 막는 벽 쪽으로 계속 밀면 위로 올라감. 꼭대기를 넘으면 앞으로 걸어 올라섬
+    if (wall !== null && !(a && a.leap)) { this.climbing = true; this.climbHold = 0.5; this.climbTop = wall; }
+    else if (this.climbing && wish.lengthSq() > 0 && feet0 < this.climbTop + 1) this.climbHold = 0.5;   // 꼭대기 넘어갈 때까지 계속
+    else if ((this.climbHold -= dt) <= 0) this.climbing = false;
+    const g = this.groundAt(p.pos.x, p.pos.z, feet0, step, t);
+    this.baseY = g; this.airY = feet0 - g;
+    if (!(a && a.leap)) {
+      if (this.climbing && feet0 < this.climbTop + 1) { this.airV = 0; this.airY += (8 + t.scale * 3) * dt; }
+      else {
+        // 점프 (착지하면 땅 울림 + 가까운 거인 비틀)
+        if (k.Space && this.airY <= 0.05 && !a) this.airV = (10 + t.scale * 2) * (s.jump || 1);
+        this.airV -= 30 * dt;
+        this.airY += this.airV * dt;
+      }
       if (this.airY <= 0) {
         if (this.airV < -12) {
           Effects.shockwave(t.pos, t.height * 0.9, 0xd9c49e, 0.5); Effects.debris(t.pos, t.scale * 0.25, 20); Effects.shake(0.6);
           this.hitArc(t.height * 0.5 + 4, -1, { mul: 0.8, bonus: 0, knock: 6, stun: 0.8 });
         }
-        this.airY = 0; this.airV = 0;
+        this.airV = 0;
+        // 턱을 밟고 올라설 때는 한 번에 튀지 않고 빠르게 올라감
+        this.airY = this.airY > -0.05 ? 0 : Math.min(0, this.airY + Math.max(25, -this.airY * 8) * dt);
       }
     }
-    World.pushCircle(p.pos, 1.3 * t.scale, t.height);
     // 적 거인과 서로 밀어냄 (큰 쪽이 덜 밀림)
     for (const e of Titans.list) {
       if (e.dead) continue;
@@ -8672,13 +8712,15 @@ const Shifter = {
         p.pos.x -= dx / d * push * (1 - w); p.pos.z -= dz / d * push * (1 - w);
       }
     }
-    t.root.position.set(p.pos.x, this.airY - (this.airY <= 0 ? World.wadeDepth(p.pos.x, p.pos.z, t.height, t.napeFrac || (t.napeFrac = Titans.napeFraction(t))) : 0), p.pos.z);
+    p.pos.y = this.baseY + this.airY;
+    t.root.position.set(p.pos.x, p.pos.y, p.pos.z);
     p.vel.copy(this.vel);
     // 걷기 애니메이션. 공격·능력 중에는 팔을 덮어쓰지 않게 attackT를 표시
     const hv = Math.hypot(this.vel.x, this.vel.z);
     t.speed = Math.max(hv, 0.1);
     t.attackT = this.attackT >= 0 || a ? 0 : -1;
-    t.animateWalk(dt, hv > 0.5 && this.airY <= 0, null);
+    t.animateWalk(dt, hv > 0.5 && this.airY <= 0.05 && !this.climbing, null);
+    if (this.climbing && !a && this.attackT < 0) { const c = Math.sin(performance.now() * 0.008); t.armL.rotation.x = -2.6 + c * 0.4; t.armR.rotation.x = -2.6 - c * 0.4; t.legL.rotation.x = -0.5 + c * 0.3; t.legR.rotation.x = -0.5 - c * 0.3; }
     this.updateAttack(dt);
     this.updateAbility(dt);
     if (s.cannon) this.updateCannon(dt);
@@ -8688,9 +8730,60 @@ const Shifter = {
     this.aimRing.visible = !!showAim;
     if (showAim) {
       const pt = this.kind === 'warhammer' ? t.pos.clone().addScaledVector(p.forward(), s.aim) : this.aimPoint(s.aim);
-      this.aimRing.position.set(pt.x, 0.4, pt.z);
+      this.aimRing.position.set(pt.x, (World.open ? Field.height(pt.x, pt.z) : 0) + 0.4, pt.z);
       this.aimRing.scale.setScalar(s.aimR);
     }
+  },
+
+  // 46차: 몸 아래에서 디딜 수 있는 가장 높은 곳(발 높이 feet + step 이하): 물·들판 지형, 맵 언덕(groundAt), 건물·성벽·원기둥 윗면
+  groundAt(x, z, feet, step, t) {
+    const W = World, lim = feet + step, r = 1.3 * t.scale * 0.6;
+    let g = -W.wadeDepth(x, z, t.height, t.napeFrac || (t.napeFrac = Titans.napeFraction(t)));
+    if (W.map.groundAt) { const h = W.map.groundAt(x, z, lim); if (h !== null && h <= lim) g = Math.max(g, h); }
+    for (const b of W.near(x - r, z - r, x + r, z + r)) {
+      if (b.block || b.roof || x < b.min.x - r || x > b.max.x + r || z < b.min.z - r || z > b.max.z + r) continue;
+      if (b.max.y <= lim && b.max.y > g) g = b.max.y;
+    }
+    for (const w of W.walls) {
+      const ox = x - w.cx, oz = z - w.cz;
+      if (Math.abs(ox * w.tx + oz * w.tz) > w.half + r || Math.abs(-ox * w.tz + oz * w.tx) > w.thick + r) continue;
+      if (w.h <= lim && w.h > g) g = w.h;
+    }
+    for (const c of W.cylinders) if (c.h <= lim && c.h > g && Math.hypot(x - c.x, z - c.z) < c.r + r) g = c.h;
+    return g;
+  },
+  // 거인 몸(반지름 r)을 수평으로 밀어냄. 발보다 step 넘게 높은 것만 막고, 낮은 것은 밟고 넘음.
+  // 이동 방향(wish)으로 막힌 벽·건물이 있으면 그 윗면 높이를 돌려줌(기어오르기), 없으면 null
+  pushBody(pos, r, feet, step, height, wish) {
+    const W = World, lim = feet + step; let climb = null;
+    const into = (nx, nz, top) => { if (wish && wish.x * nx + wish.z * nz < -0.35 && (climb === null || top > climb)) climb = top; };
+    for (const b of W.near(pos.x - r, pos.z - r, pos.x + r, pos.z + r)) {
+      let top = b.max.y;
+      if (b.block && W.map.groundAt) { const h = W.map.groundAt(Math.max(b.min.x, Math.min(pos.x, b.max.x)), Math.max(b.min.z, Math.min(pos.z, b.max.z)), 1e9); if (h !== null) top = h; }   // 언덕: 실제 지면 높이로
+      if (b.roof) top += b.roof.h;
+      if (top <= lim || top - feet < height * 0.55 || b.min.y > feet + height * 0.9) continue;   // 무릎 아래는 밟고, 허리 아래 건물은 예전처럼 지나감
+      const cx = Math.max(b.min.x, Math.min(pos.x, b.max.x)), cz = Math.max(b.min.z, Math.min(pos.z, b.max.z));
+      const ox = pos.x - cx, oz = pos.z - cz, d = Math.hypot(ox, oz);
+      if (d >= r || d === 0) continue;
+      pos.x = cx + ox / d * r; pos.z = cz + oz / d * r; into(ox / d, oz / d, top);
+    }
+    for (const w of W.walls) {
+      if (w.h <= lim || w.h - feet < height * 0.35 || w.y0 > feet + height * 0.9) continue;   // 허벅지 아래 벽은 넘어감(시조는 성벽도)
+      const ox = pos.x - w.cx, oz = pos.z - w.cz;
+      const u = ox * w.tx + oz * w.tz, v = -ox * w.tz + oz * w.tx;
+      if (Math.abs(u) > w.half + r || Math.abs(v) > w.thick + r) continue;
+      const sg = Math.sign(v) || 1, pv = w.thick + r - Math.abs(v);
+      pos.x += -w.tz * sg * pv; pos.z += w.tx * sg * pv; into(-w.tz * sg, w.tx * sg, w.h);
+    }
+    for (const c of W.cylinders) {
+      if (c.h <= lim || (!c.block && c.h - feet < height * 0.55)) continue;
+      const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), rr = c.r + r;
+      if (d >= rr || d === 0) continue;
+      pos.x = c.x + dx / d * rr; pos.z = c.z + dz / d * rr; into(dx / d, dz / d, c.h);
+    }
+    const dist = Math.hypot(pos.x, pos.z), L = W.BOUND - r - 4;
+    if (dist > L && !W.open) { pos.x *= L / dist; pos.z *= L / dist; }
+    return climb;
   },
 
   // 차력의 거인 특성: 등의 포대가 1.2초마다 가까운 거인(150m)을 자동 사격
@@ -8699,7 +8792,7 @@ const Shifter = {
     const t = this.titan, e = this.nearestEnemy(t.pos, 150);
     this.cannonT = 1.2;
     if (!e) return;
-    const from = t.pos.clone().setY(this.airY + t.height * 0.75), m = new THREE.Mesh(Nine.geo.sphere, this.rockMat);
+    const from = t.pos.clone().setY(this.baseY + this.airY + t.height * 0.75), m = new THREE.Mesh(Nine.geo.sphere, this.rockMat);
     m.scale.setScalar(0.7); m.position.copy(from); this.scene.add(m);
     this.shells.push({ mesh: m, from, target: e, t: 0 });
     Effects.gasBurst(from, t.forward().negate());
@@ -8707,7 +8800,7 @@ const Shifter = {
 
   // 거인 몸이 밀려난 위치 반영 + 빈 몸 쓰러짐 + 게이지 충전 + 남은 경화창·포탄 정리
   postUpdate(dt) {
-    if (this.active) this.titan.root.position.set(Player.pos.x, this.airY - (this.airY <= 0 ? World.wadeDepth(Player.pos.x, Player.pos.z, this.titan.height, this.titan.napeFrac || 0.74) : 0), Player.pos.z);
+    if (this.active) this.titan.root.position.set(Player.pos.x, this.baseY + this.airY, Player.pos.z);
     else this.charge = Math.min(1, this.charge + dt / this.CHARGE_TIME);
     for (const h of this.husks) h.updateDeath(dt);
     this.husks = this.husks.filter(h => !h.removed);
@@ -8875,7 +8968,7 @@ const Shifter = {
           a.rocks.push({ mesh: m, from: t.pos.clone().setY(t.height * 1.05), to: tgt, t0: a.t, hit: false });
         }
         this.aimRing.visible = true;
-        this.aimRing.position.set(a.target.x, 0.4, a.target.z);
+        this.aimRing.position.set(a.target.x, (World.open ? Field.height(a.target.x, a.target.z) : 0) + 0.4, a.target.z);
         this.aimRing.scale.setScalar(s.aimR + 18);
         for (const r of a.rocks) {
           if (r.hit) continue;
@@ -8986,7 +9079,7 @@ const Shifter = {
     }
     t.head.visible = true;
     // 3인칭: 키에 맞춰 뒤로 멀어짐. 건물에 막히면 앞으로 당김
-    eye.set(p.pos.x, this.airY + t.height * 0.85, p.pos.z);
+    eye.set(p.pos.x, this.baseY + this.airY + t.height * 0.85, p.pos.z);
     const off = p.lookDir().multiplyScalar(-Math.min(t.height * 0.9 + 10, 70 + t.height * 0.32)).addScaledVector(p.right(), Math.min(t.height * 0.18, 40));
     off.y += Math.min(t.height * 0.15, 60);
     if (t.height > 200) {   // 시조(480m): 긴 척추가 화면을 가리지 않게 머리 바로 위·뒤에서 내려다봄
@@ -9306,7 +9399,7 @@ Object.assign(Shifter, {
           const to = a.target.clone().add(new THREE.Vector3(Effects.rand(55), 0, Effects.rand(55)));
           a.rocks.push({ mesh: m, from: t.pos.clone().setY(H * 1.05), to, t0: a.t + i * 0.015, hit: false });
         }
-        this.aimRing.visible = true; this.aimRing.position.set(a.target.x, 0.4, a.target.z); this.aimRing.scale.setScalar(60);
+        this.aimRing.visible = true; this.aimRing.position.set(a.target.x, (World.open ? Field.height(a.target.x, a.target.z) : 0) + 0.4, a.target.z); this.aimRing.scale.setScalar(60);
         for (const r of a.rocks) {
           if (r.hit) continue;
           const f = Math.max(0, Math.min(1, (a.t - r.t0) / 0.6));
@@ -9349,7 +9442,7 @@ Object.assign(Shifter, {
       }
       case 'cart2': {    // 포대 일제 사격: 240m 안 거인 열 마리를 차례로 포격
         while (a.fired < a.targets.length && a.t > 0.15 + a.fired * 0.1) {
-          const e = a.targets[a.fired++], from = t.pos.clone().setY(this.airY + H * 0.8), m = new THREE.Mesh(Nine.geo.sphere, this.rockMat);
+          const e = a.targets[a.fired++], from = t.pos.clone().setY(this.baseY + this.airY + H * 0.8), m = new THREE.Mesh(Nine.geo.sphere, this.rockMat);
           m.scale.setScalar(0.7); m.position.copy(from); this.scene.add(m);
           this.shells.push({ mesh: m, from, target: e, t: 0, big: true });
           Effects.gasBurst(from, t.forward().negate());
@@ -9359,7 +9452,7 @@ Object.assign(Shifter, {
       case 'cart3': {    // 기관총 난사: 3초 동안 앞쪽 120m 부채꼴을 쓸어 냄 (거인마다 최대 6발)
         if ((a.tick -= dt) <= 0) {
           a.tick = 0.1;
-          const f = p.forward(), from = t.pos.clone().setY(this.airY + H * 0.85);
+          const f = p.forward(), from = t.pos.clone().setY(this.baseY + this.airY + H * 0.85);
           for (const e of Titans.list) {
             if (e.dead) continue;
             const dx = e.pos.x - t.pos.x, dz = e.pos.z - t.pos.z, d = Math.hypot(dx, dz);
