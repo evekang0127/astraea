@@ -9,6 +9,8 @@
   #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
     border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.5); pointer-events: none; }
   #crosshair.lock { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: #38d8ff; }
+  #crosshair.far { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: transparent; box-shadow: 0 0 0 2px rgba(255,255,255,.8), 0 0 0 3px rgba(0,0,0,.45); }   /* 사거리 밖: 빈 고리 */
+  #crosshair.fail { background: #ff5a4a; }
   #hud { position: fixed; left: 20px; bottom: 20px; pointer-events: none; text-shadow: 0 1px 3px #000; }
   .bar { width: 260px; height: 12px; background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.4); margin: 4px 0 10px; }
   .bar > div { height: 100%; width: 100%; background: #e84a3c; transition: width .15s; }
@@ -312,8 +314,16 @@
         <label>화질<select id="quality"><option value="auto">자동 · 성능 우선</option><option value="low">가볍게 · 그림자 끄기</option><option value="high">고화질</option></select></label>
         <label>마우스 감도<select id="mouseSens"><option value="0.5">느리게</option><option value="0.75">조금 느리게</option><option value="1">보통</option><option value="1.3">조금 빠르게</option><option value="1.7">빠르게</option></select></label>
         <label>위아래 시점<select id="invertY"><option value="0">보통</option><option value="1">반대로 (Y축 반전)</option></select></label>
+        <label>시야각<select id="fov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
+        <label>화면 흔들림<select id="shake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
         <label>프레임 제한<select id="fpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
         <button type="button" id="showPerf">성능 표시 F3</button>
+      </div>
+      <div class="savebox">
+        <div class="eyebrow">SAVE · 이 브라우저에만 저장됩니다 (서버 저장 없음)</div>
+        <p id="saveSummary"></p>
+        <div class="saverow"><button type="button" id="saveExport">기록·설정 내보내기</button><button type="button" id="saveImport">가져오기</button><button type="button" id="saveUndo" hidden>가져오기 되돌리기</button><input type="file" id="saveFile" accept="application/json,.json" hidden><button type="button" id="saveResetSet">설정 초기화</button><button type="button" id="saveWipe">개인 기록 삭제</button></div>
+        <p id="saveMsg" role="status"></p>
       </div>
     </div>
   </section>
@@ -358,6 +368,8 @@
       <label>출현 거인 (다음 출현부터)<select id="pEncounter"></select></label>
       <label>마우스 감도<select id="pMouseSens"><option value="0.5">느리게</option><option value="0.75">조금 느리게</option><option value="1">보통</option><option value="1.3">조금 빠르게</option><option value="1.7">빠르게</option></select></label>
       <label>위아래 시점<select id="pInvertY"><option value="0">보통</option><option value="1">반대로 (Y축 반전)</option></select></label>
+      <label>시야각<select id="pFov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
+      <label>화면 흔들림<select id="pShake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
       <label>프레임 제한<select id="pFpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
     </div>
     <details><summary>조작 안내</summary><div class="keys">WASD 이동 · Space 점프 / 감기 · Shift 가스 · Q 회피(거인: 대시) · 사람일 때 숫자 키 1~9: 변신할 거인 고르기<br>우클릭 유지: 양손 와이어 · 좌클릭: 베기 / 돌진<br>T: 거인화 · 거인일 때 숫자 키 1~3 스킬 · 좌클릭 연타 · 우클릭 강타 · E 해제<br>V / 휠: 시점 · M: 미니맵 · F3: 성능 표시</div></details>
@@ -722,7 +734,7 @@ const Effects = {
   // 카메라 위치가 정해진 뒤에 호출: 흔들림 적용
   applyShake(camera, dt) {
     if (this.shakeAmt <= 0.001) return;
-    const a = this.shakeAmt * 0.35;
+    const a = this.shakeAmt * 0.35 * (this.shakeMul ?? 1);   // 50차: 화면 흔들림 세기 설정(0 = 끔)
     camera.position.x += this.rand(a);
     camera.position.y += this.rand(a);
     camera.position.z += this.rand(a);
@@ -6809,6 +6821,24 @@ const Player = {
     return hit;
   },
 
+  // 50차: 조준점 방향으로 사거리 밖(최대 600m)에 걸 수 있는 것이 있으면 그 거리, 없으면 null (조준점 모양·실패 안내용)
+  aimFar(camera) {
+    const dir = this._farDir || (this._farDir = new THREE.Vector3());
+    camera.getWorldDirection(dir);
+    this._ray.layers.enable(1); this._ray.set(camera.position, dir); this._ray.far = 600;
+    const hits = this._aimHits || (this._aimHits = []); hits.length = 0;
+    this._ray.intersectObjects(World.hookables, false, hits);
+    if (typeof Titans !== 'undefined') Titans.raycast(this._ray, hits);
+    return hits[0] ? hits[0].point.distanceTo(this.hipPos()) : null;
+  },
+  // 50차: 와이어가 걸리지 않은 이유를 짧게 알려 줌(1.2초에 한 번만) — 사거리 밖인지, 걸 곳이 없는지. 조준점도 잠깐 붉게
+  hookFail(camera) {
+    const now = performance.now(); if (now - (this._failT || 0) < 1200) return; this._failT = now;
+    const d = this.aimFar(camera);
+    this.lastHookFail = d ? 'range' : 'none';
+    if (typeof Game !== 'undefined') Game.toast(d ? `사거리 밖 · ${Math.round(d)}m (최대 ${this.HOOK_RANGE}m)` : '와이어를 걸 곳이 없습니다 · 건물·성벽·나무를 조준', '#9fb4c8');
+    const c = document.getElementById('crosshair'); if (c) { c.classList.add('fail'); setTimeout(() => c.classList.remove('fail'), 300); }
+  },
   // 우클릭 한 번에 양손 와이어 발사: 왼쪽은 조준점 살짝 왼쪽, 오른쪽은 살짝 오른쪽에 박혀 V자가 됨.
   // 벌린 쪽이 빗나가면 조준점 가운데에 박음
   HOOK_SPREAD: 0.07,
@@ -6824,7 +6854,7 @@ const Player = {
   },
   fireHook(camera) {
     const center = this.aimHit(camera) || this.aimAssist(camera);
-    if (!center) return;
+    if (!center) { this.hookFail(camera); return; }
     [0, 1].forEach(s => {
       const hit = this.aimHit(camera, s === 0 ? this.HOOK_SPREAD : -this.HOOK_SPREAD) || center;
       // 움직이는 물체(거인)에도 붙어 있도록 물체 기준 좌표로 저장
@@ -6973,7 +7003,7 @@ const Player = {
     camera.rotation.set(this.pitch, this.yaw, this.camRoll);
     // 속도가 빠를수록 시야각을 넓혀 속도감 표현
     const sp = this.vel.length();
-    const fov = 75 + Math.min(sp, 70) * 0.25 - Effects.slowK() * 9;   // 토벌 슬로우 중엔 살짝 줌인
+    const fov = (this.baseFov || 75) + Math.min(sp, 70) * 0.25 - Effects.slowK() * 9;   // 토벌 슬로우 중엔 살짝 줌인
     if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * 0.1; camera.updateProjectionMatrix(); }
     Effects.drawSpeedLines(sp);
 
@@ -9111,7 +9141,7 @@ const Shifter = {
     const p = Player, t = this.titan, eye = this._eye || (this._eye = new THREE.Vector3());
     camera.rotation.set(p.pitch, p.yaw, 0);
     Effects.drawSpeedLines(0);
-    if (Math.abs(camera.fov - 75) > 0.1) { camera.fov += (75 - camera.fov) * 0.1; camera.updateProjectionMatrix(); }
+    { const bf = p.baseFov || 75; if (Math.abs(camera.fov - bf) > 0.1) { camera.fov += (bf - camera.fov) * 0.1; camera.updateProjectionMatrix(); } }
     if (!p.thirdPerson) {                // 1인칭: 거인의 눈 높이 (머리는 가림)
       t.head.visible = false;
       t.head.getWorldPosition(eye);
@@ -10597,7 +10627,7 @@ const Tutor = {
     const css = document.createElement('style');
     css.textContent = `#tutor{position:fixed;left:50%;top:92px;transform:translateX(-50%);z-index:30;max-width:min(680px,92vw);padding:10px 18px 9px;background:rgba(8,11,18,.82);border:1px solid rgba(56,216,255,.5);border-radius:8px;color:#f1ece0;font-size:15px;line-height:1.6;text-align:center;pointer-events:none}
 #tutor[hidden]{display:none}#tutor kbd{display:inline-block;min-width:22px;padding:0 6px;margin:0 2px;border:1px solid #9fb4c8;border-radius:4px;background:#1a2230;color:#fff;font:700 13px system-ui,sans-serif}
-#tutor small{display:block;margin-top:3px;font-size:11.5px;color:#9fb4c8;letter-spacing:.5px}#tutor.ok{border-color:#9fe0b0}.title #tutor,html.dying #tutor{display:none}`;
+#tutor small{display:block;margin-top:3px;font-size:11.5px;color:#9fb4c8;letter-spacing:.5px}#tutor.ok{border-color:#9fe0b0}.savebox{margin-top:14px;padding-top:12px;border-top:1px solid rgba(200,178,122,.25)}.savebox p{margin:6px 0;font-size:12.5px;color:#d9d3c4}.saverow{display:flex;flex-wrap:wrap;gap:8px}.saverow button{padding:7px 12px;font-size:12.5px}#saveMsg{min-height:16px;color:#9fe0b0}.title #tutor,html.dying #tutor{display:none}`;
     document.head.appendChild(css);
     this.el = document.createElement('div'); this.el.id = 'tutor'; this.el.hidden = true; this.el.setAttribute('role', 'status');
     document.body.appendChild(this.el);
@@ -10731,6 +10761,65 @@ const StartView = {
   },
 };
 
+// ---------- 저장 관리 (50차): 내보내기 · 가져오기 · 설정 초기화 · 개인 기록 삭제 ----------
+// 전부 이 브라우저(localStorage)에만 있음. 서버 저장·기기 간 동기화는 없음 → 다른 기기로 옮기려면 내보낸 파일을 가져오기
+const SaveBox = {
+  SET: 'astraea-set-',
+  KEYS: ['astraea-records', 'astraea-save-guest', 'astraea-tutor-done', 'astraea-quality', 'astraea-volume', 'astraea-music-volume', 'astraea-minimap'],
+  settingKeys() { const out = []; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(this.SET)) out.push(k); } } catch (_) {} return out; },
+  pack() {
+    const data = {};
+    try { for (const k of [...this.KEYS, ...this.settingKeys()]) { const v = localStorage.getItem(k); if (v !== null) data[k] = v; } } catch (_) {}
+    return { app: 'ASTRAEA', v: 1, exported: new Date().toISOString(), data };
+  },
+  // 가져오기: 구조·버전 검사 → 지금 상태를 백업 → 허용한 키의 짧은 문자열만 적용. 기록은 Records.load로 한 번 걸러 이상한 값은 기본값으로
+  apply(obj) {
+    if (!obj || obj.app !== 'ASTRAEA' || obj.v !== 1 || !obj.data || typeof obj.data !== 'object') return { ok: false, msg: 'ASTRAEA 저장 파일이 아니거나 버전이 다릅니다' };
+    const allow = k => this.KEYS.includes(k) || (k.startsWith(this.SET) && k.length < 40);
+    const items = Object.entries(obj.data).filter(([k, v]) => allow(k) && typeof v === 'string' && v.length < 4000);
+    if (!items.length) return { ok: false, msg: '가져올 내용이 없습니다' };
+    try {
+      localStorage.setItem('astraea-backup', JSON.stringify(this.pack()));   // 되돌릴 수 있게 지금 상태를 남김
+      for (const [k, v] of items) {
+        if (k === 'astraea-records') { try { JSON.parse(v); } catch (_) { continue; } localStorage.setItem(k, v); localStorage.setItem(k, JSON.stringify(Records.load())); }
+        else localStorage.setItem(k, v);
+      }
+    } catch (_) { return { ok: false, msg: '저장하지 못했습니다 (브라우저 저장 공간 확인)' }; }
+    return { ok: true, msg: `${items.length}개 항목을 가져왔습니다 · 새로고침하면 설정이 적용됩니다` };
+  },
+  undoImport() {
+    let b = null; try { b = JSON.parse(localStorage.getItem('astraea-backup') || 'null'); } catch (_) {}
+    if (!b || !b.data) return { ok: false, msg: '되돌릴 백업이 없습니다' };
+    try { for (const k of [...this.KEYS, ...this.settingKeys()]) localStorage.removeItem(k); for (const [k, v] of Object.entries(b.data)) if (typeof v === 'string') localStorage.setItem(k, v); localStorage.removeItem('astraea-backup'); } catch (_) { return { ok: false, msg: '되돌리지 못했습니다' }; }
+    return { ok: true, msg: '가져오기 전 상태로 되돌렸습니다 · 새로고침하면 적용됩니다' };
+  },
+  resetSettings() { try { for (const k of this.settingKeys()) localStorage.removeItem(k); for (const k of ['astraea-quality', 'astraea-volume', 'astraea-music-volume', 'astraea-minimap']) localStorage.removeItem(k); } catch (_) {} },
+  wipeRecords() { try { localStorage.removeItem('astraea-records'); } catch (_) {} Records.base = { kills: Game.kills, own: Game.ownKills, ally: Game.allyKills }; Records.kinds = {}; },
+  init() {
+    const $ = id => document.getElementById(id), msg = t => { const m = $('saveMsg'); if (m) m.textContent = t; }, sum = () => { const s = $('saveSummary'); if (s) s.textContent = Records.summary(); };
+    if (!$('saveExport')) return;
+    sum();
+    $('saveExport').addEventListener('click', () => {
+      const a = document.createElement('a'), url = URL.createObjectURL(new Blob([JSON.stringify(this.pack(), null, 1)], { type: 'application/json' }));
+      a.href = url; a.download = 'astraea-save-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000); msg('저장 파일을 내려받았습니다');
+    });
+    $('saveImport').addEventListener('click', () => $('saveFile').click());
+    $('saveFile').addEventListener('change', e => {
+      const f = e.target.files && e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      if (f.size > 100000) { msg('파일이 너무 큽니다 (100KB 이하만)'); return; }
+      const r = new FileReader();
+      r.onload = () => { let o = null; try { o = JSON.parse(String(r.result)); } catch (_) { msg('읽을 수 없는 파일입니다 (JSON 형식이 아님)'); return; } const res = this.apply(o); msg(res.msg); sum(); if ($('saveUndo')) $('saveUndo').hidden = !res.ok; };
+      r.onerror = () => msg('파일을 읽지 못했습니다');
+      r.readAsText(f);
+    });
+    if ($('saveUndo')) { let has = false; try { has = !!localStorage.getItem('astraea-backup'); } catch (_) {} $('saveUndo').hidden = !has; $('saveUndo').addEventListener('click', () => { const res = this.undoImport(); msg(res.msg); sum(); if (res.ok) $('saveUndo').hidden = true; }); }
+    $('saveResetSet').addEventListener('click', () => { if (!confirm('설정(화질·소리·조작·프레임 제한 등)을 처음 값으로 되돌립니다. 개인 기록은 그대로입니다. 계속할까요?')) return; this.resetSettings(); location.reload(); });
+    $('saveWipe').addEventListener('click', () => { if (!confirm('개인 기록(최장 생존·최고 점수·누적 토벌 등)을 모두 지웁니다. 되돌릴 수 없습니다. 지울까요?')) return; this.wipeRecords(); msg('개인 기록을 지웠습니다'); sum(); });
+  },
+};
+
 const Freeplay = {
   ready: false, began: false,
   init() {
@@ -10749,6 +10838,9 @@ const Freeplay = {
     };
     if ($('mouseSens')) pair(['mouseSens', 'pMouseSens'], 'sens', '1', v => { Player.sens = +v || 1; });
     if ($('invertY')) pair(['invertY', 'pInvertY'], 'invertY', '0', v => { Player.invertY = v === '1'; });
+    if ($('fov')) pair(['fov', 'pFov'], 'fov', '75', v => { Player.baseFov = +v || 75; });
+    if ($('shake')) pair(['shake', 'pShake'], 'shake', '1', v => { Effects.shakeMul = +v; });
+    SaveBox.init();
     for (const id of ['fpsCap', 'pFpsCap']) {
       const sel = $(id); if (!sel) continue;
       sel.value = String(FpsCap.cap);
@@ -10921,7 +11013,11 @@ const Game = {
     this.setHud('hpText', 'text', String(Math.ceil(p.hp)));
     this.setHud('hpbar', 'width', (p.hp / p.maxHp * 100).toFixed(1) + '%');
     // 와이어가 닿는 곳을 조준하면 조준점이 파랗게 (조준점 주황 깜빡임은 Effects가 따로 붙였다 뗌)
-    this.$('crosshair').classList.toggle('lock', !!p.aimHit(camera));
+    const aimOk = !!p.aimHit(camera), ch = this.$('crosshair');
+    ch.classList.toggle('lock', aimOk);
+    // 50차: 걸 수 있는 것이 사거리 밖에 있으면 조준점이 빈 고리 (0.2초마다만 검사)
+    if (!aimOk && !Shifter.active) { if ((this._farN = (this._farN || 0) + 1) % 4 === 0) this._far = p.aimFar(camera) !== null; } else this._far = false;
+    ch.classList.toggle('far', !!this._far);
     // 목덜미 안내: 칼 닿는 거리 / 돌진 가능 거리
     const st = Titans.markerState;
     this.setHud('hint', 'text', st === 'reach' ? '베기' : st === 'lunge' ? '돌진' : '');
@@ -12444,25 +12540,18 @@ const Music = {
   },
   scene() {
     if (!Game.started || Game.over) return 'menu';
-    if (typeof Story !== 'undefined' && Story.active && !Story.done) return 'free';   // 34차: 스토리도 자유 모드처럼 4곡 무작위
-    if (typeof Story !== 'undefined' && Story.active) return Story.done ? 'menu' : 'story';
-    return 'free';
+    if (typeof Story !== 'undefined' && Story.active && Story.done) return 'menu';   // 장 완료 화면
+    return 'free';   // 34차: 스토리도 자유 모드처럼 넣은 곡을 무작위로 (50차: 쓰이지 않던 '장마다 정한 곡' 분기를 지움 — 동작은 같음)
   },
   wanted() {
     if (!this.loaded || Game.dying) return null;   // 먹히는 장면에서는 음악을 줄여 끔
     const sc = this.scene();
-    if (sc === 'story' && false) {   // 34차: 스토리 장도 무작위 (사용자 요청)
-      const id = Story.ch >= 7 ? 'twothousand' : Story.ch >= 5 ? 'devil' : 'attack';
-      if (this.tracks[id]) return id;
-      if (this.tracks.attack) return 'attack';
-      return Object.keys(this.tracks)[0] || null;
-    }
     if (sc !== this.plScene) { this.plScene = sc; this.order = null; }   // 화면이 바뀌면 새로 섞음
     this.order = (this.order || []).filter(id => this.tracks[id]);      // 뺀 곡은 건너뜀
     if (!this.order.length) this.order = this.shuffle(this.last);
     return this.order[0] || null;
   },
-  // 곡이 끝나면 섞은 순서의 다음 곡 (스토리 장 곡은 loop라 끝나지 않음)
+  // 곡이 끝나면 섞은 순서의 다음 곡
   next() { if (this.order && this.order.length) this.last = this.order.shift(); this.cur = null; },
   // 0.05초마다: 곡이 바뀌면 소리를 줄였다가 새 곡으로 바꾸고 다시 키움
   tick() {
@@ -12471,7 +12560,7 @@ const Music = {
     this.level += Math.sign(target - this.level) * Math.min(Math.abs(target - this.level), 0.025);
     if (want !== this.cur && this.level < 0.01) {
       this.cur = want;
-      if (want) { this.el.loop = this.scene() === 'story'; this.el.src = this.tracks[want].url; this.el.currentTime = 0; this.play(); } else this.el.pause();
+      if (want) { this.el.loop = false; this.el.src = this.tracks[want].url; this.el.currentTime = 0; this.play(); } else this.el.pause();
     }
     this.el.volume = Math.max(0, Math.min(1, this.level));
   },
@@ -12491,7 +12580,7 @@ const Music = {
 .music .vol{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px}`;
     document.head.appendChild(css);
     const box = document.createElement('div'); box.className = 'music';
-    box.innerHTML = `<div class="hd"><b>배경 음악</b><small>시작 화면·자유 모드는 넣은 곡을 모두 무작위 순서로, 스토리는 장마다 정한 곡 · 이 브라우저에만 저장</small></div>
+    box.innerHTML = `<div class="hd"><b>배경 음악</b><small>시작 화면·자유 모드·스토리 모두 넣은 곡을 무작위 순서로 · 이 브라우저에만 저장</small></div>
       <div class="all"><label class="pick big">♪ 4곡 한 번에 넣기<input type="file" accept="audio/*" multiple hidden></label><small>파일 4개를 같이 고르면 이름을 보고 알맞은 칸에 넣어요</small></div>
       ${this.SLOTS.map(s => `<div class="mrow" data-id="${s.id}"><span>${s.artist} - ${s.title}<i>${s.use}</i></span>
         <span class="st">없음</span><span><label class="pick">파일 넣기<input type="file" accept="audio/*" hidden></label> <button type="button" class="del" hidden>빼기</button></span></div>`).join('')}
