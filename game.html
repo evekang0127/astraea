@@ -5795,12 +5795,42 @@ const Field = {
     }
     J.i = i;
     if (J.i < pa.count) return;
-    for (let i = 0; i < pa.count; i++) pa.setZ(i, J.zs[i]);
-    if (this.river) { const rp = this.river.geometry.attributes.position; for (let i = 0; i < rp.count; i++) rp.setZ(i, J.ws[i]); rp.needsUpdate = true; this.river.geometry.computeBoundingSphere(); this.river.position.set(gx, 0, gz); this.river.visible = !!J.anyRiver; }   // 41차: 근처에 강이 없으면 수면 메시(삼각형 4.5만)를 그리지 않음
-    ca.array.set(J.cs); this.job = null;
+    // 48차: 땅 기울기(법선)도 나눠서 계산. 예전엔 높이 계산만 나누고, 마지막에 computeVertexNormals(삼각형 4.5만)·경계 계산을 한 프레임에 몰아 해서
+    // 그 프레임만 17~31ms 걸렸음(60Hz 실측). 격자라서 이웃 높이 차이로 바로 구함(가로·세로 40m 간격). 경계 상자·구도 높이 범위로 직접 넣음
+    const N = Math.round(Math.sqrt(pa.count)), step = 6000 / (N - 1), zs = J.zs;
+    if (!J.ns) { J.ns = new Float32Array(pa.count * 3); J.k = 0; }
+    let k = J.k;
+    for (; k < pa.count; k++) {
+      if ((k & 255) === 0 && budget !== Infinity && performance.now() - t0 > 2.5) break;
+      const c = k % N, r = (k - c) / N;
+      const xl = c > 0 ? zs[k - 1] : zs[k], xr = c < N - 1 ? zs[k + 1] : zs[k], yu = r > 0 ? zs[k - N] : zs[k], yd = r < N - 1 ? zs[k + N] : zs[k];
+      // 평면의 지역 좌표: x는 열이 늘수록 +, y는 행이 늘수록 − (PlaneGeometry), z = 높이
+      const nx = -(xr - xl) / ((c > 0 && c < N - 1 ? 2 : 1) * step), ny = -(yu - yd) / ((r > 0 && r < N - 1 ? 2 : 1) * step), il = 1 / Math.sqrt(nx * nx + ny * ny + 1);
+      J.ns[k * 3] = nx * il; J.ns[k * 3 + 1] = ny * il; J.ns[k * 3 + 2] = il;
+    }
+    J.k = k;
+    if (k < pa.count) return;
+    // 적용: 배열 복사만 (한 프레임에 1~2ms)
+    let z0 = Infinity, z1 = -Infinity, w0 = Infinity, w1 = -Infinity;
+    const P = pa.array;
+    for (let i = 0; i < pa.count; i++) { const z = zs[i]; P[i * 3 + 2] = z; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+    if (this.river) {
+      const rp = this.river.geometry.attributes.position, R = rp.array, ws = J.ws;
+      for (let i = 0; i < rp.count; i++) { const z = ws[i]; R[i * 3 + 2] = z; if (z < w0) w0 = z; if (z > w1) w1 = z; }
+      rp.needsUpdate = true;
+      const rg = this.river.geometry; if (!rg.boundingSphere) rg.boundingSphere = new THREE.Sphere();
+      rg.boundingSphere.center.set(0, 0, (w0 + w1) / 2); rg.boundingSphere.radius = Math.hypot(3000, 3000, (w1 - w0) / 2);
+      this.river.position.set(gx, 0, gz); this.river.visible = !!J.anyRiver;   // 41차: 근처에 강이 없으면 수면 메시(삼각형 4.5만)를 그리지 않음
+    }
+    ca.array.set(J.cs);
+    g.attributes.normal.array.set(J.ns); g.attributes.normal.needsUpdate = true;
+    this.job = null;
     this.ground.position.set(gx, -0.05, gz);
     ca.needsUpdate = true;
-    pa.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
+    pa.needsUpdate = true;
+    if (!g.boundingSphere) g.boundingSphere = new THREE.Sphere(); if (!g.boundingBox) g.boundingBox = new THREE.Box3();
+    g.boundingSphere.center.set(0, 0, (z0 + z1) / 2); g.boundingSphere.radius = Math.hypot(3000, 3000, (z1 - z0) / 2);
+    g.boundingBox.min.set(-3000, -3000, z0); g.boundingBox.max.set(3000, 3000, z1);
     this.shaped = true;
   },
   wildPos() {
