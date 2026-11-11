@@ -8091,12 +8091,29 @@ const Titans = {
         if (Math.hypot(x - Player.pos.x, z - Player.pos.z) > 80 && World.isFree(x, z, 4)) break;
       }
       // 키는 애니 기준 무작위 4m ~ 15m. 절반은 12m 이상(애니에서 자주 보이는 15m급), 작은 거인은 드묾
-      const kind = Nine.selection === 'classic' ? null :
-        Nine.selection === 'mixed' ? Nine.order[Nine.serial++ % Nine.order.length] : Nine.selection;
-      const height = kind ? Nine.defs[kind].height : 4 + 11 * Math.pow(Math.random(), 0.45);
-      const fast = Math.random() < Math.min(0.08 + wave * 0.03, 0.35);
-      this.list.push(new Titan(this.scene, x, z, height, kind ? false : fast, kind));
+      // 52차: 미리 만들어 둔 거인이 있으면 자리만 옮겨 내보냄(만드는 데 3~5ms, 모델 거인은 더 걸려 그 프레임이 끊겼음)
+      const ready = this.pool && this.pool.sel === Nine.selection ? this.pool.t : null;
+      if (this.pool && !ready) this.scene.remove(this.pool.t.root);   // 출현 설정이 바뀌었으면 버림
+      this.pool = null;
+      if (ready) { ready.root.position.set(x, 0, z); ready.root.visible = true; this.list.push(ready); continue; }
+      this.list.push(this.make(x, z, wave));
     }
+  },
+
+  // 출현 규칙대로 거인 하나를 만듦 (종류: 출현 설정, 키: 4~15m 무작위·절반은 12m 이상, 빠른 변종 확률은 시간이 갈수록 늘어남)
+  make(x, z, wave) {
+    const kind = Nine.selection === 'classic' ? null :
+      Nine.selection === 'mixed' ? Nine.order[Nine.serial++ % Nine.order.length] : Nine.selection;
+    const height = kind ? Nine.defs[kind].height : 4 + 11 * Math.pow(Math.random(), 0.45);
+    const fast = Math.random() < Math.min(0.08 + wave * 0.03, 0.35);
+    return new Titan(this.scene, x, z, height, kind ? false : fast, kind);
+  },
+  // 다음에 나올 거인을 여유 있는 프레임에 미리 만들어 숨겨 둠 (game.js 루프가 그림자·HUD 갱신이 없는 가벼운 프레임에 부름)
+  prebuild(wave) {
+    if (this.pool || !this.scene) return;
+    const t = this.make(World.START.x, World.START.z, wave);
+    t.root.visible = false;
+    this.pool = { t, sel: Nine.selection };
   },
 
   update(dt, player) {
@@ -9223,24 +9240,28 @@ Object.assign(Effects, {
     this.pillar(p, R * 3, R * 0.15, 0xffc080, 2.6); this.pillar(p, R * 1.5, R * 0.32, 0xff8a40, 1.9); this.pillar(p, R * 4, R * 0.05, 0xfff4e0, 1.4);
     [[R * 0.6, 0xffffff, 0.6], [R, color, 1.1], [R * 1.6, 0xffd0a0, 1.7], [R * 2.2, color, 2.3], [R * 2.8, 0xfff0e0, 3.0]].forEach(([r, c, l]) => this.shockwave(p, r, c, l));
     const cap = y0 + R * 1.25;
-    for (let i = 0; i < 220; i++) {   // 버섯구름 갓: 높은 곳에서 옆으로 둥글게 퍼짐
+    this.later(2, () => { for (let i = 0; i < 220; i++) {   // 버섯구름 갓: 높은 곳에서 옆으로 둥글게 퍼짐
       const a = Math.random() * Math.PI * 2, rr = Math.random() * R * 0.35, sp = 8 + Math.random() * R * 0.12;
       v.set(Math.cos(a) * sp, 2 + Math.random() * 8, Math.sin(a) * sp);
       this.steam.emit(this._p.set(p.x + Math.cos(a) * rr, cap + this.rand(R * 0.12), p.z + Math.sin(a) * rr), v, 3 + Math.random() * 3, R * 0.08, R * 0.22);
     }
-    for (let i = 0; i < 140; i++) {   // 기둥: 땅에서 갓까지 솟구침
+    }); this.later(1, () => { for (let i = 0; i < 140; i++) {   // 기둥: 땅에서 갓까지 솟구침
       v.set(this.rand(4), 20 + Math.random() * 40, this.rand(4));
       this.steam.emit(this._p.set(p.x + this.rand(R * 0.08), y0 + Math.random() * R * 1.1, p.z + this.rand(R * 0.08)), v, 2.5 + Math.random() * 2.5, R * 0.05, R * 0.14);
     }
-    for (let i = 0; i < 160; i++) {   // 땅을 쓸고 퍼지는 흙먼지 고리
+    }); this.later(3, () => { for (let i = 0; i < 160; i++) {   // 땅을 쓸고 퍼지는 흙먼지 고리
       const a = i / 160 * Math.PI * 2, sp = 40 + Math.random() * 50;
       v.set(Math.cos(a) * sp, 2 + Math.random() * 4, Math.sin(a) * sp);
       this.steam.emit(this._p.set(p.x + Math.cos(a) * R * 0.2, y0 + 3, p.z + Math.sin(a) * R * 0.2), v, 3 + Math.random() * 2, R * 0.05, R * 0.12);
     }
-    this.debris(p, 4, 160);
+    }); this.later(4, () => { this.debris(p, 4, 160);
     for (let i = 0; i < 80; i++) { v.set(this.rand(60), 20 + Math.random() * 60, this.rand(60)); this.sparks.emit(p, v, 0.8 + Math.random() * 0.8, 0.8); }
+    });
     this.shake(3); this.hitStop = Math.max(this.hitStop, 0.22);
   },
+  // 52차: n프레임 뒤에 실행. 대폭발은 입자 700여 개를 한 프레임에 내던 것을 4프레임에 나눠 냄(첫 프레임이 60ms 걸렸음)
+  later(n, fn) { (this._later || (this._later = [])).push({ n, fn }); },
+  runLater() { const L = this._later; if (!L || !L.length) return; for (let i = L.length - 1; i >= 0; i--) if (--L[i].n <= 0) { const q = L[i]; L.splice(i, 1); q.fn(); } },
   // 빛 기둥 (소환·땅울림·포효)
   pillar(at, height, radius, color = 0xbfe6ff, life = 1.2) {
     if (!this.pillars) return;
@@ -9277,7 +9298,7 @@ Object.assign(Effects, {
 Effects._p = new THREE.Vector3();
 {
   const baseUpdate = Effects.update, baseLightning = Effects.lightning;
-  Effects.update = function (dt) { baseUpdate.call(this, dt); this.updateGrand(dt); };
+  Effects.update = function (dt) { baseUpdate.call(this, dt); this.updateGrand(dt); this.runLater(); };
   // 번개는 원래의 따뜻한 흰빛 번쩍임 (다른 색 번쩍임 뒤에도)
   Effects.lightning = function (...a) { const b = document.getElementById('bolt'); if (b) b.style.background = ''; return baseLightning.apply(this, a); };
 }
@@ -11432,7 +11453,9 @@ function loop(now = performance.now()) {
   World.updateSun(Player.pos);
   if (Game.running) World.update(frameDt);   // 풍차·횃불·연기 같은 맵 움직임
   if (Game.running) Effects.applyShake(camera, frameDt);
+  let heavy = false;   // 이번 프레임에 HUD·미니맵 갱신이나 그림자 다시 그리기가 있는가
   if (Game.running && now - lastHudFrame >= 50) {
+    heavy = true;
     Game.updateHud();
     Minimap.draw();
     lastHudFrame = now;
@@ -11440,10 +11463,13 @@ function loop(now = performance.now()) {
   scene.updateMatrixWorld();
   TitanRenderer.update(Shifter.renderList(Titans.list), camera, true);
   Quality.shadow(now);
+  if (renderer.shadowMap.needsUpdate) heavy = true;
   Quality.gpuBegin();
   renderer.render(scene, camera);
   Quality.gpuEnd();
   Quality.update(rawDt, performance.now() - cpuStart);
+  // 52차: 다음 거인을 미리 만들어 둠 — 무거운 일이 없고 이번 프레임 작업이 9ms 아래일 때만(만드는 3~5ms가 16.7ms를 넘기지 않게)
+  if (Game.running && !Game.over && !heavy && Titans.prebuild && performance.now() - cpuStart < 9) Titans.prebuild(1 + Math.floor(Game.time / 60));
   Perf.update(rawDt);
   Menu.render(now);
 }
