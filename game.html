@@ -273,7 +273,7 @@
       </div>
       <h1>ASTRAEA</h1>
       <div class="subline"><span>성벽 위의 진혼곡</span></div>
-      <p class="lead">거인이 쉼 없이 몰려오는 성벽의 세계. 와이어로 날아올라 목덜미를 베고, 위기의 순간에는 계승한 거인으로 변신하라.</p>
+      <p class="lead">거인이 쉼 없이 몰려오는 성벽의 세계. 와이어로 날아올라 목덜미를 베고, 위기의 순간에는 아홉 거인 중 하나로 변신하라.</p>
       <div class="deploy">
         <button type="button" class="btn-gold" data-view="3" disabled>출격</button>
         <div class="viewpick" role="group" aria-label="시점"><button type="button" data-viewpick="3" class="on">3인칭</button><button type="button" data-viewpick="1">1인칭</button></div>
@@ -304,12 +304,13 @@
       <div class="eyebrow">SETTINGS</div><h2>전투 설정</h2>
       <div class="fields">
         <label>출현 거인<select id="encounter"><option value="mixed">9거인 순환</option><option value="classic">기존 일반 거인</option></select></label>
-        <label>변신할 거인 (먹어서 계승한 것만)<select id="heir"></select></label>
-        <label>Google 클라이언트 ID<span class="cid"><input id="googleClientId" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false"><button type="button" id="saveClientId">저장</button></span></label>
+        <label>변신할 거인 (9종 모두 사용 가능)<select id="heir"></select></label>
+        <label id="devClientId" hidden>Google 클라이언트 ID (개발용)<span class="cid"><input id="googleClientId" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false"><button type="button" id="saveClientId">저장</button></span></label>
         <label>소리<select id="volume"><option value="1">켜기</option><option value="0.5">작게</option><option value="0">끄기</option></select></label>
         <label>동료 수<select id="allyCount"></select></label>
         <label>동료 소속<select id="allyFaction"><option value="mixed">혼성 편성</option><option value="survey">조사병단</option><option value="garrison">주둔병단</option><option value="police">헌병단</option></select></label>
         <label>화질<select id="quality"><option value="auto">자동 · 성능 우선</option><option value="low">가볍게 · 그림자 끄기</option><option value="high">고화질</option></select></label>
+        <label>프레임 제한<select id="fpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
         <button type="button" id="showPerf">성능 표시 F3</button>
       </div>
     </div>
@@ -324,7 +325,8 @@
         <span><kbd>Space</kbd></span><span>점프 · 와이어 빨리 감기</span>
         <span><kbd>Shift</kbd></span><span>달리기 · 공중 가스 분사 (무한)</span>
         <span><kbd>좌클릭</kbd></span><span>베기 · 목덜미 근처면 돌진</span>
-        <span><kbd>F</kbd><kbd>T</kbd><kbd>1~9</kbd><kbd>E</kbd></span><span>9거인 사용자 먹기(계승) · 거인화 · 스킬(사람일 때는 변신할 거인 고르기) · 해제</span>
+        <span><kbd>Q</kbd></span><span>회피 (거인일 때는 대시)</span>
+        <span><kbd>T</kbd><kbd>1~9</kbd><kbd>E</kbd></span><span>거인화(게이지가 찼을 때) · 사람일 때 숫자 키로 변신할 거인 고르기(9종 모두) · 거인일 때 1~3 스킬 · 해제</span>
         <span><kbd>V</kbd><kbd>휠</kbd></span><span>1인칭 · 3인칭 전환</span>
         <span><kbd>H</kbd><kbd>G</kbd></span><span>말 부르기·타기·내리기 (Shift 질주) · 들판에서 가까운 장소로 들어가기</span>
         <span><kbd>M</kbd><kbd>Esc</kbd><kbd>F3</kbd></span><span>미니맵 확대·축소 (160m → 800m → 4km → 섬 전체 지도) · 일시정지(세계 지도·빠른 이동) · 성능 표시</span>
@@ -341,20 +343,21 @@
 <div id="pause" hidden role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
   <div class="pause-card">
     <div class="eyebrow">PAUSED</div><h2 id="pauseTitle">일시정지</h2>
-    <p id="pauseStats"></p>
+    <p id="pauseStats"></p><p id="pauseRecords" style="font-size:12px;opacity:.8;margin:2px 0 8px"></p>
     <button type="button" id="resume">계속하기</button>
     <p id="pauseHint" role="status"></p>
     <div class="pause-grid">
       <label>시점<select id="pView"><option value="3">3인칭</option><option value="1">1인칭</option></select></label>
       <label>화질<select id="pQuality"></select></label>
-      <label>계승 거인<select id="pHeir"></select></label>
+      <label>변신할 거인<select id="pHeir"></select></label>
       <label>소리<select id="pVolume"></select></label>
       <label>동료 수<select id="pAllies"></select></label>
       <label>동료 소속<select id="pFaction"></select></label>
       <label>출현 거인 (다음 출현부터)<select id="pEncounter"></select></label>
+      <label>프레임 제한<select id="pFpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
     </div>
-    <details><summary>조작 안내</summary><div class="keys">WASD 이동 · Space 점프 / 감기 · Shift 가스 · Q 회피(거인: 대시) · F 9거인 사용자 먹기(계승) · 사람일 때 숫자 키: 변신할 거인<br>우클릭 유지: 양손 와이어 · 좌클릭: 베기 / 돌진<br>T: 거인화 · 거인일 때 숫자 키 1~3 스킬 · 좌클릭 연타 · 우클릭 강타 · E 해제<br>V / 휠: 시점 · M: 미니맵 · F3: 성능 표시</div></details>
-    <div class="pause-actions"><button type="button" id="toMenu">메인 화면으로 (새 게임)</button></div>
+    <details><summary>조작 안내</summary><div class="keys">WASD 이동 · Space 점프 / 감기 · Shift 가스 · Q 회피(거인: 대시) · 사람일 때 숫자 키 1~9: 변신할 거인 고르기<br>우클릭 유지: 양손 와이어 · 좌클릭: 베기 / 돌진<br>T: 거인화 · 거인일 때 숫자 키 1~3 스킬 · 좌클릭 연타 · 우클릭 강타 · E 해제<br>V / 휠: 시점 · M: 미니맵 · F3: 성능 표시</div></details>
+    <div class="pause-actions"><button type="button" id="escapeStuck">끼임 탈출 (안전한 곳으로)</button><button type="button" id="tutorAgain">조작 연습 다시 보기</button><button type="button" id="toMenu">메인 화면으로 (새 게임 · 점수 초기화)</button></div>
   </div>
 </div>
 <div id="bolt"></div>
@@ -370,7 +373,6 @@
   <div id="shiftHud"><span id="shiftName"></span> <span id="shiftKey"></span><div class="bar" id="shiftbar"><div></div></div></div>
 </div>
 <div id="skillbar" hidden></div>
-<div id="eatPrompt" hidden></div>
 <div id="info">
   <div id="waveText"></div>
   <div id="titanText"></div>
@@ -4647,7 +4649,7 @@ Polish.hill = function (W, id, X, Z, r, H) {
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
   const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })); m.receiveShadow = true; W.scene.add(m); W.hookables.push(m);
   W.heightRay(m, (x, z) => { const h = hf(x, z); return h > 0.05 ? h : null; });   // 42차: 빠른 광선 검사
-  const rock = new THREE.MeshLambertMaterial({ color: 0xb8a888, flatShading: true });
+  const rock = new THREE.MeshLambertMaterial({ color: 0xb8a888 });
   for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, d = r * (0.25 + Math.random() * 0.6), x = X + Math.cos(a) * d, z = Z + Math.sin(a) * d, s = 1 + Math.random() * 3.5; W.batch('hlRock', W.unitRock, rock, x, hf(x, z) + s * 0.25, z, s * 1.4, s * 0.8, s * 1.2, Math.random() * 6, null, 0, 0, { hook: true }); }
   for (let i = 0; i < 10; i++) { const a = Math.random() * Math.PI * 2, d = r * (0.9 + Math.random() * 0.08), x = X + Math.cos(a) * d, z = Z + Math.sin(a) * d; W.addTree(x, z, 1.1); }
   const map = Maps[id], prev = map.groundAt;
@@ -4661,7 +4663,7 @@ Polish.add('dauper', W => {
   // 마을 북쪽 언덕 + 그 위로 오르는 돌계단(언덕 높이를 따라 1.2m 간격 돌판)
   Polish.hill(W, 'dauper', 0, -120, 75, 20);
   const stone = new THREE.MeshLambertMaterial({ color: 0xa9a08c }), moss = new THREE.MeshLambertMaterial({ color: 0x5f7a3a });
-  const rockM = new THREE.MeshLambertMaterial({ color: 0x8d8a7c, flatShading: true });
+  const rockM = new THREE.MeshLambertMaterial({ color: 0x8d8a7c });
   for (let z = -46; z >= -120; z -= 1.2) {
     const y = Maps.dauper.groundAt(0, z, 99) || 0;
     W.batch('dpStep', W.unitBox, stone, 0, y + 0.12, z, 3.6, 0.3, 1.15, 0, null, 0, 0, { noShadow: true });
@@ -4685,7 +4687,7 @@ Polish.add('dauper', W => {
 Polish.add('ragako', W => {
   const Z = 150, L = 1900;   // 40차: 마을이 넓어져 개울도 길게
   W.addWater(0, Z, L, 10, 0.18, 1.6);
-  const bankM = new THREE.MeshLambertMaterial({ color: 0x6e5a3e }), rockM = new THREE.MeshLambertMaterial({ color: 0x8e8a7e, flatShading: true }), reed = new THREE.MeshLambertMaterial({ color: 0x8a9a4a });
+  const bankM = new THREE.MeshLambertMaterial({ color: 0x6e5a3e }), rockM = new THREE.MeshLambertMaterial({ color: 0x8e8a7e }), reed = new THREE.MeshLambertMaterial({ color: 0x8a9a4a });
   const wood = new THREE.MeshLambertMaterial({ color: 0x6a4a30 });
   for (const s of [-1, 1]) W.batch('rgBank', W.unitBox, bankM, 0, 0.12, Z + s * 5.6, L, 0.24, 1.4, 0, null, 0, 0, { noShadow: true });
   for (let i = 0; i < 180; i++) { const x = rand(940), s = Math.random() < 0.5 ? 1 : -1; W.batch('rgStone', W.unitRock, rockM, x, 0.2, Z + s * (5 + Math.random() * 1.5), 0.6 + Math.random() * 0.9, 0.4, 0.7, Math.random() * 6, null, 0, 0, { noShadow: true }); }
@@ -5469,7 +5471,10 @@ addEventListener('keydown', e => {
 #travelFx .c small{display:block;font:700 12px 'Cinzel',serif;letter-spacing:6px;color:#D71A1C}#travelFx .c b{display:block;font-size:34px;letter-spacing:6px;margin:6px 0}
 #travelFx .c i{font-style:normal;font-size:13px;color:#cfcfcf;border:1px solid #D71A1C;padding:8px 18px;display:inline-block;margin-top:10px;background:rgba(0,0,0,.6)}`;
   document.head.appendChild(css);
+  let leaving = false;   // 47차: 연속 클릭·더블클릭으로 이동이 두 번 실행되지 않게
   const leave = (name, go) => {
+    if (leaving) return; leaving = true;
+    if (typeof Session !== 'undefined') Session.save();   // 이번 출격의 점수·시간·체력을 넘김
     try { sessionStorage.setItem(KEY, JSON.stringify({ name })); sessionStorage.setItem('astraea-story-pending', JSON.stringify({ free: true })); } catch (_) {}
     const m = document.getElementById('atlasModal'); if (m) m.hidden = true;
     fx(`<div class="c"><small>TRAVELLING</small><b>${name}</b>이동 중…</div>`, 'go');
@@ -5485,8 +5490,9 @@ addEventListener('keydown', e => {
     try { sessionStorage.removeItem('astraea-story-pending'); } catch (_) {}
     if (typeof Story !== 'undefined') Story.ready = true;
     Game.started = true; document.documentElement.classList.remove('title');
+    const kept = typeof Session !== 'undefined' && Session.restore();
     const ov = document.getElementById('overlay'); if (ov) ov.style.display = 'none';
-    const d = fx(`<div class="c"><small>ARRIVED</small><b>${t.name}</b><i>클릭하면 계속 · Enter</i></div>`, 'arrive');
+    const d = fx(`<div class="c"><small>ARRIVED</small><b>${t.name}</b><i>클릭하면 계속 · Enter</i>${kept ? `<br><em style="font-style:normal;font-size:12px;color:#cfcfcf">이번 출격 이어짐 · 생존 ${Game.clock()} · 토벌 ${Game.kills} · 점수 ${Game.score}</em>` : ''}</div>`, 'arrive');
     const go = e => { if (e) { e.preventDefault(); e.stopPropagation(); } d.hidden = true; removeEventListener('keydown', key, true); if (typeof requestPlay === 'function') requestPlay(); };
     const key = e => { if (e.code === 'Enter' || e.code === 'Space') go(e); };
     d.onclick = go; addEventListener('keydown', key, true);
@@ -5565,7 +5571,7 @@ const Field = {
       sea: inst(box, new THREE.MeshPhongMaterial({ color: 0x3f7f98, shininess: 90, specular: 0x88aabb }), 1700),
       sand: inst(box, new THREE.MeshLambertMaterial({ color: 0xd8c89c }), 900),
       bridge: inst(box, new THREE.MeshLambertMaterial({ map: W.stoneTexture('#b0a48c', '#6d6152') }), 3000),   // 40차: 강 돌다리
-      stone: inst(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0x8c877c, flatShading: true }), 2400),
+      stone: inst(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0x8c877c }), 2400),
       rock: inst(new THREE.ConeGeometry(1, 1, 7, 1), new THREE.MeshStandardMaterial({ color: 0x7a7266, flatShading: true, roughness: 1 }), 300),
       snow: inst(new THREE.ConeGeometry(1, 1, 7, 1), new THREE.MeshStandardMaterial({ color: 0xf2f0ea, flatShading: true, roughness: 0.9 }), 300),
       far: inst(new THREE.ConeGeometry(1, 1, 6, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }), 120),
@@ -6103,7 +6109,7 @@ html.title #fieldHud,html.cutting #fieldHud,html.dying #fieldHud{display:none}`;
     let h = null;
     try { h = JSON.parse(sessionStorage.getItem('astraea-handoff')); sessionStorage.removeItem('astraea-handoff'); } catch (_) {}
     if (!h || h.id !== W.mapId) return;
-    W.START.set(h.x, 0, h.z); W.START_YAW = h.yaw;
+    W.START.set(h.x, 0, h.z); W.START_YAW = h.yaw; W.handoff = true;
     if (h.riding) this.rideOnStart = true;
   },
 };
@@ -9716,97 +9722,46 @@ Object.assign(Shifter, {
   S.attack = function () { const before = this.attackT; baseAttack.call(this); if (before < 0 && this.attackT >= 0) this.lungeT = 0.16; };
 }
 
-// ---------- 계승 (11차): 9거인을 쓰러뜨리면 목덜미에서 사용자가 떨어지고, 다가가 F로 먹어야 그 거인의 힘을 얻음 ----------
-// 얻은 거인은 Account 저장소에 남음 (Google 로그인 = 계정별 영구 저장, 게스트 = 이 탭 동안). 사람일 때 숫자 키로 변신할 거인을 고름
+// ---------- 9거인 선택 (47차): 계승(사용자 먹기)을 없앰 — 자유 모드는 처음부터 9거인 전부 변신 가능. 쓰러진 9거인에게서 사용자가 떨어지지 않음 ----------
+// Account 저장소에는 고른 거인·개인 기록이 남음 (게스트·로그인 모두 이 브라우저의 localStorage). 사람일 때 숫자 키로 변신할 거인을 고름. 스토리는 장마다 쓸 수 있는 거인이 정해짐(story.js)
 const Account = {
   id: 'guest', name: '',
   key() { return 'astraea-save-' + this.id; },
-  store() { return this.id === 'guest' ? sessionStorage : localStorage; },
+  store() { return localStorage; },   // 47차: 게스트도 브라우저를 닫았다 열어도 남게 (예전엔 sessionStorage라 탭을 닫으면 사라졌음)
   load() {
     try { return JSON.parse(this.store().getItem(this.key()) || '{}'); } catch (_) { return {}; }
   },
   save(data) {
     try { this.store().setItem(this.key(), JSON.stringify(Object.assign(this.load(), data))); } catch (_) {}
   },
-  // 로그인·로그아웃 때: 그 계정의 계승 거인을 불러옴
+  // 로그인·로그아웃 때: 그 계정이 마지막에 고른 거인을 불러옴
   use(id, name) {
     this.id = id || 'guest'; this.name = name || '';
     const d = this.load();
-    Shifter.owned = new Set((d.owned || []).filter(k => Nine.defs[k]));
-    if (!Shifter.owned.has(Shifter.kind) && Shifter.owned.size) Shifter.kind = [...Shifter.owned][0];
+    Shifter.owned = new Set(Nine.order);
+    if (d.kind && Nine.defs[d.kind]) Shifter.kind = d.kind;
     if (typeof Menu !== 'undefined' && Menu.refreshHeir) Menu.refreshHeir();
   },
 };
 
 Object.assign(Shifter, {
-  owned: new Set(), users: [],
-  // 쓰러진 9거인의 사용자: 목덜미에서 떨어져 30초 동안 증기 속에 누워 있음 (빛 기둥으로 위치 표시)
-  dropUser(t) {
-    if (!this.userGeo) {
-      this.userGeo = { body: new THREE.CylinderGeometry(0.28, 0.32, 1.5, 10), head: new THREE.SphereGeometry(0.2, 10, 8), ring: new THREE.RingGeometry(1.6, 2, 32) };
-      this.userMat = { body: new THREE.MeshStandardMaterial({ color: 0x3c4a36, roughness: 0.8 }), head: new THREE.MeshStandardMaterial({ color: 0xe0b496, roughness: 0.7 }) };
-    }
-    const at = t.nape.getWorldPosition(new THREE.Vector3()), g = new THREE.Group();
-    const body = new THREE.Mesh(this.userGeo.body, this.userMat.body), head = new THREE.Mesh(this.userGeo.head, this.userMat.head);
-    body.rotation.z = Math.PI / 2; body.position.y = 0.3; head.position.set(0.95, 0.32, 0);
-    const ring = new THREE.Mesh(this.userGeo.ring, new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
-    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.08;
-    g.add(body, head, ring); g.position.copy(at); this.scene.add(g);
-    this.users.push({ kind: t.kind, g, ring, vy: 0, life: 30, glow: 0 });
-    Game.toast(`${Nine.defs[t.kind].name}의 사용자가 떨어졌다 · 다가가 F로 먹어 계승`, '#ffb347');
-  },
-  updateUsers(dt) {
-    if (!this.users.length) { this.nearUser = null; return; }
-    const p = Player, me = this.active ? this.titan.pos : p.pos, reach = this.active ? 4 + this.titan.scale * 3 : 6;
-    this.nearUser = null;
-    for (const u of this.users) {
-      u.life -= dt;
-      const g = u.g, floor = Math.max(0, World.waterLevel(g.position.x, g.position.z) ?? 0);
-      if (g.position.y > floor) { u.vy -= 30 * dt; g.position.y = Math.max(floor, g.position.y + u.vy * dt); }
-      u.ring.scale.setScalar(1 + 0.15 * Math.sin(u.life * 6)); u.ring.material.opacity = 0.5 + 0.3 * Math.sin(u.life * 6);
-      if ((u.glow -= dt) <= 0) { u.glow = 2.4; Effects.pillar(g.position, 40, 1.2, 0xffb347, 1.1); }
-      if (Math.random() < 0.3) Effects.steam.emit(g.position.clone().setY(g.position.y + 0.4), Effects._v.set(Effects.rand(1), 2, Effects.rand(1)), 1.2, 1.5, 3);
-      if (Math.hypot(g.position.x - me.x, g.position.z - me.z) < reach && (!this.nearUser || u.life > this.nearUser.life)) this.nearUser = u;
-      if (u.life <= 0) { this.scene.remove(g); u.gone = true; }
-    }
-    this.users = this.users.filter(u => !u.gone);
-  },
-  // F: 가까운 사용자를 먹어 그 거인을 계승 → 바로 변신할 수 있게 게이지가 참
-  tryEat() {
-    const u = this.nearUser;
-    if (!u) return;
-    this.scene.remove(u.g); u.gone = true; this.users = this.users.filter(x => !x.gone); this.nearUser = null;
-    const first = !this.owned.has(u.kind);
-    this.owned.add(u.kind);
-    Account.save({ owned: [...this.owned] });
-    if (!this.active) { this.kind = u.kind; this.charge = 1; }
-    const at = u.g.position.clone();
-    Effects.lightning(at, 30); Effects.pillar(at, 300, 6, 0xff6a3d, 1.6); Effects.screenFlash(0xff6a3d, 0.45);
-    Game.toast(first ? `${Nine.defs[u.kind].name} 계승! [T] 변신 · 보유 ${this.owned.size}/9` : `${Nine.defs[u.kind].name}의 힘이 다시 차올랐다`, '#ff9a6a');
-    if (typeof Menu !== 'undefined' && Menu.refreshHeir) Menu.refreshHeir();
-  },
-  // 사람일 때 숫자 키: 계승한 거인 중 변신할 것을 고름 (1 진격 … 9 시조)
+  owned: new Set(),
+  // 사람일 때 숫자 키: 변신할 거인을 고름 (1 진격 … 9 시조). owned는 자유 모드에서 늘 9종 전부, 스토리에서는 그 장의 거인만
   pickHeir(n) {
     const kind = Nine.order[n - 1];
     if (!kind) return;
-    if (!this.owned.has(kind)) { Game.toast(`${Nine.defs[kind].name}: 아직 계승하지 않았다`, '#cfd8e6'); return; }
+    if (!this.owned.has(kind)) { Game.toast(`${Nine.defs[kind].name}: 이 장에서는 쓸 수 없다`, '#cfd8e6'); return; }
     this.kind = kind; Game.toast(`변신할 거인: ${Nine.defs[kind].name}`, '#ffb347');
+    if (!(typeof Story !== 'undefined' && Story.active)) { Account.save({ kind }); try { localStorage.setItem('astraea-set-heir', kind); } catch (_) {} }
     if (typeof Menu !== 'undefined' && Menu.refreshHeir) Menu.refreshHeir();
   },
 });
 {
-  const S = Shifter, baseReady = S.ready, baseTransform = S.transform, basePost = S.postUpdate, baseStrike = Titans.strike;
+  const S = Shifter, baseReady = S.ready, baseTransform = S.transform;
   S.ready = function () { return baseReady.call(this) && this.owned.has(this.kind); };
   S.transform = function () {
-    if (!this.active && !this.owned.has(this.kind)) { Game.toast(this.owned.size ? `${Nine.defs[this.kind].name}은(는) 아직 계승하지 않았다 · 숫자 키로 고르기` : '계승한 거인이 없다 · 9거인을 쓰러뜨리고 사용자를 F로 먹어라', '#cfd8e6'); return; }
+    if (!this.active && !this.owned.has(this.kind)) { Game.toast(this.owned.size ? `${Nine.defs[this.kind].name}은(는) 이 장에서 쓸 수 없다 · 숫자 키로 고르기` : '이 장에서는 아직 거인화할 수 없다', '#cfd8e6'); return; }
     baseTransform.call(this);
-  };
-  S.postUpdate = function (dt) { basePost.call(this, dt); this.updateUsers(dt); };
-  // 적 9거인이 쓰러지면 사용자가 떨어짐 (땅울림·소환·동료가 쓰러뜨려도)
-  Titans.strike = function (titan, opts) {
-    const wasDead = titan.dead, killed = baseStrike.call(this, titan, opts);
-    if (killed && !wasDead && titan.kind && !titan.isShifter && !titan.rumbler && !titan.summon) S.dropUser(titan);
-    return killed;
   };
 }
 Account.use('guest');
@@ -9949,7 +9904,6 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => Sound.in
     Sound.play(killed ? 'kill' : opts && opts.source === 'shifter' ? 'punch' : 'hit', at, 1, 60);
   });
   wrap(Shifter, 'useSkill', Object.assign(function (r, before) { if (this.ab && this.ab !== before && this.titan) Sound.play('roar', this.titan.pos, Math.max(1, this.titan.scale), 200); }, { pre: function () { return this.ab; } }));
-  wrap(Shifter, 'tryEat', Object.assign(function (r, before) { if (before) Sound.play('crunch', before.g.position, 1, 30); }, { pre: function () { return this.nearUser; } }));
   // 거인 발소리: 걸음 위상이 반 바퀴 넘어갈 때마다, 큰 거인일수록 낮고 멀리 들림 (땅울림 거인은 땅울림 소리가 대신)
   const walk = Titan.prototype.animateWalk;
   Titan.prototype.animateWalk = function (dt, moving, player) {
@@ -10209,7 +10163,7 @@ const Menu = {
       const b=document.createElement('button');b.type='button';b.dataset.titan=id;b.innerHTML=`<small>${String(Nine.order.indexOf(id)+1).padStart(2,'0')}</small><span>${d.name}</span>`;
       b.addEventListener('click',()=>this.select(id));$('roster').appendChild(b);
     }
-    try{const v=sessionStorage.getItem('encounter');if(v==='classic'||v==='mixed'||Nine.defs[v])Nine.selection=v;}catch(_){}
+    try{const v=localStorage.getItem('astraea-set-encounter')??sessionStorage.getItem('encounter');if(v==='classic'||v==='mixed'||Nine.defs[v])Nine.selection=v;}catch(_){}
     $('encounter').value=Nine.selection;
     this.initSetup();
     this.scene=new THREE.Scene();this.camera=new THREE.PerspectiveCamera(36,1,.1,1500);
@@ -10241,9 +10195,9 @@ const Menu = {
     show('deploy');
     // 시점 토글: 출격 버튼 하나의 data-view를 바꿈 (토글 버튼 자체는 게임을 시작하지 않음)
     const deploy=document.querySelector('.deploy [data-view]'),picks=[...document.querySelectorAll('[data-viewpick]')];
-    const pick=v=>{deploy.dataset.view=v;for(const b of picks)b.classList.toggle('on',b.dataset.viewpick===v);try{sessionStorage.setItem('view',v);}catch(_){}};
+    const pick=v=>{deploy.dataset.view=v;for(const b of picks)b.classList.toggle('on',b.dataset.viewpick===v);try{localStorage.setItem('astraea-set-view',v);}catch(_){}};
     picks.forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();pick(b.dataset.viewpick);}));
-    let saved=null;try{saved=sessionStorage.getItem('view');}catch(_){}
+    let saved=null;try{saved=localStorage.getItem('astraea-set-view')??sessionStorage.getItem('view');}catch(_){}
     if(saved==='1'||saved==='3')pick(saved);
     const mc=document.getElementById('mapCount');if(mc)mc.textContent='장소 '+Object.keys(Atlas.PLACES).length+'곳';
     this.embers=Array.from({length:70},()=>({x:Math.random(),y:Math.random(),v:.02+Math.random()*.05,r:.6+Math.random()*1.8,a:Math.random()*6.28}));
@@ -10262,11 +10216,11 @@ const Menu = {
     }
     g.globalCompositeOperation='source-over';
   },
-  // 출격 설정(시작 화면)과 일시정지 화면의 같은 항목을 서로 맞춰 둠. 고른 값은 이번 탭 동안 기억
+  // 출격 설정(시작 화면)과 일시정지 화면의 같은 항목을 서로 맞춰 둠. 고른 값은 이 브라우저에 저장
   initSetup(){
     const $=id=>document.getElementById(id);
     const fill=(sel,items)=>{for(const [v,t] of items){const o=document.createElement('option');o.value=v;o.textContent=t;sel.appendChild(o);}};
-    const store=(k,v)=>{try{sessionStorage.setItem(k,v);}catch(_){}},load=k=>{try{return sessionStorage.getItem(k);}catch(_){return null;}};
+    const store=(k,v)=>{try{localStorage.setItem('astraea-set-'+k,v);}catch(_){}},load=k=>{try{return localStorage.getItem('astraea-set-'+k)??sessionStorage.getItem(k);}catch(_){return null;}};   // 47차: 설정은 브라우저를 닫아도 남음(예전 탭 저장값도 읽음)
     const heirs=Nine.order.map(id=>[id,Nine.defs[id].name]),allies=[...Array(9).keys()].map(n=>[String(n),n?n+'명':'없음']);
     fill($('heir'),heirs);fill($('pHeir'),heirs);fill($('allyCount'),allies);fill($('pAllies'),allies);
     for(const [src,dst] of [['quality','pQuality'],['encounter','pEncounter'],['allyFaction','pFaction'],['volume','pVolume']])fill($(dst),[...$(src).options].map(o=>[o.value,o.textContent]));
@@ -10283,22 +10237,24 @@ const Menu = {
     $('pView').addEventListener('change',e=>Player.thirdPerson=e.target.value==='3');
     $('toMenu').addEventListener('click',()=>location.reload());
     this.refreshHeir();
+    if(/[?&]dev=1/.test(location.search))$('devClientId').hidden=false;   // 47차: 일반 설정에서 숨김(개발용 주소 ?dev=1 에서만)
     let cid='';try{cid=localStorage.getItem('astraea-google-client-id')||'';}catch(_){}
     $('googleClientId').value=cid||(window.ASTRAEA_AUTH||{}).googleClientId||'';
     $('saveClientId').addEventListener('click',()=>{try{localStorage.setItem('astraea-google-client-id',$('googleClientId').value.trim());}catch(_){}location.reload();});
   },
-  // 변신할 거인 목록: 계승하지 않은 거인은 고를 수 없게 표시
+  // 변신할 거인 목록: 자유 모드는 9종 전부, 스토리는 그 장에서 쓸 수 있는 거인만 고를 수 있음
   refreshHeir(){
     for(const id of ['heir','pHeir']){
       const sel=document.getElementById(id);if(!sel)continue;
-      for(const o of sel.options){const own=Shifter.owned.has(o.value);o.disabled=!own;o.textContent=Nine.defs[o.value].name+(own?'':' (미계승)');}
+      for(const o of sel.options){const own=Shifter.owned.has(o.value);o.disabled=!own;o.textContent=Nine.defs[o.value].name+(own?'':' (이 장 사용 불가)');}
       sel.value=Shifter.kind;
     }
   },
   showPause(){
     const $=id=>document.getElementById(id);
     $('pView').value=Player.thirdPerson?'3':'1';
-    $('pauseStats').textContent=`생존 ${Game.clock()} · 토벌 ${Game.kills} · 점수 ${Game.score}`;
+    $('pauseStats').textContent=`생존 ${Game.clock()} · 토벌 ${Game.kills} (직접 ${Game.ownKills} · 동료 ${Game.allyKills}) · 점수 ${Game.score}`;
+    if(typeof Records!=='undefined'){Records.commit();const r=$('pauseRecords');if(r)r.textContent=Records.summary();}
     $('pauseHint').textContent=Game.noLock?'Esc 또는 계속하기로 돌아가기':'계속하기를 누르면 마우스가 다시 잠깁니다';
   },
   select(id){
@@ -10344,7 +10300,7 @@ const el=document.getElementById('specimen');if(!el)return;
     const status=document.getElementById('accountStatus'),holder=document.getElementById('googleButton'),logout=document.getElementById('logout');
     // 로그인 유지: 맵을 바꾸거나 메인으로 가면 페이지가 다시 열리므로, 로그인한 계정을 이 브라우저에 기억했다가 바로 되살림 (로그아웃할 때까지)
     const KEY='astraea-account';
-    const showIn=(id,name)=>{Account.use(id,name);status.textContent=(name||'플레이어')+` · 계승 ${Shifter.owned.size}/9 저장됨`;holder.hidden=true;logout.hidden=false;};
+    const showIn=(id,name)=>{Account.use(id,name);status.textContent=(name||'플레이어')+' · 로그인됨 (기록은 이 브라우저에 저장)';holder.hidden=true;logout.hidden=false;};
     let saved=null;try{saved=JSON.parse(localStorage.getItem(KEY)||'null');}catch(_){}
     if(saved&&saved.id)showIn(saved.id,saved.name);
     logout.addEventListener('click',()=>{try{localStorage.removeItem(KEY);}catch(_){}if(window.google&&google.accounts)google.accounts.id.disableAutoSelect();Account.use('guest');holder.hidden=false;logout.hidden=true;status.textContent='게스트';});
@@ -10369,7 +10325,7 @@ const el=document.getElementById('specimen');if(!el)return;
             if(profile.aud!==clientId||profile.exp*1000<Date.now())throw new Error('expired');
             try{localStorage.setItem(KEY,JSON.stringify({id:'g:'+profile.sub,name:profile.name||''}));}catch(_){}
             showIn('g:'+profile.sub,profile.name);   // 계정별 저장: 계승한 거인
-            status.textContent=(profile.name||'플레이어')+` · 계승 ${Shifter.owned.size}/9 저장됨`;holder.hidden=true;logout.hidden=false;
+            status.textContent=(profile.name||'플레이어')+' · 로그인됨 (기록은 이 브라우저에 저장)';holder.hidden=true;logout.hidden=false;
           }catch(_){status.textContent='계정 연결을 확인하지 못했습니다. 다시 시도해 주세요.';}
         }});
         google.accounts.id.renderButton(holder,{theme:'outline',size:'large',text:'signin_with',locale:'ko'});
@@ -10535,6 +10491,7 @@ const Quality = {
   },
   gpuEnd(){if(this.measuring){this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);this.measuring=false;}},
   update(dt,cpuMs=0){
+    if(dt>.25)return;   // 47차: 탭 전환·불러오기 같은 긴 멈춤은 전투 성능으로 치지 않음(자동 화질이 잘못 내려가던 원인)
     this.acc+=dt;this.n++;this.cpu+=cpuMs;if(this.acc<1)return;
     const avg=this.acc/this.n;this.cpuMs=this.cpu/this.n;
     const gpu=this.gpuN?this.gpuAcc/this.gpuN:-1;
@@ -10543,7 +10500,9 @@ const Quality = {
     const max=this.maxRatio(),min=Math.min(max,.6);
     // GPU 시간을 모르면 CPU 작업 시간이 프레임의 60% 미만일 때 GPU 병목으로 봄
     const gpuBound=gpu>=0?gpu>avg*1000*.7:this.cpuMs<avg*1000*.6;
-    if(avg>1/54){   // 43차: 60fps 유지 기준(18.5ms 넘으면 해상도부터 낮춤; 전투 효과로 GPU가 밀릴 때)
+    // 47차: 프레임 제한(30/60)을 쓰면 그 목표 시간 기준으로 판단. 제한 중에는 프레임 시간으로 여유를 알 수 없어 CPU+GPU 작업 시간이 목표의 70% 아래일 때만 올림
+    const tgt=(typeof FpsCap!=='undefined'&&FpsCap.cap)?1/FpsCap.cap:1/60,capped=tgt>1/59;
+    if(avg>tgt*1.11){   // 43차: 60fps 유지 기준(18.5ms 넘으면 해상도부터 낮춤; 전투 효과로 GPU가 밀릴 때)
       this.recover=0;
       // 44차: 올린 직후(6초 안) 다시 느려지면 다음엔 더 오래(15→30→60→120초) 안정돼야 올림 — 올렸다 내렸다 반복하며 주기적으로 끊기던 것 방지
       if(performance.now()-this.lastUp<6000)this.need=Math.min(120,this.need*2);
@@ -10551,7 +10510,7 @@ const Quality = {
       if(gpuBound&&next!==this.ratio){this.ratio=next;this.resize();}
       else if(this.renderer.shadowMap.enabled&&this.hz>5){this.hz/=2;}
       // 44차: 자동 모드에서는 그림자를 끄지 않음 — 켜고 끌 때마다 모든 재질 셰이더를 다시 컴파일해 수백 ms 멈췄음(그림자는 2~4번/초로만 낮춤)
-    }else if(avg<1/57){
+    }else if(avg<tgt*1.053&&(!capped||this.cpuMs+Math.max(0,gpu)<tgt*700)){
       if(++this.recover>=this.need){this.recover=0;this.lastUp=performance.now();
         if(this.degraded){this.degraded=false;this.applyShadows();}
         else if(this.hz<this.profile.hz){this.hz=Math.min(this.profile.hz,this.hz*2);}
@@ -10566,11 +10525,197 @@ const Perf = {
   toggle(){this.visible=!this.visible;document.getElementById('perf').hidden=!this.visible;},
   update(dt){
     if(!this.visible)return;this.frames++;this.elapsed+=dt;
+    // 47차: 최근 약 10초의 프레임 시간으로 p95와 끊김(목표의 1.5배 넘는 프레임) 횟수
+    const ms=dt*1000;(this.hist||(this.hist=[])).push(ms);if(this.hist.length>600)this.hist.shift();
     if(this.elapsed<.5)return;
-    const gpu=Quality.ext?` · GPU ${Quality.gpuMs.toFixed(1)}ms`:'';
-    document.getElementById('perf').textContent=`${Math.round(this.frames/this.elapsed)} FPS · ${(1000*this.elapsed/this.frames).toFixed(1)} ms · CPU ${Quality.cpuMs.toFixed(1)}ms${gpu} · 해상도 ${Math.round(Quality.ratio*100)}% · 그림자 ${renderer.shadowMap.enabled?Math.round(Math.min(Quality.hz,60))+'Hz':'끔'} · 그리기 ${renderer.info.render.calls}`;
+    const gpu=Quality.ext?` · GPU ${Quality.gpuMs.toFixed(1)}ms`:' · GPU 측정 불가';
+    const h=this.hist.slice().sort((a,b)=>a-b),p95=h[Math.floor(h.length*.95)]||0,tg=(typeof FpsCap!=='undefined'&&FpsCap.cap)?1000/FpsCap.cap:16.7,hit=this.hist.filter(v=>v>tg*1.5).length;
+    const cv=renderer.domElement,lim=typeof FpsCap!=='undefined'&&FpsCap.cap?` · 제한 ${FpsCap.cap}`:'';
+    document.getElementById('perf').textContent=`${Math.round(this.frames/this.elapsed)} FPS${lim} · ${(1000*this.elapsed/this.frames).toFixed(1)} ms · p95 ${p95.toFixed(1)}ms · 끊김 ${hit}회/최근 ${Math.round(this.hist.length*(1000*this.elapsed/this.frames)/1000)}초 · 작업(CPU) ${Quality.cpuMs.toFixed(1)}ms${gpu} · 내부 해상도 ${cv.width}×${cv.height} (${Math.round(Quality.ratio*100)}%) · ${Quality.mode} · 그림자 ${renderer.shadowMap.enabled?Math.round(Math.min(Quality.hz,60))+'Hz':'끔'} · 그리기 ${renderer.info.render.calls}`;
     this.elapsed=0;this.frames=0;
   }
+};
+
+</script>
+<script>
+// 47차: 자유 모드 편의 기능 — 첫 출격 안내(Tutor), 끼임 탈출·좌표 복구(Safe), 프레임 제한(FpsCap), 시작 방향 보정(StartView)
+// 게임 규칙(피해·판정·출현)은 바꾸지 않음. game.js 루프에서 Freeplay.update(dt)만 부름.
+
+// ---------- 첫 출격 안내: 읽는 설명창이 아니라 한 번에 한 가지씩, 실제로 해 보면 다음으로 넘어감 ----------
+// 처음 한 번만 자동으로 나오고(이 브라우저에 기억), Backspace로 건너뜀. 일시정지 화면에서 다시 볼 수 있음. 스토리에서는 나오지 않음
+const Tutor = {
+  KEY: 'astraea-tutor-done', i: -1, t: 0, el: null, s: null, last: null,
+  steps: [
+    { text: '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 로 움직여 보세요', done: s => s.moved > 4 },
+    { text: '마우스를 움직여 주변을 둘러보세요', done: s => s.turned > 1.2 },
+    { text: '건물·성벽·나무를 조준하고 <kbd>우클릭</kbd>을 누르고 있으면 와이어가 걸립니다', done: s => s.hooked },
+    { text: '와이어가 걸린 채 <kbd>Space</kbd> 를 누르면 빠르게 감겨 날아갑니다', done: s => s.reeled },
+    { text: '<kbd>우클릭</kbd>을 떼면 와이어가 풀리고 그 속도 그대로 날아갑니다', done: s => s.released },
+    { text: '거인의 목덜미 가까이에서 <kbd>좌클릭</kbd>으로 벱니다 · 조금 멀면 돌진', done: s => s.attacked },
+    { text: '<kbd>Q</kbd> 로 회피합니다 (거인의 손이 다가올 때)', done: s => s.dodged },
+    { text: '왼쪽 아래 게이지가 차면 <kbd>T</kbd> 로 거인화 · 사람일 때 숫자 키 <kbd>1</kbd>~<kbd>9</kbd> 로 거인을 고릅니다', done: s => s.shifted, wait: 12 },
+    { text: '<kbd>Esc</kbd> 일시정지 — 지도·빠른 이동·설정·끼임 탈출이 거기에 있습니다', done: () => false, wait: 7 },
+  ],
+  seen() { try { return localStorage.getItem(this.KEY) === '1'; } catch (_) { return false; } },
+  mark() { try { localStorage.setItem(this.KEY, '1'); } catch (_) {} },
+  init() {
+    const css = document.createElement('style');
+    css.textContent = `#tutor{position:fixed;left:50%;top:92px;transform:translateX(-50%);z-index:30;max-width:min(680px,92vw);padding:10px 18px 9px;background:rgba(8,11,18,.82);border:1px solid rgba(56,216,255,.5);border-radius:8px;color:#f1ece0;font-size:15px;line-height:1.6;text-align:center;pointer-events:none}
+#tutor[hidden]{display:none}#tutor kbd{display:inline-block;min-width:22px;padding:0 6px;margin:0 2px;border:1px solid #9fb4c8;border-radius:4px;background:#1a2230;color:#fff;font:700 13px system-ui,sans-serif}
+#tutor small{display:block;margin-top:3px;font-size:11.5px;color:#9fb4c8;letter-spacing:.5px}#tutor.ok{border-color:#9fe0b0}.title #tutor,html.dying #tutor{display:none}`;
+    document.head.appendChild(css);
+    this.el = document.createElement('div'); this.el.id = 'tutor'; this.el.hidden = true; this.el.setAttribute('role', 'status');
+    document.body.appendChild(this.el);
+    // 베기·회피는 실제 함수가 불렸는지로 확인 (원래 동작은 그대로)
+    const pa = Player.attack, pd = Player.dodge;
+    Player.attack = function (...a) { if (Tutor.s) Tutor.s.attacked = true; return pa.apply(this, a); };
+    Player.dodge = function (...a) { if (Tutor.s) Tutor.s.dodged = true; return pd.apply(this, a); };
+    addEventListener('keydown', e => { if (e.code === 'Backspace' && this.i >= 0 && Game.running) { e.preventDefault(); this.finish(true); } });
+  },
+  start(force = false) {
+    if (!this.el || (typeof Story !== 'undefined' && Story.active)) return;
+    if (!force && this.seen()) return;
+    this.i = 0; this.t = 0; this.s = { moved: 0, turned: 0 }; this.last = null; this.show();
+  },
+  show() {
+    const st = this.steps[this.i];
+    this.el.className = '';
+    this.el.innerHTML = `${st.text}<small>안내 ${this.i + 1}/${this.steps.length} · Backspace 건너뛰기</small>`;
+    this.el.hidden = false;
+  },
+  finish(skipped) {
+    this.i = -1; this.s = null; this.mark();
+    if (!this.el) return;
+    this.el.className = 'ok';
+    this.el.innerHTML = skipped ? '안내를 건너뛰었습니다<small>일시정지(Esc) → 조작 연습 다시 보기</small>' : '안내 끝 — 이제 자유롭게 날아다니세요<small>일시정지(Esc)에서 다시 볼 수 있습니다</small>';
+    clearTimeout(this._h); this._h = setTimeout(() => { if (this.i < 0) this.el.hidden = true; }, 3500);
+  },
+  update(dt) {
+    if (this.i < 0 || !this.s) return;
+    const p = Player, s = this.s, st = this.steps[this.i];
+    if (this.last) {
+      s.moved += Math.hypot(p.pos.x - this.last.x, p.pos.z - this.last.z);
+      s.turned += Math.abs(p.yaw - this.last.yaw) + Math.abs(p.pitch - this.last.pitch);
+    } else this.last = { x: 0, z: 0, yaw: 0, pitch: 0 };
+    this.last.x = p.pos.x; this.last.z = p.pos.z; this.last.yaw = p.yaw; this.last.pitch = p.pitch;
+    const hooked = !!(p.hooks && p.hooks.some(h => h && h.attached));
+    if (hooked) { s.hooked = true; if (p.keys.Space) s.reeled = true; }
+    else if (s.wasHooked) s.released = true;
+    s.wasHooked = hooked;
+    if (typeof Shifter !== 'undefined' && Shifter.active) s.shifted = true;
+    this.t += dt;
+    if (st.done(s) || (st.wait && this.t > st.wait)) {
+      this.i++; this.t = 0; s.moved = 0; s.turned = 0;
+      if (this.i >= this.steps.length) this.finish(false); else this.show();
+    }
+  },
+};
+
+// 발 높이 y에 선 사람의 몸통(0.6~2m)을 가로막는 것이 (x,z) 주변 m 안에 있는가. 광장 단·낮은 턱·머리 위 구조물은 막힘이 아님
+// (World.isFree는 높이를 안 보고 낮은 단도 막힘으로 쳐서, 광장에서 시작하면 사방이 막힌 것으로 나왔음)
+function bodyBlocked(x, z, y, m) {
+  const W = World, lo = y + 0.6, hi = y + 2;
+  if (!W.open && Math.hypot(x, z) > W.BOUND - m) return true;
+  for (const b of W.near(x - m, z - m, x + m, z + m)) if (b.max.y > lo && b.min.y < hi && x > b.min.x - m && x < b.max.x + m && z > b.min.z - m && z < b.max.z + m) return true;
+  for (const c of W.cylinders) if (c.h > lo && Math.hypot(x - c.x, z - c.z) < c.r + m) return true;
+  for (const w of W.walls) { if (w.h <= lo || w.y0 >= hi) continue; const ox = x - w.cx, oz = z - w.cz; if (Math.abs(ox * w.tx + oz * w.tz) < w.half + m && Math.abs(-ox * w.tz + oz * w.tx) < w.thick + m) return true; }
+  return false;
+}
+
+// ---------- 끼임 탈출 + 좌표 복구 ----------
+// 1초마다 '땅 위·물 밖·주변이 빈 자리'를 기억해 둠. 일시정지의 '끼임 탈출'을 누르면 몇 초 전 자리로 옮김(체력·점수 그대로, 회복 없음, 20초에 한 번).
+// 좌표나 속도가 숫자가 아니게 되면(NaN) 바로 같은 자리로 복구해 진행이 막히지 않게 함
+const Safe = {
+  spots: [], t: 0, cd: 0,
+  update(dt) {
+    const p = Player.pos, v = Player.vel;
+    this.cd -= dt;
+    if (![p.x, p.y, p.z, v.x, v.y, v.z].every(isFinite)) { this.recover(true); return; }
+    if ((this.t += dt) < 1) return;
+    this.t = 0;
+    if ((typeof Shifter !== 'undefined' && Shifter.active) || !Player.onGround || Player.hp <= 0) return;
+    if (World.waterLevel(p.x, p.z) !== null || bodyBlocked(p.x, p.z, p.y, 1.2)) return;
+    this.spots.push([p.x, p.y, p.z]);
+    if (this.spots.length > 14) this.spots.shift();
+  },
+  recover(auto = false) {
+    if (!auto && this.cd > 0) { Game.toast(`끼임 탈출은 ${Math.ceil(this.cd)}초 뒤에 다시 쓸 수 있습니다`, '#cfd8e6'); return false; }
+    // 방금 자리(끼인 곳일 수 있음)는 건너뛰고 3초쯤 전 자리로. 없으면 출발 지점
+    const sp = this.spots.length > 3 ? this.spots[this.spots.length - 4] : this.spots[0];
+    const to = sp || [World.START.x, World.START.y, World.START.z];
+    Player.releaseHook(); Player.lunge = null;
+    Player.pos.set(to[0], to[1] + 0.2, to[2]); Player.vel.set(0, 0, 0);
+    if (typeof Shifter !== 'undefined' && Shifter.active && Shifter.groundAt) { Shifter.baseY = Shifter.groundAt(to[0], to[2], to[1], Shifter.titan.height * 0.25, Shifter.titan); Shifter.airY = 0; Shifter.airV = 0; Shifter.vel.set(0, 0, 0); }
+    this.spots.length = Math.max(0, this.spots.length - 3);
+    this.cd = 20;
+    Game.toast(auto ? '위치 오류를 복구했습니다' : '안전한 곳으로 옮겼습니다', '#9fe0b0');
+    return true;
+  },
+};
+
+// ---------- 프레임 제한: 화면 주사율 그대로 / 60 / 30 ----------
+// 노트북에서 60을 못 지키고 40~55를 오르내리면 더 끊겨 보임 → 30으로 고정하면 고르게 나옴. 게임 속도는 그대로(시간은 실제 흐른 만큼 계산)
+const FpsCap = {
+  cap: 0, next: 0,
+  load() { try { const v = +localStorage.getItem('astraea-set-fps'); if (v === 30 || v === 60) this.cap = v; } catch (_) {} },
+  set(v) { this.cap = v === 30 || v === 60 ? v : 0; this.next = 0; try { localStorage.setItem('astraea-set-fps', String(this.cap)); } catch (_) {} },
+  // true면 이번 화면 갱신은 건너뜀
+  skip(now) {
+    if (!this.cap) return false;
+    const iv = 1000 / this.cap, d = now - (this.prev || now); this.prev = now;
+    if (d > 2 && d < 100) this.est = this.est ? this.est * 0.95 + d * 0.05 : d;   // 화면이 실제로 갱신되는 간격
+    if (this.est && this.est > iv * 0.9) return false;                          // 화면 주사율이 제한값 이하(60Hz 화면에 60 제한 등)면 건너뛸 것이 없음
+    if (now < this.next - iv * 0.25) return true;
+    this.next = Math.max(this.next + iv, now - iv);
+    return false;
+  },
+};
+FpsCap.load();
+
+// ---------- 시작 방향 보정: 출발하자마자 벽·건물만 보이지 않게 ----------
+// 출발 지점에서 16방향으로 '막히지 않고 갈 수 있는 거리'를 재서, 지금 방향이 120m도 안 트여 있으면 가장 트인 쪽을 보게 함(충돌 자료만 씀 → 가벼움)
+const StartView = {
+  clear(x, z, yaw, max = 200, y = World.START.y) {
+    const dx = -Math.sin(yaw), dz = -Math.cos(yaw);
+    for (let d = 4; d <= max; d += 4) if (bodyBlocked(x + dx * d, z + dz * d, y, 1.5)) return d - 4;
+    return max;
+  },
+  // 정면과 좌우 23도, 세 방향이 모두 트인 정도(가장 막힌 쪽 기준) — 한쪽을 벽이 가리는 방향은 점수가 낮음
+  open(at, yaw) { return Math.min(this.clear(at.x, at.z, yaw, 200, at.y), this.clear(at.x, at.z, yaw - 0.4, 200, at.y), this.clear(at.x, at.z, yaw + 0.4, 200, at.y)); },
+  pick(at, yaw) {
+    const cur = this.open(at, yaw);
+    if (cur >= 100) return yaw;
+    let best = yaw, bd = cur;
+    for (let i = 1; i < 16; i++) {
+      // 원래 방향에서 가까운 쪽부터(좌우 번갈아) 살펴 같은 값이면 덜 도는 쪽
+      const k = Math.ceil(i / 2) * (i % 2 ? 1 : -1), y = yaw + k * Math.PI / 8, d = this.open(at, y);
+      if (d > bd + 8) { bd = d; best = y; }
+    }
+    return best;
+  },
+};
+
+const Freeplay = {
+  ready: false, began: false,
+  init() {
+    if (this.ready) return; this.ready = true;
+    Tutor.init();
+    const $ = id => document.getElementById(id);
+    // 일시정지 화면 버튼
+    const esc = $('escapeStuck'), tut = $('tutorAgain');
+    if (esc) esc.addEventListener('click', () => { if (Safe.recover(false)) $('pauseHint').textContent = '안전한 곳으로 옮겼습니다 · 계속하기를 누르세요'; else $('pauseHint').textContent = `끼임 탈출은 ${Math.ceil(Safe.cd)}초 뒤에 다시 쓸 수 있습니다`; });
+    if (tut) tut.addEventListener('click', () => { Tutor.start(true); $('pauseHint').textContent = '조작 연습을 다시 시작합니다 · 계속하기를 누르세요'; });
+    for (const id of ['fpsCap', 'pFpsCap']) {
+      const sel = $(id); if (!sel) continue;
+      sel.value = String(FpsCap.cap);
+      sel.addEventListener('change', e => { FpsCap.set(+e.target.value); for (const o of ['fpsCap', 'pFpsCap']) if ($(o)) $(o).value = String(FpsCap.cap); });
+    }
+  },
+  update(dt) {
+    if (!this.began && Game.started) { this.began = true; Tutor.start(false); }
+    Safe.update(dt);
+    Tutor.update(dt);
+  },
 };
 
 </script>
@@ -10618,6 +10763,8 @@ World.init(scene, chosenMap());
 Player.init(scene);
 Player.initViewModel(camera);
 Player.pos.copy(World.START);        // 맵마다 출발 위치·방향이 다름
+// 47차: 출발하자마자 벽·건물만 보이지 않게 가장 트인 쪽을 봄 (걸어서 이어 들어온 자리는 방향 유지)
+if (!World.handoff && typeof StartView !== 'undefined') World.START_YAW = StartView.pick(World.START, World.START_YAW);
 Player.yaw = World.START_YAW;
 Minimap.init();
 Titans.init(scene);
@@ -10635,6 +10782,7 @@ const Game = {
   over: false,
   score: 0,
   kills: 0,
+  ownKills: 0, allyKills: 0, topSpeed: 0,   // 47차: 내가 직접 벤 것 / 동료가 벤 것 구분, 이번 출격 최고 속도
   // 레벨·웨이브 없음 (피드백 2026-10-30): 거인이 끊임없이 나오고, 버틴 시간이 길수록 동시에 있는 거인 수가 늘어남
   spawnT: 3,                 // 다음 거인이 나올 때까지 (첫 거인은 3초 뒤)
   allyT: 60,                 // 다음 동료 증원까지
@@ -10650,7 +10798,8 @@ const Game = {
 
   // label: 마지막 타격 이름 (예: '치명타! 즉사'). credit: 동료가 쓰러뜨렸으면 소속 이름
   onKill(titan, dmg, label = '', credit = null) {
-    this.kills++;
+    this.kills++; if (credit) this.allyKills++; else this.ownKills++;
+    if (typeof Records !== 'undefined') Records.kill(titan, credit);
     const pts = Math.round(100 * titan.scale * (titan.fast ? 1.5 : 1));
     this.score += pts;
     if (credit) this.toast(`${credit} 토벌 +${pts}`, '#9fe0b0');
@@ -10676,7 +10825,7 @@ const Game = {
     this.running = false;
     document.exitPointerLock();
     this.$('overlay').innerHTML = `<div class="gameover"><div class="eyebrow">THE WALLS HAVE FALLEN</div><h1>전사했습니다</h1>
-      <p>생존 ${this.clock()} · 토벌 ${this.kills} · 점수 ${this.score}</p>
+      <p>생존 ${this.clock()} · 토벌 ${this.kills} (직접 ${this.ownKills} · 동료 ${this.allyKills}) · 점수 ${this.score}</p>${typeof Records !== 'undefined' ? Records.commit(true) : ''}
       <p class="again">클릭해서 다시 시작</p></div>`;
     this.$('overlay').onclick = () => location.reload();
     this.$('overlay').style.display = '';   // 스타일시트의 grid 배치로 되돌림
@@ -10721,7 +10870,8 @@ const Game = {
   updateHud() {
     const p = Player;
     this.setHud('speedText', 'text', `${p.vel.length().toFixed(0)} m/s`);
-    this.setHud('titanText', 'text', `거인 ${Titans.aliveCount()}`);
+    this.setHud('titanText', 'text', `남은 거인 ${Titans.aliveCount()} · 토벌 ${this.kills}`);
+    { const v = p.vel.length(); if (v > this.topSpeed && v < 400) this.topSpeed = v; }
     this.setHud('scoreText', 'text', `${this.score}점`);
     this.setHud('waveText', 'text', this.clock());
     this.setHud('hpText', 'text', String(Math.ceil(p.hp)));
@@ -10741,14 +10891,11 @@ const Game = {
       this.setHud('shiftHud', 'class', 'active');
     } else {
       const own = sh.owned.has(sh.kind);
-      this.setHud('shiftName', 'text', sh.owned.size ? `${def.name} 거인화 · 계승 ${sh.owned.size}/9` : '거인화 · 계승한 거인 없음');
-      this.setHud('shiftKey', 'text', !sh.owned.size ? '9거인을 쓰러뜨리고 사용자를 F로 먹기' : !own ? '숫자 키로 계승한 거인 고르기' : sh.charge >= 1 ? '[T] 준비' : `${Math.floor(sh.charge * 100)}%`);
+      this.setHud('shiftName', 'text', own ? `${def.name} 거인화` : '거인화');
+      this.setHud('shiftKey', 'text', !own ? (sh.owned.size ? '숫자 키로 거인 고르기' : '이 장에서는 사용 불가') : sh.charge >= 1 ? '[T] 준비' : `${Math.floor(sh.charge * 100)}%`);
       this.setHud('shiftbar', 'width', (sh.charge * 100).toFixed(1) + '%');
       this.setHud('shiftHud', 'class', sh.charge >= 1 && own ? 'ready' : '');
     }
-    // 계승 안내: 쓰러진 9거인 사용자 가까이
-    const ep = document.getElementById('eatPrompt'), et = sh.nearUser ? `F  먹기 · ${Nine.defs[sh.nearUser.kind].name} 계승` : '';
-    if (ep && ep._t !== et) { ep.textContent = et; ep._t = et; ep.hidden = !et; }
     // 거인 스킬 막대 (숫자 키)
     const sb = document.getElementById('skillbar'), html = sh.active ? sh.skillHtml() : '';
     if (sb && sb._h !== html) { sb.innerHTML = html; sb._h = html; sb.hidden = !html; }
@@ -10759,6 +10906,68 @@ const Game = {
     });
   },
 };
+
+// ----- 47차: 이번 출격 상태 넘기기 + 개인 기록 -----
+// 빠른 이동·장소 경계 이동은 페이지를 다시 열지만 '새 게임'이 아님 → 점수·토벌·생존 시간·체력·변신 게이지를 이어 줌.
+// 체력은 그대로(이동으로 공짜 회복 없음), 변신 중에 이동하면 변신은 풀리고 게이지는 0. 전사 뒤 다시 시작·메인 화면으로는 새 게임
+const Session = {
+  KEY: 'astraea-session',
+  save() {
+    if (!Game.started || Game.over || (typeof Story !== 'undefined' && Story.active)) return;
+    try {
+      sessionStorage.setItem(this.KEY, JSON.stringify({ v: 1, at: Date.now(), score: Game.score, kills: Game.kills, own: Game.ownKills, ally: Game.allyKills, time: Game.time, top: Game.topSpeed,
+        hp: Player.hp, charge: Shifter.active ? 0 : Shifter.charge, kind: Shifter.kind, view: Player.thirdPerson ? 3 : 1 }));
+    } catch (_) {}
+    Records.commit();
+  },
+  // 이동 직후 한 번만 읽고 지움. 값이 이상하면(숫자가 아님·10분 넘게 지남) 버림
+  restore() {
+    let d = null; try { d = JSON.parse(sessionStorage.getItem(this.KEY) || 'null'); sessionStorage.removeItem(this.KEY); } catch (_) {}
+    const num = v => typeof v === 'number' && isFinite(v) && v >= 0;
+    if (!d || d.v !== 1 || !num(d.at) || Date.now() - d.at > 600000 || ![d.score, d.kills, d.time, d.hp].every(num)) return false;
+    Game.score = Math.round(d.score); Game.kills = Math.round(d.kills); Game.ownKills = num(d.own) ? Math.round(d.own) : Game.kills; Game.allyKills = num(d.ally) ? Math.round(d.ally) : 0;
+    Game.time = d.time; Game.topSpeed = num(d.top) ? d.top : 0; Game.lastHit = d.time;
+    Player.hp = Math.max(1, Math.min(Player.maxHp, d.hp));
+    if (num(d.charge)) Shifter.charge = Math.min(1, d.charge);
+    if (Nine.defs[d.kind] && Shifter.owned.has(d.kind)) Shifter.kind = d.kind;
+    if (d.view === 1 || d.view === 3) Player.thirdPerson = d.view === 3;
+    Records.base = { kills: Game.kills, own: Game.ownKills, ally: Game.allyKills };   // 이미 기록에 더한 만큼은 다시 더하지 않음
+    return true;
+  },
+};
+// 개인 기록: 이 브라우저(localStorage)에 남음. 자유 모드만 셈(스토리 제외). 매 프레임 저장하지 않고 전사·일시정지·이동·창 닫을 때만 저장
+const Records = {
+  KEY: 'astraea-records', base: { kills: 0, own: 0, ally: 0 }, kinds: {},
+  blank() { return { v: 1, bestTime: 0, bestScore: 0, bestKills: 0, topSpeed: 0, totalKills: 0, ownKills: 0, allyKills: 0, runs: 0, kinds: {}, updated: 0 }; },
+  load() {
+    let d = null; try { d = JSON.parse(localStorage.getItem(this.KEY) || 'null'); } catch (_) { d = null; }
+    const b = this.blank(); if (!d || typeof d !== 'object') return b;
+    for (const k in b) if (k !== 'kinds' && typeof d[k] === 'number' && isFinite(d[k]) && d[k] >= 0) b[k] = d[k];   // 빠진 값·이상한 값은 기본값
+    if (d.kinds && typeof d.kinds === 'object') for (const k in d.kinds) if (typeof d.kinds[k] === 'number' && isFinite(d.kinds[k])) b.kinds[k] = d.kinds[k];
+    b.v = 1; return b;
+  },
+  kill(titan, credit) { if (!credit) { const k = titan.kind || 'pure'; this.kinds[k] = (this.kinds[k] || 0) + 1; } },
+  // 이번 출격 값을 기록에 반영. final(전사)이면 새 기록 안내 문구(HTML)를 돌려줌
+  commit(final = false) {
+    if (!Game.started || (typeof Story !== 'undefined' && Story.active)) return '';
+    const d = this.load(), news = [];
+    if (Game.time > d.bestTime + 1) { if (final && d.bestTime > 0) news.push('최장 생존'); d.bestTime = Game.time; }
+    if (Game.score > d.bestScore) { if (final && d.bestScore > 0) news.push('최고 점수'); d.bestScore = Game.score; }
+    if (Game.kills > d.bestKills) d.bestKills = Game.kills;
+    if (Game.topSpeed > d.topSpeed) d.topSpeed = Math.round(Game.topSpeed);
+    d.totalKills += Game.kills - this.base.kills; d.ownKills += Game.ownKills - this.base.own; d.allyKills += Game.allyKills - this.base.ally;
+    this.base = { kills: Game.kills, own: Game.ownKills, ally: Game.allyKills };
+    for (const k in this.kinds) d.kinds[k] = (d.kinds[k] || 0) + this.kinds[k];
+    this.kinds = {};
+    if (final && !this.counted) { this.counted = true; d.runs++; }
+    d.updated = Date.now();
+    try { localStorage.setItem(this.KEY, JSON.stringify(d)); } catch (_) { this.failed = true; }
+    return news.length ? `<p class="again" style="color:#e8c36a">새 기록 · ${news.join(' · ')}</p>` : '';
+  },
+  clockOf(t) { const s = Math.floor(t); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; },
+  summary() { const d = this.load(); return d.totalKills || d.bestTime ? `개인 기록 — 최장 생존 ${this.clockOf(d.bestTime)} · 최고 점수 ${d.bestScore} · 누적 토벌 ${d.totalKills} (직접 ${d.ownKills}) · 최고 속도 ${d.topSpeed} m/s` + (this.failed ? ' · 저장 실패(브라우저 저장 공간 확인)' : '') : '개인 기록 — 아직 없음 (이 브라우저에 저장됩니다)'; },
+};
+addEventListener('pagehide', () => { if (Game.started && !Game.over) Records.commit(); });
 
 // ----- 입력 -----
 const overlay = Game.$('overlay'), pauseEl = Game.$('pause');
@@ -10823,9 +11032,8 @@ document.addEventListener('keydown', e => {
   if (!e.repeat) {
     if (e.code === 'KeyT') Shifter.transform();                    // 거인화 (게이지가 찼을 때)
     if (e.code === 'KeyQ') { if (Shifter.active) Shifter.dash(); else Player.dodge(); }   // Q: 회피(사람) · 대시(거인)
-    if (e.code === 'KeyF') Shifter.tryEat();
     if (e.code === 'KeyH' && typeof Horse !== 'undefined') Horse.key();          // 22차: 말 부르기·타기·내리기
-    if (e.code === 'KeyG' && typeof Field !== 'undefined') Field.enter();        // 22차: 가까운 장소로 들어가기                       // F: 쓰러진 9거인 사용자를 먹어 계승
+    if (e.code === 'KeyG' && typeof Field !== 'undefined') Field.enter();        // 22차: 가까운 장소로 들어가기
     const num = /^(Digit|Numpad)([1-9])$/.exec(e.code);
     if (num) { if (Shifter.active) Shifter.useSkill(+num[2]); else Shifter.pickHeir(+num[2]); }   // 거인: 스킬 · 사람: 변신할 거인 고르기
     if (e.code === 'KeyE' && Shifter.active) Shifter.exit();       // 해제
@@ -10862,6 +11070,7 @@ Quality.applyShadows();
 Player.updateCamera(camera);
 TitanRenderer.warmup(renderer, camera);
 World.warmShaders(renderer, camera);   // 44차: 숨겨진 효과·물체 셰이더도 미리
+if (typeof Freeplay !== 'undefined') Freeplay.init();   // 47차: 첫 출격 안내·끼임 탈출·프레임 제한
 // 행렬은 루프에서 한 번만 갱신 (렌더러가 다시 갱신하지 않게)
 scene.autoUpdate = false;
 }
@@ -10877,6 +11086,7 @@ function renderTitle(now) {
 }
 function loop(now = performance.now()) {
   requestAnimationFrame(loop);
+  if (typeof FpsCap !== 'undefined' && FpsCap.skip(now)) return;   // 47차: 프레임 제한(30/60)
   const rawDt = clock.getDelta();
   if (document.hidden) return;
   if (!Game.running && !Game.dying && Game.started && now - lastPausedFrame < 1000 / 30) return;   // 일시정지 화면만 30fps (시작 화면 배경은 매 프레임 부드럽게)
@@ -10886,8 +11096,11 @@ function loop(now = performance.now()) {
     Menu.render(now);
     return;
   }
-  const realDt = Math.min(rawDt, 0.05);   // 렉이 걸려도 한 번에 너무 많이 움직이지 않게
+  // 47차: 한 번에 0.05초 넘게 움직이지 않게 하되(벽 뚫기 방지), 느린 프레임에서는 나눠서 여러 번 계산해 게임 시간이 실제보다 느려지지 않게 함.
+  // 예전엔 0.05초에서 잘라 버려 20fps 아래면 게임이 슬로모션이 됐음. 탭을 다녀온 긴 멈춤은 0.15초까지만 반영(갑자기 멀리 이동·한꺼번에 공격 방지)
+  const frameDt = Math.min(rawDt, 0.15), steps = frameDt > 0.05 ? Math.ceil(frameDt / 0.05) : 1, realDt = frameDt / steps;
   const cpuStart = performance.now();
+  for (let si = 0; si < steps; si++) {
   if (Game.running) {
     const dt = realDt * Effects.timeScale(realDt);   // 히트스톱 중엔 아주 느리게
     if (Shifter.active) Shifter.update(dt); else Player.update(dt);
@@ -10899,12 +11112,14 @@ function loop(now = performance.now()) {
     Game.update(dt);
     Effects.update(dt);
     if (typeof Field !== 'undefined') { Field.update(dt); Horse.update(dt); }   // 22차: 1:1 들판 스트리밍 · 말
+    if (typeof Freeplay !== 'undefined') Freeplay.update(realDt);
   }
   if (Game.dying) { Death.update(realDt); Effects.update(realDt); }   // 전사 연출: 거인에게 잡아먹히는 장면 (death.js)
+  }
   if (Game.dying) Death.camera(camera); else if (Shifter.active) Shifter.updateCamera(camera); else Player.updateCamera(camera);
   World.updateSun(Player.pos);
-  if (Game.running) World.update(realDt);   // 풍차·횃불·연기 같은 맵 움직임
-  if (Game.running) Effects.applyShake(camera, realDt);
+  if (Game.running) World.update(frameDt);   // 풍차·횃불·연기 같은 맵 움직임
+  if (Game.running) Effects.applyShake(camera, frameDt);
   if (Game.running && now - lastHudFrame >= 50) {
     Game.updateHud();
     Minimap.draw();
@@ -11352,7 +11567,7 @@ const Story = {
     const done = this.progress(), pct = Math.round(done / this.chapters.length * 100), ing = Game.started, cur = n => ing && (n === 'story') === this.active ? '<span class="cur">현재</span>' : '';
     const m = this.modal(`<div class="eyebrow">ASTRAEA</div><h2>${ing ? '모드 변경' : '모드 선택'}</h2><p class="sub">고르면 거인의 주먹이 내려칩니다${ing ? ' · 다른 모드는 새로 시작합니다' : ''}</p>
       <div class="modes">
-        <button class="card" data-m="free">${cur('free')}<div class="art">${this.ART.free}</div><div class="txt"><b>자유 모드</b><small>끝없이 몰려오는 거인과 싸웁니다. 9거인 사용자를 먹어 힘을 계승하고, 마음껏 변신하고 날아다니세요.</small><br><span class="tag">맵 9곳 · 무한 출현</span></div></button>
+        <button class="card" data-m="free">${cur('free')}<div class="art">${this.ART.free}</div><div class="txt"><b>자유 모드</b><small>끝없이 몰려오는 거인과 싸웁니다. 아홉 거인 중 하나로 마음껏 변신하고 날아다니세요.</small><br><span class="tag">장소 ${typeof Atlas !== 'undefined' ? Object.keys(Atlas.PLACES).length : 20}곳 · 무한 출현</span></div></button>
         <button class="card" data-m="story">${cur('story')}<div class="art">${this.ART.story}</div><div class="txt"><b>스토리 모드</b><small>시간시나 함락부터 천지의 싸움까지 애니 줄거리를 9장으로 따라갑니다. 진행률이 화면 위에 표시됩니다.</small><br><span class="tag">진행 ${pct}% · ${done}/${this.chapters.length}장</span></div></button>
       </div>${ing ? '<div class="row"><button class="back">← 게임으로 돌아가기</button></div>' : ''}`);
     if (ing) m.querySelector('.back').onclick = () => this.close();
@@ -11564,9 +11779,6 @@ const Story = {
     const s = Story.chapters[Story.ch].steps[Story.step];
     return Story.done ? 0 : (s.pure ?? 6) + Titans.list.filter(t => t.boss && !t.dead).length;
   };
-  // 스토리에서는 쓰러진 9거인 사용자가 떨어지지 않음 (힘은 장마다 정해짐), 계승도 저장하지 않음
-  const baseDrop = Shifter.dropUser;
-  Shifter.dropUser = function (t) { if (!Story.active) baseDrop.call(this, t); };
   Story.initUI();
 }
 

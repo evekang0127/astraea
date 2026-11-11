@@ -4,17 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ASTRAEA</title>
-<style>html,body{margin:0;height:100%;background:#05070d;color:#c8b27a;font:14px system-ui,sans-serif}body{display:grid;place-items:center}</style>
+<style>html,body{margin:0;height:100%;background:#05070d;color:#c8b27a;font:14px system-ui,sans-serif}body{display:grid;place-items:center;text-align:center}
+#boot button{margin-top:14px;padding:9px 22px;background:#1a2230;color:#f1ece0;border:1px solid #c8b27a;border-radius:6px;font:inherit;cursor:pointer}</style>
 </head>
 <body>
 <div id="boot">ASTRAEA 불러오는 중…</div>
 <script>
-// 최신 버전 불러오기: GitHub Pages는 파일을 10분까지 캐시하므로, 이 작은 시작 파일이 매번 game.html을
-// 캐시 없이 새로 받아 그대로 띄움 → 업데이트 직후 새로고침만 해도 바로 최신판 (주소·#맵·Google 로그인 그대로)
-fetch('game.html?t=' + Date.now(), { cache: 'no-store' })
-  .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-  .then(html => { document.open(); document.write(html); document.close(); })
-  .catch(() => { location.replace('game.html' + location.hash); });
+// 게임 본체(game.html)를 받아 그대로 띄움 (주소·#장소·로그인 그대로).
+// cache:'no-cache' = 매번 서버에 "바뀌었나?"만 물어봄 → 같은 버전이면 받아 둔 파일을 그대로 쓰고(다시 내려받지 않음),
+// 새로 배포했으면 바로 새 파일을 받음. 예전의 ?t=시각 + no-store는 장소를 옮길 때마다 2.8MB를 통째로 다시 받았음.
+function boot() {
+  var el = document.getElementById('boot');
+  el.textContent = 'ASTRAEA 불러오는 중… (게임 파일 받는 중)';
+  fetch('game.html', { cache: 'no-cache' })
+    .then(function (r) { if (!r.ok) throw new Error('서버 응답 ' + r.status); return r.text(); })
+    .then(function (html) { document.open(); document.write(html); document.close(); })
+    .catch(function (e) {
+      // 받지 못함: 이유를 보여 주고 다시 시도할 수 있게 함 (자동으로 무한 반복하지 않음)
+      el.innerHTML = '게임 파일을 받지 못했습니다.<br><small>' + String(e && e.message || e).slice(0, 80) + ' · 인터넷 연결을 확인하세요</small><br><button type="button" id="retry">다시 시도</button>';
+      document.getElementById('retry').onclick = boot;
+    });
+}
+boot();
 </script>
 </body>
 </html>
