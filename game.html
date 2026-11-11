@@ -310,6 +310,8 @@
         <label>동료 수<select id="allyCount"></select></label>
         <label>동료 소속<select id="allyFaction"><option value="mixed">혼성 편성</option><option value="survey">조사병단</option><option value="garrison">주둔병단</option><option value="police">헌병단</option></select></label>
         <label>화질<select id="quality"><option value="auto">자동 · 성능 우선</option><option value="low">가볍게 · 그림자 끄기</option><option value="high">고화질</option></select></label>
+        <label>마우스 감도<select id="mouseSens"><option value="0.5">느리게</option><option value="0.75">조금 느리게</option><option value="1">보통</option><option value="1.3">조금 빠르게</option><option value="1.7">빠르게</option></select></label>
+        <label>위아래 시점<select id="invertY"><option value="0">보통</option><option value="1">반대로 (Y축 반전)</option></select></label>
         <label>프레임 제한<select id="fpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
         <button type="button" id="showPerf">성능 표시 F3</button>
       </div>
@@ -354,6 +356,8 @@
       <label>동료 수<select id="pAllies"></select></label>
       <label>동료 소속<select id="pFaction"></select></label>
       <label>출현 거인 (다음 출현부터)<select id="pEncounter"></select></label>
+      <label>마우스 감도<select id="pMouseSens"><option value="0.5">느리게</option><option value="0.75">조금 느리게</option><option value="1">보통</option><option value="1.3">조금 빠르게</option><option value="1.7">빠르게</option></select></label>
+      <label>위아래 시점<select id="pInvertY"><option value="0">보통</option><option value="1">반대로 (Y축 반전)</option></select></label>
       <label>프레임 제한<select id="pFpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
     </div>
     <details><summary>조작 안내</summary><div class="keys">WASD 이동 · Space 점프 / 감기 · Shift 가스 · Q 회피(거인: 대시) · 사람일 때 숫자 키 1~9: 변신할 거인 고르기<br>우클릭 유지: 양손 와이어 · 좌클릭: 베기 / 돌진<br>T: 거인화 · 거인일 때 숫자 키 1~3 스킬 · 좌클릭 연타 · 우클릭 강타 · E 해제<br>V / 휠: 시점 · M: 미니맵 · F3: 성능 표시</div></details>
@@ -6260,8 +6264,9 @@ const Player = {
     document.addEventListener('mousemove', e => {
       const noLockPlay = typeof Game !== 'undefined' && Game.noLock && Game.running;
       if (!document.pointerLockElement && !noLockPlay) return;
-      this.yaw -= e.movementX * 0.0022;
-      this.pitch -= e.movementY * 0.0022;
+      const k = 0.0022 * (this.sens || 1);   // 49차: 마우스 감도·위아래 반전 설정
+      this.yaw -= e.movementX * k;
+      this.pitch -= e.movementY * k * (this.invertY ? -1 : 1);
       this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch));
       this.swayX = Math.max(-0.04, Math.min(0.04, this.swayX - e.movementX * 0.00012));
       this.swayY = Math.max(-0.04, Math.min(0.04, this.swayY + e.movementY * 0.00012));
@@ -10657,10 +10662,11 @@ function bodyBlocked(x, z, y, m) {
 // 좌표나 속도가 숫자가 아니게 되면(NaN) 바로 같은 자리로 복구해 진행이 막히지 않게 함
 const Safe = {
   spots: [], t: 0, cd: 0,
+  // 좌표·속도가 숫자가 아니면 바로 복구. 매 계산의 맨 앞에서 부름(49차: 뒤에서 하면 소리·충돌 계산이 깨진 값으로 먼저 돌아 오류가 났음)
+  guard() { const p = Player.pos, v = Player.vel; if (![p.x, p.y, p.z, v.x, v.y, v.z, Player.yaw, Player.pitch].every(isFinite)) { if (!isFinite(Player.yaw)) Player.yaw = 0; if (!isFinite(Player.pitch)) Player.pitch = 0; this.recover(true); } },
   update(dt) {
-    const p = Player.pos, v = Player.vel;
+    const p = Player.pos;
     this.cd -= dt;
-    if (![p.x, p.y, p.z, v.x, v.y, v.z].every(isFinite)) { this.recover(true); return; }
     if ((this.t += dt) < 1) return;
     this.t = 0;
     if ((typeof Shifter !== 'undefined' && Shifter.active) || !Player.onGround || Player.hp <= 0) return;
@@ -10735,6 +10741,14 @@ const Freeplay = {
     const esc = $('escapeStuck'), tut = $('tutorAgain');
     if (esc) esc.addEventListener('click', () => { if (Safe.recover(false)) $('pauseHint').textContent = '안전한 곳으로 옮겼습니다 · 계속하기를 누르세요'; else $('pauseHint').textContent = `끼임 탈출은 ${Math.ceil(Safe.cd)}초 뒤에 다시 쓸 수 있습니다`; });
     if (tut) tut.addEventListener('click', () => { Tutor.start(true); $('pauseHint').textContent = '조작 연습을 다시 시작합니다 · 계속하기를 누르세요'; });
+    // 49차: 마우스 감도 · 위아래 반전 (시작 화면 설정과 일시정지 화면을 서로 맞춤, 이 브라우저에 저장)
+    const pair = (ids, key, def, apply) => {
+      let v = def; try { const sv = localStorage.getItem('astraea-set-' + key); if (sv !== null && [...$(ids[0]).options].some(o => o.value === sv)) v = sv; } catch (_) {}
+      apply(v);
+      for (const id of ids) { const sel = $(id); if (!sel) continue; sel.value = v; sel.addEventListener('change', e => { apply(e.target.value); try { localStorage.setItem('astraea-set-' + key, e.target.value); } catch (_) {} for (const o of ids) if ($(o)) $(o).value = e.target.value; }); }
+    };
+    if ($('mouseSens')) pair(['mouseSens', 'pMouseSens'], 'sens', '1', v => { Player.sens = +v || 1; });
+    if ($('invertY')) pair(['invertY', 'pInvertY'], 'invertY', '0', v => { Player.invertY = v === '1'; });
     for (const id of ['fpsCap', 'pFpsCap']) {
       const sel = $(id); if (!sel) continue;
       sel.value = String(FpsCap.cap);
@@ -11133,6 +11147,7 @@ function loop(now = performance.now()) {
   for (let si = 0; si < steps; si++) {
   if (Game.running) {
     const dt = realDt * Effects.timeScale(realDt);   // 히트스톱 중엔 아주 느리게
+    if (typeof Safe !== 'undefined') Safe.guard();   // 좌표가 깨졌으면 다른 계산보다 먼저 복구
     if (Shifter.active) Shifter.update(dt); else Player.update(dt);
     Titans.update(dt, Player);
     Shifter.postUpdate(dt);
