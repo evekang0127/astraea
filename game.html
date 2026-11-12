@@ -349,6 +349,8 @@
         <label>화질<select id="quality"><option value="auto">자동 · 성능 우선</option><option value="low">가볍게 · 그림자 끄기</option><option value="high">고화질</option></select></label>
         <label>프레임 제한<select id="fpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
         <label>시야각<select id="fov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
+        <label>번쩍임 (피격·변신·폭발)<select id="flashFx"><option value="1">보통</option><option value="0.4">약하게</option><option value="0">끄기</option></select></label>
+        <label>타격 멈춤 (히트스톱)<select id="hitStop"><option value="1">켜기</option><option value="0">끄기</option></select></label>
         <label>화면 흔들림<select id="shake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
         <button type="button" id="showPerf">성능 표시 F3</button>
       </div>
@@ -415,6 +417,8 @@
       <label>마우스 감도<select id="pMouseSens"><option value="0.5">느리게</option><option value="0.75">조금 느리게</option><option value="1">보통</option><option value="1.3">조금 빠르게</option><option value="1.7">빠르게</option></select></label>
       <label>위아래 시점<select id="pInvertY"><option value="0">보통</option><option value="1">반대로 (Y축 반전)</option></select></label>
       <label>시야각<select id="pFov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
+      <label>번쩍임<select id="pFlashFx"><option value="1">보통</option><option value="0.4">약하게</option><option value="0">끄기</option></select></label>
+      <label>타격 멈춤<select id="pHitStop"><option value="1">켜기</option><option value="0">끄기</option></select></label>
       <label>화면 흔들림<select id="pShake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
       <label>프레임 제한<select id="pFpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
     </div>
@@ -646,7 +650,7 @@ const Effects = {
     this.bolt.visible = true;
     this.boltT = 0.35;
     const b = document.getElementById('bolt');
-    if (b) { b.style.transition = 'none'; b.style.opacity = 1; requestAnimationFrame(() => { b.style.transition = ''; b.style.opacity = 0; }); }
+    if (b && (this.flashMul ?? 1) > 0) { b.style.transition = 'none'; b.style.opacity = this.flashMul ?? 1; requestAnimationFrame(() => { b.style.transition = ''; b.style.opacity = 0; }); }
     this.shockwave(at, height * 2.2, 0xffe2a0, 0.8);
     this.shake(1.3);
     const v = this._v;
@@ -772,7 +776,7 @@ const Effects = {
   playerHit() {
     this.shake(1.2);
     const f = document.getElementById('flash');
-    f.style.opacity = 1;
+    f.style.opacity = this.flashMul ?? 1;   // 56차: 번쩍임 세기 설정
     setTimeout(() => f.style.opacity = 0, 180);
   },
 
@@ -796,7 +800,7 @@ const Effects = {
 
   // 히트스톱 중이면 시간을 아주 느리게, 그다음 토벌 슬로우
   timeScale(dt) {
-    if (this.hitStop > 0) { this.hitStop -= dt; return 0.08; }
+    if (this.hitStop > 0) { this.hitStop -= dt; return this.noHitStop ? 1 : 0.08; }   // 56차: 히트스톱 끄기 설정(멈칫 없이 계속 진행)
     if (this.slowT > 0) {
       const k = this.slowK();
       this.slowT -= dt;
@@ -7063,11 +7067,18 @@ const Player = {
     offset.y += 0.6;
     let dist = offset.length();
     const dir = offset.divideScalar(dist);
-    this._ray.set(eye, dir);
-    this._ray.far = dist;
-    const hit = this._ray.intersectObjects(World.hookables, false)[0];
-    if (hit) dist = Math.max(0.5, hit.distance - 0.3);
-    camera.position.copy(eye).addScaledVector(dir, dist);
+    // 56차: 가운데 광선 하나로는 벽 모서리·지붕 끝을 놓쳐 카메라가 벽 속에 들어갔음 → 좌우로 0.5m 벌린 광선 2개를 더 쏨.
+    // 막히면 바로 당기고, 트이면 천천히 물러나서 앞뒤로 튀지 않게
+    let want = dist;
+    const rt = this.right(), o = this._camO || (this._camO = new THREE.Vector3());
+    for (const sx of [0, -0.5, 0.5]) {
+      o.copy(eye).addScaledVector(rt, sx);
+      this._ray.set(o, dir); this._ray.far = dist;
+      const hit = this._ray.intersectObjects(World.hookables, false)[0];
+      if (hit) want = Math.min(want, Math.max(0.5, hit.distance - 0.4));
+    }
+    this.camDist = want < (this.camDist ?? want) ? want : Math.min(want, (this.camDist ?? want) + 0.35);
+    camera.position.copy(eye).addScaledVector(dir, this.camDist);
   },
 };
 
@@ -9347,7 +9358,7 @@ Object.assign(Effects, {
     if (!b) return;
     const c = new THREE.Color(color);
     b.style.background = `radial-gradient(ellipse at 50% 45%, rgba(${c.r * 255 | 0},${c.g * 255 | 0},${c.b * 255 | 0},.95), rgba(${c.r * 255 | 0},${c.g * 255 | 0},${c.b * 255 | 0},.3) 50%, transparent 80%)`;
-    b.style.transition = 'none'; b.style.opacity = amt;
+    b.style.transition = 'none'; b.style.opacity = amt * (this.flashMul ?? 1);
     requestAnimationFrame(() => { b.style.transition = ''; b.style.opacity = 0; });
   },
   updateGrand(dt) {
@@ -11023,6 +11034,8 @@ const Freeplay = {
     if ($('invertY')) pair(['invertY', 'pInvertY'], 'invertY', '0', v => { Player.invertY = v === '1'; });
     if ($('fov')) pair(['fov', 'pFov'], 'fov', '75', v => { Player.baseFov = +v || 75; });
     if ($('shake')) pair(['shake', 'pShake'], 'shake', '1', v => { Effects.shakeMul = +v; });
+    if ($('flashFx')) pair(['flashFx', 'pFlashFx'], 'flash', '1', v => { Effects.flashMul = +v; });   // 56차
+    if ($('hitStop')) pair(['hitStop', 'pHitStop'], 'hitstop', '1', v => { Effects.noHitStop = v === '0'; });
     SaveBox.init();
     Keymap.init();   // 53차: 키 바꾸기 칸(조작법 창)
     // 51차: 훈련 모드 켜고 끄기 (53차: 현장 목표 기능은 삭제함 — 훈련 중 표시는 왼쪽 위 작은 띠로)
