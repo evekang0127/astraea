@@ -5372,6 +5372,7 @@ html.title .fields-list{display:none!important}   /* 37차: 메인 화면을 깔
   },
   // 큰 세계 지도 창 (게임 중: 일시정지 버튼·M키 마지막 단계)
   openModal() {
+    this.fromPause = typeof Game !== 'undefined' && Game.started && !Game.running;   // 63차: 어디서 열었는지 기억
     this.css();
     let m = document.getElementById('atlasModal');
     if (!m) { m = document.createElement('div'); m.id = 'atlasModal'; document.body.appendChild(m); m.addEventListener('click', e => { if (e.target === m) this.closeModal(); }); }
@@ -5389,7 +5390,7 @@ html.title .fields-list{display:none!important}   /* 37차: 메인 화면을 깔
 // 지도 창이 열려 있을 때: M·Esc로 닫고 게임으로 돌아감 (M은 미니맵 마지막 단계에서 열었으니 다시 누르면 닫힘)
 addEventListener('keydown', e => {
   if (!Atlas.isOpen()) return;
-  if (e.code === 'KeyM' || e.code === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); Atlas.closeModal(true); if (typeof Minimap !== 'undefined') { Minimap.level = 0; Minimap.apply(); } }
+  if (e.code === 'KeyM' || e.code === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); Atlas.closeModal(!Atlas.fromPause); /* 63차: Esc 한 번에 전투까지 재개되지 않게 — 일시정지에서 열었으면 일시정지로 */ if (typeof Minimap !== 'undefined') { Minimap.level = 0; Minimap.apply(); } }
 }, true);
 
 // ===== 37차: 세계 지도 — 파라디 섬 + 바다 건너 대륙(마레·중동 연합) 전체, 휠 확대/축소·끌어서 이동 =====
@@ -7103,6 +7104,8 @@ const Player = {
     }
     this.camDist = want < (this.camDist ?? want) ? want : Math.min(want, (this.camDist ?? want) + 0.35);
     camera.position.copy(eye).addScaledVector(dir, this.camDist);
+    // 63차: 벽·성벽에 붙어 카메라가 2.2m 안으로 당겨지면 내 몸을 숨김(머리와 등이 화면 가운데를 크게 가리던 것). 1인칭과 같은 보기
+    this.model.visible = this.camDist > 2.2;
   },
 };
 
@@ -10756,9 +10759,9 @@ const Perf = {
     const ms=dt*1000;(this.hist||(this.hist=[])).push(ms);if(this.hist.length>600)this.hist.shift();
     if(this.elapsed<.5)return;
     const gpu=Quality.ext?` · GPU ${Quality.gpuMs.toFixed(1)}ms`:' · GPU 측정 불가';
-    const h=this.hist.slice().sort((a,b)=>a-b),p95=h[Math.floor(h.length*.95)]||0,tg=(typeof FpsCap!=='undefined'&&FpsCap.eff())?1000/FpsCap.eff():16.7,hit=this.hist.filter(v=>v>tg*1.5).length;
+    const h=this.hist.slice().sort((a,b)=>a-b),p95=h[Math.floor(h.length*.95)]||0,p99=h[Math.floor(h.length*.99)]||0,o50=this.hist.filter(v=>v>50).length,o100=this.hist.filter(v=>v>100).length,tg=(typeof FpsCap!=='undefined'&&FpsCap.eff())?1000/FpsCap.eff():16.7,hit=this.hist.filter(v=>v>tg*1.5).length;
     const cv=renderer.domElement,lim=typeof FpsCap!=='undefined'&&FpsCap.eff()?` · 제한 ${FpsCap.eff()}${FpsCap.cap?'':' (자동: 끊김이 계속돼 고르게)'}`:'';
-    document.getElementById('perf').textContent=`${Math.round(this.frames/this.elapsed)} FPS${lim} · ${(1000*this.elapsed/this.frames).toFixed(1)} ms · p95 ${p95.toFixed(1)}ms · 끊김 ${hit}회/최근 ${Math.round(this.hist.reduce((a,b)=>a+b,0)/1000)}초 · 작업(CPU) ${Quality.cpuMs.toFixed(1)}ms${gpu} · 내부 해상도 ${cv.width}×${cv.height} (${Math.round(Quality.ratio*100)}%) · 그리는 거리 ${Math.round((typeof World!=='undefined'?World.detail:1)*100)}% · ${Quality.mode} · 그림자 ${renderer.shadowMap.enabled?Math.round(Math.min(Quality.hz,60))+'Hz':'끔'} · 그리기 ${renderer.info.render.calls}`;
+    document.getElementById('perf').textContent=`${Math.round(this.frames/this.elapsed)} FPS${lim} · ${(1000*this.elapsed/this.frames).toFixed(1)} ms · p95 ${p95.toFixed(1)} · p99 ${p99.toFixed(1)}ms · 50ms 넘음 ${o50} · 100ms 넘음 ${o100} · 끊김 ${hit}회/최근 ${Math.round(this.hist.reduce((a,b)=>a+b,0)/1000)}초 · 작업(CPU) ${Quality.cpuMs.toFixed(1)}ms${gpu} · 내부 해상도 ${cv.width}×${cv.height} (${Math.round(Quality.ratio*100)}%) · 그리는 거리 ${Math.round((typeof World!=='undefined'?World.detail:1)*100)}% · ${Quality.mode} · 그림자 ${renderer.shadowMap.enabled?Math.round(Math.min(Quality.hz,60))+'Hz':'끔'} · 그리기 ${renderer.info.render.calls}`;
     this.elapsed=0;this.frames=0;
   }
 };
@@ -11444,6 +11447,7 @@ function setPaused(paused) {
   overlay.style.display = paused && !Game.started ? '' : 'none';   // '' = 스타일시트의 grid 배치
   pauseEl.hidden = !(paused && Game.started);
   if (paused) {
+    { const pf = document.getElementById('perf'); if (pf && !pf.hidden && !/일시정지/.test(pf.textContent)) pf.textContent = '(일시정지 전 측정값) ' + pf.textContent; if (typeof Perf !== 'undefined') Perf.hist = []; }   // 63차
     Player.keys = {}; Player.releaseHook();
     if (document.pointerLockElement === renderer.domElement) document.exitPointerLock();
     if (Game.started) Menu.showPause();
@@ -12018,7 +12022,8 @@ const Story = {
     const sw = Object.assign(document.createElement('button'), { type: 'button', id: 'modeSwitch', textContent: '모드 변경 (자유 ↔ 스토리 · 장 선택)' });
     sw.onclick = () => this.openModes();
     document.querySelector('.pause-actions').before(sw);
-    addEventListener('keydown', e => { if (e.code === 'Escape' && Game.started && !this.smashing) this.close(); });   // Esc로 게임에 돌아가면 창도 닫힘
+    // 63차: 모드 선택 창이 열려 있으면 Esc는 그 창만 닫고 일시정지는 그대로(예전엔 창을 닫으면서 전투까지 재개됨)
+    addEventListener('keydown', e => { const m = document.getElementById('modePick'); if (e.code === 'Escape' && Game.started && !this.smashing && m && !m.hidden) { e.preventDefault(); e.stopImmediatePropagation(); this.close(); } }, true);
   },
   modal(html) {
     let m = document.getElementById('modePick');
