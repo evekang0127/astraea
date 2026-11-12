@@ -7244,8 +7244,8 @@ const Nine = {
       }
       if(id==='armored'){
         ell(arm,[.85,.62,.8],0,.05,0,bone);ell(el,[.54,.8,.53],0,-.9,.1,bone);
-        part(leg,'box',[1.13,1.8,.45],0,-1.15,.63,bone);ell(knee,[.6,.55,.3],0,0,.5,bone);
-        part(knee,'box',[.85,1.65,.4],0,-1,.5,bone);
+        ell(leg,[.6,.95,.28],0,-1.15,.6,bone);ell(leg,[.5,.3,.2],0,-.35,.72,bone);ell(knee,[.6,.55,.3],0,0,.5,bone);   /* 74차: 허벅지 판을 납작한 상자 대신 둥근 갑판 2장 */
+        ell(knee,[.47,.88,.25],0,-1,.48,bone);ell(knee,[.36,.32,.18],0,-1.75,.56,bone);   /* 74차: 정강이 판도 둥글게 */
       }
       if(id==='female')ell(el,[.49,.61,.38],0,handY,.1,bone);
       if(!quad&&!founder){
