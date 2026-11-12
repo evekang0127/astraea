@@ -273,6 +273,9 @@
   .pause-end { margin-top: 14px; } .pause-end button { color: var(--ui-sub); }
   #pauseStats, #pauseHint { color: var(--ui-sub); }
   .links { gap: 12px; }
+  #resumeRun { margin-top: 14px; min-width: 280px; padding: 10px 22px; font: 700 15px 'Noto Serif KR', serif; letter-spacing: .1em; color: #fff; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.55); border-radius: var(--ui-radius); cursor: pointer; }
+  #resumeRun:hover { border-color: var(--ui-danger); background: rgba(215,26,28,.22); } #resumeRun small { display: block; margin-top: 4px; font: 400 12px 'Malgun Gothic', sans-serif; letter-spacing: 0; color: var(--ui-sub); }
+  #resumeNote { margin: 6px 0 0; font-size: 11.5px; color: var(--ui-dim); }
   #titanStats { font-size: 12.5px; line-height: 1.75; color: var(--ui-sub); margin: 8px 0 12px; } #titanStats b { color: var(--ui-text); margin-right: 6px; }
   .links button { padding: 9px 16px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--ui-radius); background: rgba(0,0,0,.4); }
   .links button:hover { border-color: var(--ui-danger); }
@@ -10445,6 +10448,7 @@ const Menu = {
     const $=id=>document.getElementById(id);
     $('pView').value=Player.thirdPerson?'3':'1';
     $('pauseStats').textContent=`생존 ${Game.clock()} · 토벌 ${Game.kills} (직접 ${Game.ownKills} · 동료 ${Game.allyKills}) · 점수 ${Game.score}`;
+    if(typeof Resume!=='undefined')Resume.snap();
     if(typeof Records!=='undefined'){Records.commit();const r=$('pauseRecords');if(r)r.textContent=Records.summary();}
     $('pauseHint').textContent=Game.noLock?'Esc 또는 계속하기로 돌아가기':'계속하기를 누르면 마우스가 다시 잠깁니다';
   },
@@ -11181,6 +11185,7 @@ const Game = {
 
   gameOver() {
     this.over = true;
+    if (typeof Resume !== 'undefined') Resume.clear();   // 전사하면 이어하기 기록을 지움
     this.running = false;
     document.exitPointerLock();
     this.$('overlay').innerHTML = `<div class="gameover"><div class="eyebrow">THE WALLS HAVE FALLEN</div><h1>전사했습니다</h1>
@@ -11333,6 +11338,54 @@ const Records = {
 };
 addEventListener('pagehide', () => { if (Game.started && !Game.over) Records.commit(); });
 
+// ----- 58차: 이어하기 — 브라우저를 닫았다 열어도 마지막 자유 모드 출격을 이어서 할 수 있게 -----
+// 30초마다·일시정지·창 닫을 때 이 브라우저(localStorage)에 '지금 장소·위치·점수·생존 시간·체력'을 남김(매 프레임 저장하지 않음).
+// 시작 화면에 '이어하기' 버튼(장소·생존 시간·점수·저장 시각)을 보여 주고, 누르면 그 장소의 그 자리에서 이어감. 전사하면 지움. 3일 지나면 보여 주지 않음
+const Resume = {
+  KEY: 'astraea-continue', t: 0,
+  snap() {
+    if (!Game.started || Game.over || Game.dying || (typeof Story !== 'undefined' && Story.active)) return;
+    const p = Player.pos;
+    if (![p.x, p.y, p.z].every(isFinite)) return;
+    const d = { v: 1, at: Date.now(), map: World.mapId, x: Math.round(p.x * 10) / 10, z: Math.round(p.z * 10) / 10, yaw: +Player.yaw.toFixed(3),
+      wild: World.mapId === 'wild' && typeof Field !== 'undefined' ? Field.wildPos() : null,
+      score: Game.score, kills: Game.kills, own: Game.ownKills, ally: Game.allyKills, time: Game.time, top: Game.topSpeed, hp: Player.hp,
+      charge: Shifter.active ? 0 : Shifter.charge, kind: Shifter.kind, view: Player.thirdPerson ? 3 : 1, tr: !!Game.trainedRun };
+    try { localStorage.setItem(this.KEY, JSON.stringify(d)); } catch (_) {}
+  },
+  clear() { try { localStorage.removeItem(this.KEY); } catch (_) {} },
+  load() {
+    let d = null; try { d = JSON.parse(localStorage.getItem(this.KEY) || 'null'); } catch (_) { return null; }
+    const num = v => typeof v === 'number' && isFinite(v);
+    if (!d || d.v !== 1 || !Maps[d.map] || !num(d.at) || Date.now() - d.at > 3 * 86400000 || ![d.x, d.z, d.score, d.time, d.hp].every(num)) return null;
+    return d;
+  },
+  update(dt) { if ((this.t += dt) >= 30) { this.t = 0; this.snap(); } },
+  go(d) {
+    // 기존 빠른 이동 경로를 그대로 씀: 출격 상태(Session) + 도착 자리(handoff) + 도착 안내(travel)를 남기고 그 장소를 다시 엶
+    try {
+      sessionStorage.setItem('astraea-session', JSON.stringify({ v: 1, at: Date.now(), score: d.score, kills: d.kills, own: d.own, ally: d.ally, time: d.time, top: d.top, hp: d.hp, charge: d.charge, kind: d.kind, view: d.view, tr: d.tr }));
+      sessionStorage.setItem('astraea-handoff', JSON.stringify({ id: d.map, x: d.x, z: d.z, yaw: d.yaw, riding: false }));
+      sessionStorage.setItem('astraea-travel', JSON.stringify({ name: (Atlas.PLACES[d.map] || {}).name || '이어하기' }));
+      sessionStorage.setItem('astraea-story-pending', JSON.stringify({ free: true }));
+      if (d.map === 'wild' && Array.isArray(d.wild)) sessionStorage.setItem('astraea-wild', JSON.stringify(d.wild));
+      sessionStorage.setItem('map', d.map);
+    } catch (_) {}
+    location.hash = d.map; location.reload();
+  },
+  initUI() {
+    const d = this.load(), dep = document.querySelector('.deploy');
+    if (!d || !dep) return;
+    const name = (Atlas.PLACES[d.map] || {}).name || d.map, ago = Math.max(1, Math.round((Date.now() - d.at) / 60000));
+    const b = document.createElement('button'); b.type = 'button'; b.id = 'resumeRun';
+    b.innerHTML = `이어하기<small>${name} · 생존 ${Records.clockOf(d.time)} · 점수 ${d.score} · ${ago < 60 ? ago + '분' : Math.round(ago / 60) + '시간'} 전</small>`;
+    b.onclick = e => { e.stopPropagation(); b.disabled = true; this.go(d); };
+    dep.after(b);
+    const n = document.createElement('p'); n.id = 'resumeNote'; n.textContent = '출격을 누르면 새 게임 (이어하기 기록은 새 출격이 저장될 때 바뀝니다)'; b.after(n);
+  },
+};
+addEventListener('pagehide', () => { if (Game.started && !Game.over) Resume.snap(); });
+
 // ----- 입력 -----
 const overlay = Game.$('overlay'), pauseEl = Game.$('pause');
 // 처음 출격 전에는 시작 화면, 출격한 뒤에는 일시정지 화면을 보여 줌
@@ -11436,7 +11489,8 @@ Quality.applyShadows();
 Player.updateCamera(camera);
 TitanRenderer.warmup(renderer, camera);
 World.warmShaders(renderer, camera);   // 44차: 숨겨진 효과·물체 셰이더도 미리
-if (typeof Freeplay !== 'undefined') Freeplay.init();   // 47차: 첫 출격 안내·끼임 탈출·프레임 제한
+if (typeof Freeplay !== 'undefined') Freeplay.init();
+Resume.initUI();   // 58차: 시작 화면 이어하기 버튼   // 47차: 첫 출격 안내·끼임 탈출·프레임 제한
 // 행렬은 루프에서 한 번만 갱신 (렌더러가 다시 갱신하지 않게)
 scene.autoUpdate = false;
 }
@@ -11480,6 +11534,7 @@ function loop(now = performance.now()) {
     Effects.update(dt);
     if (typeof Field !== 'undefined') { Field.update(dt); Horse.update(dt); }   // 22차: 1:1 들판 스트리밍 · 말
     if (typeof Freeplay !== 'undefined') Freeplay.update(realDt);
+    Resume.update(realDt);   // 58차: 이어하기 저장(30초마다)
   }
   if (Game.dying) { Death.update(realDt); Effects.update(realDt); }   // 전사 연출: 거인에게 잡아먹히는 장면 (death.js)
   }
