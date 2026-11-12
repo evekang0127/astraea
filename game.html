@@ -340,6 +340,7 @@
       <div class="eyebrow">SETTINGS</div><h2>설정</h2>
       <h3 class="sec">전투</h3>
       <div class="fields">
+        <label>자유 모드 조건<select id="freeRule"><option value="battle">기본 전투 · 점점 늘어 최대 24</option><option value="calm">조용한 전투 · 최대 6</option><option value="duel">거인 대결 · 최대 4</option><option value="explore">탐험 · 거인 없음</option></select></label>
         <label>출현 거인<select id="encounter"><option value="mixed">9거인 순환</option><option value="classic">기존 일반 거인</option></select></label>
         <label>변신할 거인 (9종 모두 사용 가능)<select id="heir"></select></label>
         <label>동료 수<select id="allyCount"></select></label>
@@ -422,6 +423,7 @@
       <label>소리<select id="pVolume"></select></label>
       <label>동료 수<select id="pAllies"></select></label>
       <label>동료 소속<select id="pFaction"></select></label>
+      <label>자유 모드 조건 (바로 적용)<select id="pFreeRule"><option value="battle">기본 전투 · 점점 늘어 최대 24</option><option value="calm">조용한 전투 · 최대 6</option><option value="duel">거인 대결 · 최대 4</option><option value="explore">탐험 · 거인 없음</option></select></label>
       <label>출현 거인 (다음 출현부터)<select id="pEncounter"></select></label>
       <label>마우스 감도<select id="pMouseSens"><option value="0.5">느리게</option><option value="0.75">조금 느리게</option><option value="1">보통</option><option value="1.3">조금 빠르게</option><option value="1.7">빠르게</option></select></label>
       <label>위아래 시점<select id="pInvertY"><option value="0">보통</option><option value="1">반대로 (Y축 반전)</option></select></label>
@@ -11100,6 +11102,7 @@ const Freeplay = {
     if ($('shake')) pair(['shake', 'pShake'], 'shake', '1', v => { Effects.shakeMul = +v; });
     if ($('flashFx')) pair(['flashFx', 'pFlashFx'], 'flash', '1', v => { Effects.flashMul = +v; });   // 56차
     if ($('hitStop')) pair(['hitStop', 'pHitStop'], 'hitstop', '1', v => { Effects.noHitStop = v === '0'; });
+    if ($('freeRule')) pair(['freeRule', 'pFreeRule'], 'freerule', 'battle', v => { if (Game.RULES[v]) Game.rule = v; });   // 66차
     if ($('speedLines')) pair(['speedLines', 'pSpeedLines'], 'speedlines', '1', v => { Effects.noSpeedLines = v === '0'; });   // 64차
     if ($('dynFov')) pair(['dynFov', 'pDynFov'], 'dynfov', '1', v => { Player.noDynFov = v === '0'; });
     SaveBox.init();
@@ -11219,7 +11222,14 @@ const Game = {
   setTraining(on) { this.training = !!on; if (on) this.trainedRun = true; this.toast(on ? '훈련 모드 · 피해 없음 (이번 출격은 기록 제외)' : '훈련 모드 끔 · 이번 출격은 계속 기록 제외', '#9fe0b0'); },
 
   // 동시에 있을 거인 수: 처음 5마리, 40초마다 1마리씩 늘어 최대 24마리
-  titanTarget() { return Math.min(24, 5 + Math.floor(this.time / 40)); },
+  // 66차: 자유 모드 조건 — 탐험(거인 없음) / 조용히(최대 6) / 기본 전투(처음 5, 40초마다 1씩 최대 24) / 거인 대결(최대 4, 출현 거인 설정을 따름). 화질과 상관없음(저화질이 몰래 쉬워지지 않음). 스토리는 기본 규칙
+  rule: 'battle',
+  RULES: { explore: '탐험 · 거인 없음', calm: '조용한 전투 · 최대 6', battle: '기본 전투 · 점점 늘어 최대 24', duel: '거인 대결 · 최대 4' },
+  titanTarget() {
+    const base = Math.min(24, 5 + Math.floor(this.time / 40));
+    if (typeof Story !== 'undefined' && Story.active) return base;
+    return this.rule === 'explore' ? 0 : this.rule === 'calm' ? Math.min(6, base) : this.rule === 'duel' ? Math.min(4, 2 + Math.floor(this.time / 90)) : base;
+  },
   clock() { const s = Math.floor(this.time); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; },
 
   // label: 마지막 타격 이름 (예: '치명타! 즉사'). credit: 동료가 쓰러뜨렸으면 소속 이름
@@ -11385,10 +11395,12 @@ const Records = {
   // 이번 출격 값을 기록에 반영. final(전사)이면 새 기록 안내 문구(HTML)를 돌려줌
   commit(final = false) {
     if (!Game.started || Game.trainedRun || (typeof Story !== 'undefined' && Story.active)) return '';   // 훈련 모드를 쓴 출격은 기록 제외
+    if (Game.rule !== 'battle') { Game.ruleRun = true; }   // 66차: 기본 전투가 아닌 조건을 쓴 출격은 최장 생존·최고 점수 비교에서 뺌(누적 토벌은 셈)
+    const comparable = !Game.ruleRun;
     const d = this.load(), news = [];
-    if (Game.time > d.bestTime + 1) { if (final && d.bestTime > 0) news.push('최장 생존'); d.bestTime = Game.time; }
-    if (Game.score > d.bestScore) { if (final && d.bestScore > 0) news.push('최고 점수'); d.bestScore = Game.score; }
-    if (Game.kills > d.bestKills) d.bestKills = Game.kills;
+    if (comparable && Game.time > d.bestTime + 1) { if (final && d.bestTime > 0) news.push('최장 생존'); d.bestTime = Game.time; }
+    if (comparable && Game.score > d.bestScore) { if (final && d.bestScore > 0) news.push('최고 점수'); d.bestScore = Game.score; }
+    if (comparable && Game.kills > d.bestKills) d.bestKills = Game.kills;
     if (Game.topSpeed > d.topSpeed) d.topSpeed = Math.round(Game.topSpeed);
     d.totalKills += Game.kills - this.base.kills; d.ownKills += Game.ownKills - this.base.own; d.allyKills += Game.allyKills - this.base.ally;
     this.base = { kills: Game.kills, own: Game.ownKills, ally: Game.allyKills };
