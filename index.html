@@ -5,23 +5,44 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ASTRAEA</title>
 <style>html,body{margin:0;height:100%;background:#05070d;color:#c8b27a;font:14px system-ui,sans-serif}body{display:grid;place-items:center;text-align:center}
+#boot small{display:block;margin-top:8px;color:#9fb4c8;font-size:12px}
+#bar{width:260px;height:6px;margin:12px auto 0;background:#1a2230;border-radius:3px;overflow:hidden}#bar i{display:block;height:100%;width:0;background:#b8191b;transition:width .2s}
 #boot button{margin-top:14px;padding:9px 22px;background:#1a2230;color:#f1ece0;border:1px solid #c8b27a;border-radius:6px;font:inherit;cursor:pointer}</style>
 </head>
 <body>
 <div id="boot">ASTRAEA 불러오는 중…</div>
 <script>
 // 게임 본체(game.html)를 받아 그대로 띄움 (주소·#장소·로그인 그대로).
-// cache:'no-cache' = 매번 서버에 "바뀌었나?"만 물어봄 → 같은 버전이면 받아 둔 파일을 그대로 쓰고(다시 내려받지 않음),
-// 새로 배포했으면 바로 새 파일을 받음. 예전의 ?t=시각 + no-store는 장소를 옮길 때마다 2.8MB를 통째로 다시 받았음.
+// cache:'no-cache' = 매번 서버에 "바뀌었나?"만 물어봄 → 같은 버전이면 받아 둔 파일을 그대로 쓰고, 새로 배포했으면 바로 새 파일을 받음.
+// 75차: 받은 양을 실제 바이트로 보여 줌(인터넷이 느리면 멈춘 것처럼 보였음). 압축돼서 오면 전체 크기를 모르므로 받은 양만 표시
 function boot() {
   var el = document.getElementById('boot');
-  el.textContent = 'ASTRAEA 불러오는 중… (게임 파일 받는 중)';
+  el.innerHTML = 'ASTRAEA 불러오는 중… (게임 파일 받는 중)<small id="prog">서버에 연결하는 중</small><div id="bar"><i></i></div>';
+  var prog = document.getElementById('prog'), bar = document.querySelector('#bar i'), t0 = Date.now();
+  var slow = setTimeout(function () { prog.textContent += ' · 인터넷이 느립니다. 조금만 기다려 주세요'; }, 15000);
   fetch('game.html', { cache: 'no-cache' })
-    .then(function (r) { if (!r.ok) throw new Error('서버 응답 ' + r.status); return r.text(); })
-    .then(function (html) { document.open(); document.write(html); document.close(); })
+    .then(function (r) {
+      if (!r.ok) throw new Error('서버 응답 ' + r.status);
+      var total = +r.headers.get('content-length') || 0, enc = r.headers.get('content-encoding');
+      if (enc) total = 0;   // 압축 전송이면 content-length는 압축 크기라 진행률 계산에 못 씀
+      if (!r.body || !r.body.getReader) return r.text();
+      var reader = r.body.getReader(), chunks = [], got = 0;
+      function pump() {
+        return reader.read().then(function (res) {
+          if (res.done) return new Blob(chunks).text();
+          chunks.push(res.value); got += res.value.length;
+          var mb = (got / 1048576).toFixed(1), sec = Math.max(1, (Date.now() - t0) / 1000);
+          prog.textContent = total ? mb + ' / ' + (total / 1048576).toFixed(1) + 'MB 받음 · ' + Math.round(got / 1024 / sec) + 'KB/s' : mb + 'MB 받음 · ' + Math.round(got / 1024 / sec) + 'KB/s';
+          if (total) bar.style.width = Math.min(100, got / total * 100).toFixed(0) + '%'; else bar.style.width = Math.min(95, got / 30000).toFixed(0) + '%';
+          return pump();
+        });
+      }
+      return pump();
+    })
+    .then(function (html) { clearTimeout(slow); prog.textContent = '게임 화면을 만드는 중'; setTimeout(function () { document.open(); document.write(html); document.close(); }, 30); })
     .catch(function (e) {
-      // 받지 못함: 이유를 보여 주고 다시 시도할 수 있게 함 (자동으로 무한 반복하지 않음)
-      el.innerHTML = '게임 파일을 받지 못했습니다.<br><small>' + String(e && e.message || e).slice(0, 80) + ' · 인터넷 연결을 확인하세요</small><br><button type="button" id="retry">다시 시도</button>';
+      clearTimeout(slow);
+      el.innerHTML = '게임 파일을 받지 못했습니다.<br><small>' + String(e && e.message || e).slice(0, 80) + ' · 인터넷 연결을 확인하세요</small><button type="button" id="retry">다시 시도</button>';
       document.getElementById('retry').onclick = boot;
     });
 }
