@@ -369,6 +369,7 @@
         <label>시야각<select id="fov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
         <label>번쩍임 (피격·변신·폭발)<select id="flashFx"><option value="1">보통</option><option value="0.4">약하게</option><option value="0">끄기</option></select></label>
         <label>타격 멈춤 (히트스톱)<select id="hitStop"><option value="1">켜기</option><option value="0">끄기</option></select></label>
+        <label>HUD·미니맵 크기<select id="hudScale"><option value="0.85">작게</option><option value="1">보통</option><option value="1.2">크게</option></select></label>
         <label>속도선<select id="speedLines"><option value="1">켜기</option><option value="0">끄기</option></select></label>
         <label>빠를수록 시야 넓힘<select id="dynFov"><option value="1">켜기</option><option value="0">끄기</option></select></label>
         <label>화면 흔들림<select id="shake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
@@ -441,6 +442,7 @@
       <label>시야각<select id="pFov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
       <label>번쩍임<select id="pFlashFx"><option value="1">보통</option><option value="0.4">약하게</option><option value="0">끄기</option></select></label>
       <label>타격 멈춤<select id="pHitStop"><option value="1">켜기</option><option value="0">끄기</option></select></label>
+      <label>HUD·미니맵 크기<select id="pHudScale"><option value="0.85">작게</option><option value="1">보통</option><option value="1.2">크게</option></select></label>
       <label>속도선<select id="pSpeedLines"><option value="1">켜기</option><option value="0">끄기</option></select></label>
       <label>빠를수록 시야 넓힘<select id="pDynFov"><option value="1">켜기</option><option value="0">끄기</option></select></label>
       <label>화면 흔들림<select id="pShake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
@@ -5339,7 +5341,7 @@ Object.assign(Atlas, {
 .atlas-wrap.wide{grid-template-columns:minmax(0,1fr) minmax(280px,360px)}
 .atlas-wrap .map{min-height:0;border:1px solid #797977;display:flex}
 .atlas-wrap .side{display:flex;flex-direction:column;gap:10px;min-height:0}.atlas-wrap .side .atlas-info{flex:0 0 auto}.atlas-wrap .side .list{flex:1 1 auto;min-height:0}   /* 정보 칸이 눌려 이동 버튼이 목록 뒤로 숨던 문제 */
-.atlas-wrap .list{overflow:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px}
+.atlas-wrap .list{overflow:auto;display:flex;flex-direction:column;gap:4px;padding-right:4px}.atlas-wrap .list .find{padding:8px 10px;margin-bottom:6px;background:rgba(0,0,0,.6);color:#f1ece0;border:1px solid rgba(255,255,255,.25);border-radius:5px;font:13px 'Malgun Gothic',sans-serif}.atlas-wrap .list .it[hidden]{display:none}
 .atlas-wrap h4{margin:8px 0 2px;font:700 11px 'Cinzel',serif;letter-spacing:3px;color:#898989}
 .atlas-wrap .it{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;cursor:pointer;font:600 13px 'Noto Serif KR',serif;color:#FFFFFF;background:#1a1a1a;border:1px solid #333;padding:7px 10px;border-radius:3px}
 .atlas-wrap .it small{color:#898989;font-size:11px;font-weight:400}.atlas-wrap .it:hover{border-color:#D71A1C}.atlas-wrap .it.sel{border-color:#D71A1C;background:#2a0a0a}.atlas-wrap .it.cur::after{content:'지금';font-size:10px;color:#000;background:#FFFFFF;padding:1px 6px;border-radius:8px}
@@ -5365,9 +5367,11 @@ html.title .fields-list{display:none!important}   /* 37차: 메인 화면을 깔
     const item = ([id, p]) => `<button type="button" class="it${id === cur ? ' cur' : ''}" data-place="${id}"><span>${p.name}${wide ? `<br><small>${p.where}</small>` : ''}</span></button>`;
     const home = Object.entries(this.PLACES).filter(([, p]) => !p.overseas), over = Object.entries(this.PLACES).filter(([, p]) => p.overseas);
     box.innerHTML = `<div class="atlas-wrap ${wide ? 'wide' : 'compact'}"><div class="map">${this.svg(cur)}</div>
-      <div class="side"><div class="atlas-info"></div><div class="list"><h4>PARADIS · 파라디 섬</h4>${home.map(item).join('')}<h4>BEYOND THE SEA · 바다 건너</h4>${over.map(item).join('')}</div></div></div>`;
+      <div class="side"><div class="atlas-info"></div><div class="list">${wide ? '<input type="search" class="find" placeholder="장소 찾기 (이름·지역)" aria-label="장소 찾기">' : ''}<h4>PARADIS · 파라디 섬</h4>${home.map(item).join('')}<h4>BEYOND THE SEA · 바다 건너</h4>${over.map(item).join('')}</div></div></div>`;
     const info = box.querySelector('.atlas-info'), here = cur === 'wild' ? { pos: this.wildPos() } : this.PLACES[cur], svg = box.querySelector('svg'), pick = box.querySelector('.pick');
     const sel = id => box.querySelectorAll('[data-place]').forEach(g => g.classList.toggle('sel', g.dataset.place === id));
+    // 72차: 장소 찾기 — 이름·지역 글자로 목록을 거름(입력 중 키는 게임 조작·지도 단축키로 새지 않게)
+    { const f = box.querySelector('.find'); if (f) { f.addEventListener('keydown', e => { if (e.code !== 'Escape') e.stopPropagation(); }); f.addEventListener('input', () => { const t = f.value.trim(); box.querySelectorAll('.list .it').forEach(b => { const p = this.PLACES[b.dataset.place]; b.hidden = !!t && !((p.name + ' ' + (p.where || '')).includes(t)); }); }); } }
     const show = id => {
       const p = this.PLACES[id], km = here ? Math.round(this.km(here.pos, p.pos)) : 0;
       const chs = typeof Story !== 'undefined' ? Story.chapters.map((c, i) => c.map === id ? `${i + 1}장 「${c.title}」` : '').filter(Boolean).join(', ') : '';
@@ -11138,6 +11142,7 @@ const Freeplay = {
     if ($('flashFx')) pair(['flashFx', 'pFlashFx'], 'flash', '1', v => { Effects.flashMul = +v; });   // 56차
     if ($('hitStop')) pair(['hitStop', 'pHitStop'], 'hitstop', '1', v => { Effects.noHitStop = v === '0'; });
     if ($('freeRule')) pair(['freeRule', 'pFreeRule'], 'freerule', 'battle', v => { if (Game.RULES[v]) Game.rule = v; });   // 66차
+    if ($('hudScale')) pair(['hudScale', 'pHudScale'], 'hudscale', '1', v => { const k = +v || 1; for (const id of ['hud', 'minimap', 'skillbar']) { const el = $(id); if (!el) continue; el.style.zoom = k === 1 ? '' : String(k); } });   // 72차
     if ($('speedLines')) pair(['speedLines', 'pSpeedLines'], 'speedlines', '1', v => { Effects.noSpeedLines = v === '0'; });   // 64차
     if ($('dynFov')) pair(['dynFov', 'pDynFov'], 'dynfov', '1', v => { Player.noDynFov = v === '0'; });
     SaveBox.init();
