@@ -376,7 +376,7 @@
       </div>
       <h3 class="sec">음향</h3>
       <div class="fields">
-        <label>소리<select id="volume"><option value="1">켜기</option><option value="0.5">작게</option><option value="0">끄기</option></select></label>
+        <label>효과음<select id="volume"><option value="1">켜기</option><option value="0.5">작게</option><option value="0">끄기</option></select></label>
       </div>
       <div id="setupAudio"></div>
       <h3 class="sec">저장</h3>
@@ -431,7 +431,7 @@
       <label>시점<select id="pView"><option value="3">3인칭</option><option value="1">1인칭</option></select></label>
       <label>화질<select id="pQuality"></select></label>
       <label>변신할 거인<select id="pHeir"></select></label>
-      <label>소리<select id="pVolume"></select></label>
+      <label>효과음<select id="pVolume"></select></label>
       <label>동료 수<select id="pAllies"></select></label>
       <label>동료 소속<select id="pFaction"></select></label>
       <label>자유 모드 조건 (바로 적용)<select id="pFreeRule"><option value="battle">기본 전투 · 점점 늘어 최대 24</option><option value="calm">조용한 전투 · 최대 6</option><option value="duel">거인 대결 · 최대 4</option><option value="explore">탐험 · 거인 없음</option></select></label>
@@ -10080,6 +10080,10 @@ const Sound = {
     if (!this.ctx || this.vol <= 0 || this.ctx.state !== 'running') return;
     const now = performance.now();
     if (now - (this.last[name] || 0) < (this.GAP[name] || 40)) return;
+    // 70차: 종류가 달라도 0.1초에 12개 넘게 겹치면 덜 중요한 소리(발소리·가스·타격)는 건너뜀 — 큰 전투에서 소리가 뭉개지고 찢어지지 않게
+    const vq = this._vq || (this._vq = []); while (vq.length && now - vq[0] > 100) vq.shift();
+    if (vq.length >= 12 && /^(step|gas|hit|punch|slash|land)$/.test(name)) return;
+    vq.push(now);
     this.last[name] = now;
     const o = this.out(pos, Math.min(1.2, k), range);
     if (o) this.SFX[name].call(this, o, this.ctx.currentTime, k);
