@@ -273,6 +273,7 @@
   .pause-end { margin-top: 14px; } .pause-end button { color: var(--ui-sub); }
   #pauseStats, #pauseHint { color: var(--ui-sub); }
   .links { gap: 12px; }
+  #titanStats { font-size: 12.5px; line-height: 1.75; color: var(--ui-sub); margin: 8px 0 12px; } #titanStats b { color: var(--ui-text); margin-right: 6px; }
   .links button { padding: 9px 16px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--ui-radius); background: rgba(0,0,0,.4); }
   .links button:hover { border-color: var(--ui-danger); }
 
@@ -322,7 +323,7 @@
       <div class="eyebrow">TITAN ARCHIVE <span id="titanSize"></span></div>
       <div id="specimen" aria-label="드래그해서 거인 모델 회전"></div>
       <div class="specimen-title"><span id="titanEnglish"></span><h2 id="titanName"></h2></div>
-      <p id="titanNote"></p><p id="titanSkill"></p>
+      <p id="titanNote"></p><p id="titanSkill"></p><p id="titanStats"></p>
       <div id="roster"></div>
       <small class="adaptation">모델을 드래그하여 회전 · 턱·차력·시조의 크기는 기존 맵에 맞게 조정</small>
     </div>
@@ -7894,7 +7895,7 @@ class Titan {
       if (this.rallyT > 0) this.rallyT -= dt;
       this.turnTo(player.pos.x, player.pos.z, this.fast ? 2.5 : 1.4, dt);
       const inFront = this.forward().dot(new THREE.Vector3(dx, 0, dz).normalize()) > 0.3;
-      if (dist < reach && player.pos.y < this.height * 1.05 && this.attackCd <= 0 && inFront) {
+      if (dist < reach && player.pos.y - this.root.position.y < this.height * 1.05 && this.attackCd <= 0 && inFront) {
         this.attackT = 0;
         this.attackHit = false;
         this.attackType = Math.floor(Math.random() * 3);   // 0 오른팔 / 1 왼팔 / 2 두 손 내려찍기
@@ -7967,6 +7968,19 @@ class Titan {
     }
   }
 
+  // 55차: 거인과 대상 사이(2m 간격으로 확인)에 거인 어깨(키의 60%)보다 높은 건물·벽이 가로막고 있는가
+  blockedTo(player) {
+    const W = World, ax = this.pos.x, az = this.pos.z, bx = player.pos.x, bz = player.pos.z, d = Math.hypot(bx - ax, bz - az);
+    if (d < 3 || typeof W.near !== "function") return false;   // 시험용 가짜 World(near 없음)에서는 가림 없음으로
+    const top = this.pos.y + this.height * 0.6, n = Math.ceil(d / 2);
+    for (let i = 1; i < n; i++) {
+      const x = ax + (bx - ax) * i / n, z = az + (bz - az) * i / n;
+      for (const b of W.near(x, z, x, z)) if (b.max.y + (b.roof ? b.roof.h : 0) > top && x > b.min.x && x < b.max.x && z > b.min.z && z < b.max.z) return true;
+      for (const w of W.walls || []) { if (w.h <= top) continue; const ox = x - w.cx, oz = z - w.cz; if (Math.abs(ox * w.tx + oz * w.tz) < w.half && Math.abs(-ox * w.tz + oz * w.tx) < w.thick) return true; }
+    }
+    return false;
+  }
+
   // 공격 3종: 0 오른팔 후려치기, 1 왼팔 후려치기, 2 두 손 들어 내려찍기(느리지만 강함)
   updateAttack(dt, player, reach) {
     this.attackT += dt;
@@ -7994,7 +8008,10 @@ class Titan {
       const d = Math.hypot(dx, dz);
       if (slam && d < 60) Effects.shake(Math.min(1.2, this.scale * 0.5) * (1 - d / 60));   // 땅 울림
       if (typeof Allies !== 'undefined') Allies.titanSwing(this, reach * (slam ? 1.0 : 1.15), this.height * (slam ? 0.8 : 1.1));
-      if (d < reach * (slam ? 1.0 : 1.15) && player.pos.y < this.height * (slam ? 0.8 : 1.1)) {
+      // 55차: 맞는 조건을 '보이는 대로' — 휘두르는 쪽(정면·옆)에 있을 때만 맞음(준비 동작 중에 등 뒤로 돌아가면 빗나감, 발밑은 예외),
+      // 거인 어깨보다 높은 건물·벽이 사이에 있으면 맞지 않음(벽 너머 타격 방지)
+      const fw = this.forward(), inArc = d < 1.5 * this.scale || (fw.x * dx + fw.z * dz) / (d || 1) > (slam ? 0.25 : -0.1);
+      if (inArc && d < reach * (slam ? 1.0 : 1.15) && player.pos.y - this.root.position.y < this.height * (slam ? 0.8 : 1.1) && !this.blockedTo(player)) {
         const knock = new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(slam ? 15 : 25);
         knock.y = slam ? 4 : 10;
         Game.killer = this;   // 전사 연출: 이 거인이 잡아먹음
@@ -8131,11 +8148,16 @@ const Titans = {
     this._hooksDirty = true;
     for (let n = 0; n < count; n++) {
       // 맵이 정한 구역에서, 플레이어와 멀고 건물·벽·나무가 없는 자리를 고름
-      let x = 0, z = 0;
-      for (let tries = 0; tries < 60; tries++) {
+      // 55차: 빈 자리를 60번 찾아도 없으면 이번에는 내보내지 않음(예전엔 마지막 후보에 그대로 내보내 건물 안·플레이어 코앞에 나올 수 있었음).
+      // 170m 안에서는 카메라가 보는 쪽(정면 60도)에도 내보내지 않음 → 눈앞에서 갑자기 생기지 않게
+      let x = 0, z = 0, found = false;
+      const cf = this._cf || (this._cf = new THREE.Vector3()); if (typeof camera !== 'undefined') camera.getWorldDirection(cf); else cf.set(0, 0, 0);
+      for (let tries = 0; tries < 60 && !found; tries++) {
         [x, z] = World.map.spawn();
-        if (Math.hypot(x - Player.pos.x, z - Player.pos.z) > 80 && World.isFree(x, z, 4)) break;
+        const dx = x - Player.pos.x, dz = z - Player.pos.z, d = Math.hypot(dx, dz);
+        found = d > 80 && World.isFree(x, z, 4) && (d > 170 || (dx * cf.x + dz * cf.z) / d < 0.5);
       }
+      if (!found) continue;
       // 키는 애니 기준 무작위 4m ~ 15m. 절반은 12m 이상(애니에서 자주 보이는 15m급), 작은 거인은 드묾
       // 52차: 미리 만들어 둔 거인이 있으면 자리만 옮겨 내보냄(만드는 데 3~5ms, 모델 거인은 더 걸려 그 프레임이 끊겼음)
       const ready = this.pool && this.pool.sel === Nine.selection ? this.pool.t : null;
@@ -9902,6 +9924,7 @@ Object.assign(Shifter, {
   S.ready = function () { return baseReady.call(this) && this.owned.has(this.kind); };
   S.transform = function () {
     if (!this.active && !this.owned.has(this.kind)) { Game.toast(this.owned.size ? `${Nine.defs[this.kind].name}은(는) 이 장에서 쓸 수 없다 · 숫자 키로 고르기` : '이 장에서는 아직 거인화할 수 없다', '#cfd8e6'); return; }
+    if (!this.active && this.charge < 1) { Game.toast(`거인화 게이지 ${Math.floor(this.charge * 100)}% · 가득 차면 변신`, '#cfd8e6'); return; }   // 55차: 눌렀는데 아무 반응이 없던 것
     baseTransform.call(this);
   };
 }
@@ -10420,6 +10443,9 @@ const Menu = {
     document.getElementById('titanName').textContent=d.name;document.getElementById('titanEnglish').textContent=d.en;
     document.getElementById('titanNote').textContent=d.note;
     document.getElementById('titanSkill').textContent=d.skill+' · '+d.hint;
+    // 55차: 변신했을 때의 능력치·스킬 3개·내 기록(직접 쓰러뜨린 수)
+    {const st=Shifter.stats[id],sk=(Shifter.skills||{})[id],rec=typeof Records!=='undefined'?(Records.load().kinds[id]||0):0,ts=document.getElementById('titanStats');
+     if(ts&&st)ts.innerHTML=`<b>변신했을 때</b>체력 ${st.hp} · 지속 ${st.dur}초 · 속도 ${st.speed}m/s · 받는 피해 ${Math.round(st.taken*100)}% · ${st.trait}`+(sk?`<br><b>스킬</b>`+sk.map((x,i)=>`[${i+1}] ${x[0]} (재사용 ${x[1]}초)`).join(' · '):'')+`<br><b>내 기록</b>이 거인을 직접 쓰러뜨린 수 ${rec}`;}
     document.getElementById('titanSize').textContent=`키 ${d.height}m · 성벽 50m의 ${d.height>=50?(d.height/50).toFixed(1)+'배':Math.round(d.height/50*100)+'%'} · 사람 1.8m와 실제 비율 (클릭: 가까이)`;
     document.querySelectorAll('[data-titan]').forEach(b=>{b.classList.toggle('selected',b.dataset.titan===id);b.setAttribute('aria-pressed',String(b.dataset.titan===id));});
   },
