@@ -281,6 +281,17 @@
   #titanStats { font-size: 12.5px; line-height: 1.75; color: var(--ui-sub); margin: 8px 0 12px; } #titanStats b { color: var(--ui-text); margin-right: 6px; }
   .links button { padding: 9px 16px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--ui-radius); background: rgba(0,0,0,.4); }
   .links button:hover { border-color: var(--ui-danger); }
+  /* ===== 68차: 주요 버튼 정돈 — 흰색→빨강 유광 그라데이션 대신 차분한 붉은 면 + 얇은 테두리. 누름·포커스·비활성 상태 구분 ===== */
+  .btn-gold { color: #fff !important; background: linear-gradient(180deg, #b8191b, #8e1214) !important; border: 1px solid rgba(255,255,255,.35) !important; box-shadow: 0 6px 18px rgba(0,0,0,.45) !important; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+  .btn-gold:hover:not(:disabled) { background: linear-gradient(180deg, #cc1f21, #a01517) !important; box-shadow: 0 6px 22px rgba(215,26,28,.35) !important; transform: translateY(-1px); }
+  .btn-gold:active:not(:disabled) { transform: translateY(1px); background: #8e1214 !important; }
+  #resume { color: #fff !important; background: linear-gradient(180deg, #b8191b, #8e1214) !important; border: 1px solid rgba(255,255,255,.35) !important; font-weight: 700 !important; letter-spacing: .08em; }
+  #resume:hover { background: linear-gradient(180deg, #cc1f21, #a01517) !important; }
+  .viewpick { border: 1px solid rgba(255,255,255,.25) !important; }
+  .viewpick button.on { color: #fff !important; background: #8e1214 !important; }
+  .viewpick button:not(.on) { color: #b8b8b8; }
+  /* HUD 글자: 작은 문장에는 장식 글꼴·넓은 자간을 쓰지 않음 */
+  #hud, #info, #hint, #msg { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; letter-spacing: 0; }
 
 :root { color-scheme: dark; }
 </style>
