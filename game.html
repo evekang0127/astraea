@@ -1370,15 +1370,18 @@ const World = {
   },
 
   makeMaterials() {
-    const facades = [['#e8dcc0', true], ['#d9c7a3', false], ['#cfc8bb', true], ['#e9e4d8', false], ['#c9b08a', false]];
+    // 73차: 외벽 8종(반목조 4·회벽 4) — 같은 집이 줄지어 보이던 것 완화
+    const facades = [['#e8dcc0', true], ['#d9c7a3', false], ['#cfc8bb', true], ['#e9e4d8', false], ['#c9b08a', false], ['#dccfb2', true], ['#bfb6a6', false], ['#e3d3b8', true]];
     this.facadeMats = facades.map(([c, timber]) => new THREE.MeshLambertMaterial({ map: this.facadeTexture(c, timber) }));
     this.capMats = facades.map(([c]) => new THREE.MeshLambertMaterial({ color: c }));
-    this.roofMats = ['#8a3b2a', '#7a4a32', '#55504f', '#9c4630'].map(c => new THREE.MeshLambertMaterial({ map: this.tileTexture(c) }));
+    this.roofMats = ['#8a3b2a', '#7a4a32', '#55504f', '#9c4630', '#a35a38', '#6e3324'].map(c => new THREE.MeshLambertMaterial({ map: this.tileTexture(c) }));   // 73차: 4·5번 = 바랜 주황·짙은 적갈
     this.flatRoofMat = new THREE.MeshLambertMaterial({ color: 0x8c8478 });
     this.stoneTex = this.stoneTexture();
     this.stoneMat = new THREE.MeshLambertMaterial({ map: this.stoneTex });
     this.trimMat = new THREE.MeshLambertMaterial({ color: 0xa39a8b });
     this.woodMat = new THREE.MeshLambertMaterial({ color: 0x4a3324 });
+    this.plinthMat = new THREE.MeshLambertMaterial({ color: 0x8f8678 });   // 73차: 돌 1층 밑단
+    this.awningMat = new THREE.MeshLambertMaterial({ color: 0xffffff });   // 73차: 처마 차양(색은 개체마다)
     this.crateMat = new THREE.MeshLambertMaterial({ map: this.crateTexture() });
     this.lawnMat = new THREE.MeshLambertMaterial({ color: 0x6d9450 });
     this.waterMat = new THREE.MeshPhongMaterial({ color: 0x3f7fa5, shininess: 120, transparent: true, opacity: 0.85 });
@@ -1725,18 +1728,23 @@ const World = {
     this.mesh(geo, [fm, fm, this.flatRoofMat, fm, fm, fm], x, h / 2, z);
     const box = this.solid(x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2);
 
+    // 73차: 1층 돌 밑단(45%) — 집마다 아래가 달라 보이게. 벽보다 0.08m 두꺼운 띠
+    if (Math.random() < 0.45) this.batch('plinth', this.unitBox, this.plinthMat, x, 0.6, z, w + 0.16, 1.2, d + 0.16);
     // 문 (앞뒤 중 한쪽)
     const side = Math.random() < 0.5 ? 1 : -1;
-    this.batch('door', this.unitBox, this.woodMat, x + rand(w / 2 - 2), 1.4, z + side * (d / 2 + 0.06), 1.8, 2.8, 0.12);
+    const doorX = x + rand(w / 2 - 2);
+    this.batch('door', this.unitBox, this.woodMat, doorX, 1.4, z + side * (d / 2 + 0.06), 1.8, 2.8, 0.12);
+    // 73차: 가게 차양(25%) — 문 위에 비스듬한 천
+    if (Math.random() < 0.25) this.batch('awning', this.unitBox, this.awningMat, doorX, 3.3, z + side * (d / 2 + 0.75), Math.min(w - 1, 4.2), 0.12, 1.5, 0, [0x7a2e22, 0x2f4a5c, 0x5a5a32][Math.floor(Math.random() * 3)], side * 0.32);   // 차양: 재질 하나 + 개체별 색(그리기 1번)
 
     const roofs = opts.roofs || [0, 1];
     if (h <= (opts.maxGable ?? 32) && Math.random() < (opts.roofChance ?? 0.85)) {
       // 박공지붕: 긴 쪽을 따라 용마루가 생김
       const alongX = w >= d;
       const span = alongX ? d : w, len = alongX ? w : d;
-      const rh = span * 0.45;
+      const rh = span * (0.34 + Math.random() * 0.24);   // 73차: 지붕 경사를 집마다 다르게(0.34~0.58)
       const roof = this.mesh(this.gableRoofGeo(span, len, rh, 0.7),
-        [this.capMats[style], this.roofMats[roofs[Math.floor(Math.random() * roofs.length)]]], x, h, z);
+        [this.capMats[style], this.roofMats[(() => { let ri = roofs[Math.floor(Math.random() * roofs.length)]; if ((ri === 0 || ri === 3) && Math.random() < 0.35) ri = Math.random() < 0.5 ? 4 : 5; return ri; })()]], x, h, z);   // 73차: 빨강 지붕 일부를 바랜 주황·적갈로
       if (alongX) roof.rotation.y = Math.PI / 2;
       box.roof = { axis: alongX ? 'z' : 'x', h: rh, half: span / 2 };
       // 굴뚝
@@ -1744,6 +1752,17 @@ const World = {
       const chim = alongX ? [x + off, z + span * 0.15] : [x + span * 0.15, z + off];
       this.batch('chimney', this.unitBox, this.trimMat, chim[0], cy, chim[1], 1.1, 3, 1.1);
       box.chimney = new THREE.Vector3(chim[0], cy + 1.6, chim[1]);
+      // 73차: 지붕창(도머) — 큰 지붕의 40%에 1~2개. 지붕 면 앞쪽으로 튀어나온 작은 창 + 작은 지붕
+      if (len >= 8 && span >= 6 && Math.random() < 0.4) {
+        const nd = len >= 14 ? 2 : 1, face = Math.random() < 0.5 ? 1 : -1;
+        for (let k = 0; k < nd; k++) {
+          const along = (nd === 1 ? 0 : (k ? 1 : -1) * len * 0.22), out = face * span * 0.24, dy = h + rh * 0.42;
+          const [dx, dz] = alongX ? [x + along, z + out] : [x + out, z + along];
+          this.batch('dormer', this.unitBox, this.capMats[style], dx, dy, dz, alongX ? 1.6 : 1.4, 1.5, alongX ? 1.4 : 1.6);
+          this.batch('dormerWin', this.unitBox, this.woodMat, alongX ? dx : dx + face * 0.72, dy + 0.05, alongX ? dz + face * 0.72 : dz, alongX ? 0.8 : 0.06, 0.8, alongX ? 0.06 : 0.8);
+          this.batch('dormerCap', this.unitBox, this.roofMats[0], dx, dy + 0.85, dz, alongX ? 1.9 : 1.7, 0.18, alongX ? 1.7 : 1.9);
+        }
+      }
     } else {
       // 평지붕: 난간 + 처마 띠 + 옥탑
       const t = 0.4, ph = 0.9;
@@ -6407,18 +6426,26 @@ const Player = {
     };
     const box = (parent, w, h, d, c, x, y, z) => add(parent, new THREE.BoxGeometry(w, h, d), c, x, y, z);
 
+    // ===== 73차: 둥근 몸 — 상자 대신 가늘어지는 원통(팔다리)·구(관절·손·머리)로. 관절 Group 위치·이름은 그대로(움직임 코드 그대로) =====
+    // 관절마다 같은 재질끼리 한 덩어리로 합쳐지므로(mergeJoint) 부품이 늘어도 그리기 횟수는 그대로, 삼각형만 조금 늘어남
+    const limb = (parent, rTop, rBot, len, c, x, y, z, seg = 10) => add(parent, new THREE.CylinderGeometry(rTop, rBot, len, seg, 1), c, x, y, z);
+    const ball = (parent, r, c, x, y, z, sx = 1, sy = 1, sz = 1) => { const m = add(parent, new THREE.SphereGeometry(r, 12, 9), c, x, y, z); m.scale.set(sx, sy, sz); return m; };
     // 골반과 다리 (허벅지 → 무릎 → 부츠)
     const hips = new THREE.Group(); hips.position.y = 0.92; body.add(hips);
-    box(hips, 0.34, 0.16, 0.2, C.pants, 0, 0, 0);
-    box(hips, 0.36, 0.05, 0.22, C.strap, 0, 0.07, 0);                 // 허리띠
+    ball(hips, 0.17, C.pants, 0, -0.01, 0, 1.05, 0.62, 0.68);           // 둥근 골반
+    limb(hips, 0.175, 0.175, 0.05, C.strap, 0, 0.07, 0, 14).scale.set(1, 1, 0.66);   // 허리띠
+    add(hips, new THREE.BoxGeometry(0.06, 0.05, 0.02), C.gear, 0, 0.07, -0.118);      // 버클
     const legs = [-1, 1].map(s => {
       const thigh = new THREE.Group(); thigh.position.set(s * 0.09, -0.05, 0); hips.add(thigh);
-      box(thigh, 0.14, 0.42, 0.16, C.pants, 0, -0.21, 0);
-      box(thigh, 0.15, 0.03, 0.17, C.strap, 0, -0.12, 0);              // 허벅지 벨트
-      box(thigh, 0.15, 0.03, 0.17, C.strap, 0, -0.3, 0);
+      ball(thigh, 0.085, C.pants, 0, 0, 0);                              // 고관절
+      limb(thigh, 0.082, 0.064, 0.42, C.pants, 0, -0.21, 0);             // 허벅지(위가 굵고 아래로 가늘어짐)
+      limb(thigh, 0.086, 0.084, 0.025, C.strap, 0, -0.12, 0);            // 허벅지 벨트
+      limb(thigh, 0.072, 0.07, 0.025, C.strap, 0, -0.3, 0);
       const knee = new THREE.Group(); knee.position.y = -0.42; thigh.add(knee);
-      box(knee, 0.135, 0.4, 0.155, C.boot, 0, -0.2, 0);
-      box(knee, 0.135, 0.07, 0.24, C.boot, 0, -0.41, -0.04);            // 발
+      ball(knee, 0.066, C.pants, 0, 0, 0);                                // 무릎
+      limb(knee, 0.068, 0.056, 0.36, C.boot, 0, -0.2, 0);                // 부츠 목(종아리)
+      limb(knee, 0.072, 0.072, 0.03, C.boot, 0, -0.04, 0);               // 부츠 위 테
+      ball(knee, 0.062, C.boot, 0, -0.4, -0.045, 1, 0.62, 1.75);         // 발(앞으로 긴 타원)
       return { thigh, knee };
     });
 
@@ -6442,31 +6469,46 @@ const Player = {
     add(hips, new THREE.CylinderGeometry(0.035, 0.055, 0.1, 10), C.dark, 0, -0.12, 0.21).rotation.x = -Math.PI / 3;   // 분사구
     add(hips, new THREE.TorusGeometry(0.045, 0.01, 6, 14), core, 0, -0.15, 0.24).rotation.x = Math.PI / 6;
 
-    // 상체 (척추 관절)
+    // 상체 (척추 관절) — 73차: 둥근 몸통, 옷깃 있는 짧은 재킷, 가슴·어깨 벨트
     const chest = new THREE.Group(); chest.position.y = 1.0; body.add(chest);
-    box(chest, 0.32, 0.36, 0.19, C.shirt, 0, 0.2, 0);
-    box(chest, 0.37, 0.24, 0.21, C.jacket, 0, 0.33, 0);                // 짧은 재킷
-    box(chest, 0.1, 0.2, 0.012, C.jacket, -0.13, 0.12, -0.1);          // 재킷 앞자락
-    box(chest, 0.1, 0.2, 0.012, C.jacket,  0.13, 0.12, -0.1);
-    for (const s of [-1, 1]) box(chest, 0.03, 0.42, 0.012, C.strap, s * 0.07, 0.2, -0.104);   // 가슴 벨트
-    box(chest, 0.3, 0.03, 0.012, C.strap, 0, 0.3, -0.106);
-    box(chest, 0.09, 0.08, 0.09, C.skin, 0, 0.47, 0);                   // 목
+    limb(chest, 0.15, 0.13, 0.4, C.shirt, 0, 0.2, 0, 12).scale.set(1, 1, 0.66);        // 셔츠 몸통(아래로 좁아짐)
+    limb(chest, 0.185, 0.17, 0.26, C.jacket, 0, 0.33, 0, 12).scale.set(1, 1, 0.66);    // 짧은 재킷
+    ball(chest, 0.185, C.jacket, 0, 0.45, 0, 1, 0.42, 0.66);                            // 어깨 둥근 윗면
+    for (const s of [-1, 1]) {
+      const lap = add(chest, new THREE.BoxGeometry(0.075, 0.2, 0.012), C.jacket, s * 0.07, 0.36, -0.125); lap.rotation.z = s * 0.35;   // 옷깃(V자)
+      add(chest, new THREE.BoxGeometry(0.028, 0.4, 0.012), C.strap, s * 0.075, 0.2, -0.104).rotation.z = s * 0.06;                      // 가슴 벨트
+      add(chest, new THREE.BoxGeometry(0.028, 0.34, 0.012), C.strap, s * 0.11, 0.24, 0.106).rotation.z = -s * 0.25;                     // 등 X자 벨트
+    }
+    add(chest, new THREE.BoxGeometry(0.27, 0.028, 0.012), C.strap, 0, 0.3, -0.106);
+    limb(chest, 0.05, 0.055, 0.1, C.skin, 0, 0.5, 0);                                   // 목
+    limb(chest, 0.07, 0.085, 0.05, C.shirt, 0, 0.47, 0);                                // 셔츠 깃
 
-    // 머리
+    // 머리 — 73차: 턱이 있는 얼굴형, 귀, 코, 눈썹, 앞머리·옆머리
     const head = new THREE.Group(); head.position.y = 0.6; chest.add(head);
-    add(head, new THREE.SphereGeometry(0.12, 16, 12), C.skin, 0, 0, 0).scale.set(1, 1.1, 1);
-    add(head, new THREE.SphereGeometry(0.13, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), C.hair, 0, 0.012, 0.01);
-    box(head, 0.22, 0.1, 0.08, C.hair, 0, -0.03, 0.08);                 // 뒷머리
-    for (const s of [-1, 1]) box(head, 0.03, 0.016, 0.01, C.dark, s * 0.045, 0.01, -0.12);   // 눈
+    ball(head, 0.115, C.skin, 0, 0.01, 0, 1, 1.12, 1.05);                              // 머리
+    ball(head, 0.085, C.skin, 0, -0.06, -0.025, 1, 0.7, 1);                             // 턱
+    for (const s of [-1, 1]) {
+      ball(head, 0.026, C.skin, s * 0.115, -0.005, 0.005, 0.45, 1, 0.8);               // 귀
+      ball(head, 0.014, C.dark, s * 0.042, 0.012, -0.108, 1, 0.65, 0.5);               // 눈
+      add(head, new THREE.BoxGeometry(0.04, 0.008, 0.01), C.hair, s * 0.043, 0.042, -0.112).rotation.z = s * -0.12;   // 눈썹
+    }
+    ball(head, 0.016, C.skin, 0, -0.012, -0.122, 0.8, 1, 1);                            // 코
+    add(head, new THREE.SphereGeometry(0.125, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.56), C.hair, 0, 0.018, 0.008);   // 머리카락 윗부분
+    ball(head, 0.105, C.hair, 0, -0.01, 0.045, 1.08, 0.95, 0.8);                        // 뒷머리
+    for (let i = -2; i <= 2; i++) ball(head, 0.03, C.hair, i * 0.035, 0.085 - Math.abs(i) * 0.008, -0.1, 1.1, 0.7, 0.6);   // 앞머리 갈래
+    for (const s of [-1, 1]) ball(head, 0.04, C.hair, s * 0.1, 0.02, -0.02, 0.5, 1.2, 0.9);                               // 옆머리
 
-    // 팔 (어깨 → 팔꿈치 → 손, 손에 칼)
+    // 팔 (어깨 → 팔꿈치 → 손, 손에 칼) — 73차: 어깨 구·가늘어지는 팔·둥근 손·소매 끝
     const arms = [-1, 1].map(s => {
       const sh = new THREE.Group(); sh.position.set(s * 0.22, 0.43, 0); chest.add(sh);
-      box(sh, 0.1, 0.3, 0.11, C.jacket, 0, -0.14, 0);
+      ball(sh, 0.068, C.jacket, 0, -0.01, 0);                            // 어깨
+      limb(sh, 0.062, 0.052, 0.3, C.jacket, 0, -0.14, 0);                // 위팔(재킷 소매)
       const el = new THREE.Group(); el.position.y = -0.29; sh.add(el);
-      box(el, 0.09, 0.27, 0.1, C.shirt, 0, -0.13, 0);
-      box(el, 0.09, 0.08, 0.1, C.skin, 0, -0.3, 0);                     // 손
-      box(el, 0.04, 0.04, 0.16, C.dark, 0, -0.3, -0.06);                // 손잡이
+      ball(el, 0.05, C.shirt, 0, 0, 0);                                  // 팔꿈치
+      limb(el, 0.05, 0.042, 0.26, C.shirt, 0, -0.13, 0);                 // 아래팔
+      limb(el, 0.047, 0.047, 0.03, C.strap, 0, -0.24, 0);                // 소맷부리 끈
+      ball(el, 0.045, C.skin, 0, -0.3, 0, 1, 1.05, 1.25);                // 손
+      add(el, new THREE.CylinderGeometry(0.02, 0.022, 0.16, 8), C.dark, 0, -0.3, -0.06).rotation.x = Math.PI / 2;   // 손잡이
       box(el, 0.02, 0.07, 0.03, C.dark, 0, -0.36, -0.03);               // 방아쇠
       box(el, 0.08, 0.11, 0.025, C.gear, 0, -0.3, -0.14);               // 날밑
       add(el, new THREE.BoxGeometry(0.008, 0.012, 0.6), core, 0, -0.275, -0.5);   // 칼날 발광 줄
@@ -6474,10 +6516,12 @@ const Player = {
       return { sh, el };
     });
 
-    // 망토 (어깨 뒤 관절에서 펄럭임)
+    // 망토 (어깨 뒤 관절에서 펄럭임) — 73차: 평평한 판 대신 등을 감싸는 휘어진 천 + 접힌 후드
     const cloak = new THREE.Group(); cloak.position.set(0, 0.46, 0.12); chest.add(cloak);
-    box(cloak, 0.3, 0.08, 0.08, C.cloak, 0, 0.02, 0);                   // 접힌 후드
-    box(cloak, 0.44, 0.64, 0.02, C.cloak, 0, -0.32, 0.1);
+    limb(cloak, 0.13, 0.15, 0.09, C.cloak, 0, 0.02, -0.02, 12).scale.set(1.15, 1, 0.75);   // 접힌 후드
+    const cg = new THREE.CylinderGeometry(0.26, 0.31, 0.66, 14, 1, true, Math.PI * 0.62, Math.PI * 0.76);   // 뒤쪽 원호만(등을 감쌈)
+    const cl = add(cloak, cg, new THREE.MeshStandardMaterial({ color: C.cloak, roughness: 0.9, side: THREE.DoubleSide }), 0, -0.33, -0.06); cl.scale.set(1, 1, 0.55);
+    ball(cloak, 0.022, C.gear, 0, 0.0, -0.13);                                            // 망토 고정 단추
 
     this.rig = { body, hips, chest, head, legs, arms, cloak };
     this.runPhase = 0;
@@ -8438,30 +8482,46 @@ const Allies = {
       parts.push(g);
     };
     const bodyParts = [], legParts = [], box = maker(bodyParts), leg = maker(legParts);
+    // 73차: 둥근 부품(원통·구)도 같은 방식(꼭짓점 색)으로 — 플레이어 모델과 같은 둥근 몸. 한 덩어리라 그리기 횟수는 그대로
+    const shape = parts => (geo, x, y, z, color, rx = 0, rz = 0, sx = 1, sy = 1, sz = 1) => {
+      const g = geo.index ? geo.toNonIndexed() : geo; g.scale(sx, sy, sz); if (rx) g.rotateX(rx); if (rz) g.rotateZ(rz); g.translate(x, y, z);
+      const c = new THREE.Color(color), n = g.attributes.position.count, col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3)); if (g.attributes.uv) g.deleteAttribute('uv'); parts.push(g);
+    };
+    const B = shape(bodyParts), L = shape(legParts);
+    const cyl = (rt, rb, h, seg = 9) => new THREE.CylinderGeometry(rt, rb, h, seg, 1), sph = r => new THREE.SphereGeometry(r, 10, 8);
     for (const s of [-1, 1]) {
-      box(0.1, 0.3, 0.11, s * 0.24, 1.26, 0.02, C.jacket, 0.2, s * 0.12);   // 위팔
-      box(0.09, 0.27, 0.1, s * 0.26, 1.02, 0.08, C.shirt, 0.5, s * 0.08);   // 아래팔
-      box(0.09, 0.08, 0.1, s * 0.27, 0.88, 0.15, C.skin);                   // 손
-      box(0.012, 0.05, 0.85, s * 0.28, 0.8, 0.55, C.steel, -0.25);          // 칼날 (뒤로 비스듬히)
-      box(0.1, 0.24, 0.24, s * 0.25, 0.92, 0.02, C.plate);                  // 허리 와이어 릴
-      box(0.02, 0.2, 0.2, s * 0.305, 0.92, 0.02, C.glow);                   // 릴 발광
-      box(0.1, 0.36, 0.1, s * 0.08, 1.06, 0.17, C.steel);                   // 가스 탱크
+      B(sph(0.065), s * 0.22, 1.42, 0, C.jacket);                                   // 어깨
+      B(cyl(0.058, 0.05, 0.3), s * 0.24, 1.26, 0.02, C.jacket, 0.2, s * 0.12);    // 위팔
+      B(cyl(0.048, 0.04, 0.27), s * 0.26, 1.02, 0.08, C.shirt, 0.5, s * 0.08);    // 아래팔
+      B(sph(0.045), s * 0.27, 0.88, 0.15, C.skin, 0, 0, 1, 1.05, 1.2);            // 손
+      box(0.012, 0.05, 0.85, s * 0.28, 0.8, 0.55, C.steel, -0.25);                // 칼날 (뒤로 비스듬히)
+      B(cyl(0.12, 0.12, 0.1, 14), s * 0.25, 0.92, 0.02, C.plate, 0, Math.PI / 2); // 허리 와이어 릴
+      box(0.02, 0.2, 0.2, s * 0.305, 0.92, 0.02, C.glow);                         // 릴 발광
+      B(cyl(0.05, 0.05, 0.34, 10), s * 0.08, 1.06, 0.17, C.steel);                // 가스 탱크
+      B(sph(0.05), s * 0.08, 1.23, 0.17, C.steel);
     }
-    box(0.34, 0.18, 0.2, 0, 0.92, 0, C.pants);                              // 골반
-    box(0.36, 0.05, 0.22, 0, 0.99, 0, C.strap);                             // 허리띠
-    box(0.32, 0.36, 0.19, 0, 1.2, 0, C.shirt);                              // 셔츠
-    box(0.37, 0.24, 0.21, 0, 1.33, 0, C.jacket);                            // 짧은 재킷
+    B(sph(0.17), 0, 0.91, 0, C.pants, 0, 0, 1.05, 0.62, 0.68);                    // 골반
+    B(cyl(0.175, 0.175, 0.05, 14), 0, 0.99, 0, C.strap, 0, 0, 1, 1, 0.66);        // 허리띠
+    B(cyl(0.15, 0.13, 0.4, 12), 0, 1.2, 0, C.shirt, 0, 0, 1, 1, 0.66);            // 셔츠
+    B(cyl(0.185, 0.17, 0.26, 12), 0, 1.33, 0, C.jacket, 0, 0, 1, 1, 0.66);        // 짧은 재킷
+    B(sph(0.185), 0, 1.45, 0, C.jacket, 0, 0, 1, 0.42, 0.66);                      // 어깨 윗면
     for (const s of [-1, 1]) box(0.03, 0.42, 0.012, s * 0.07, 1.2, -0.104, C.strap);   // 가슴 벨트
-    box(0.09, 0.08, 0.09, 0, 1.47, 0, C.skin);                              // 목
-    box(0.2, 0.24, 0.21, 0, 1.6, 0, C.skin);                                // 머리
-    box(0.22, 0.09, 0.23, 0, 1.73, 0.01, C.hair);                           // 머리카락
-    box(0.22, 0.14, 0.06, 0, 1.63, 0.1, C.hair);                            // 뒷머리
-    box(0.22, 0.1, 0.1, 0, 0.92, 0.15, C.plate);                            // 장치 본체
+    B(cyl(0.05, 0.055, 0.1), 0, 1.5, 0, C.skin);                                   // 목
+    B(sph(0.115), 0, 1.61, 0, C.skin, 0, 0, 1, 1.12, 1.05);                        // 머리
+    B(sph(0.085), 0, 1.54, -0.025, C.skin, 0, 0, 1, 0.7, 1);                       // 턱
+    B(new THREE.SphereGeometry(0.125, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.56), 0, 1.618, 0.008, C.hair);   // 머리카락
+    B(sph(0.105), 0, 1.59, 0.045, C.hair, 0, 0, 1.08, 0.95, 0.8);                 // 뒷머리
+    for (const s of [-1, 1]) B(sph(0.014), s * 0.042, 1.612, -0.108, 0x30343a, 0, 0, 1, 0.65, 0.5);   // 눈
+    box(0.22, 0.1, 0.1, 0, 0.92, 0.15, C.plate);                                    // 장치 본체
     // 다리 한 짝: 엉덩이 관절(원점)에서 아래로
-    leg(0.14, 0.46, 0.16, 0, -0.22, 0, C.pants);
-    leg(0.15, 0.03, 0.17, 0, -0.12, 0, C.strap);                            // 허벅지 벨트
-    leg(0.13, 0.42, 0.16, 0, -0.64, 0, C.boot);
-    leg(0.135, 0.07, 0.24, 0, -0.86, -0.04, C.boot);                        // 발
+    L(sph(0.085), 0, 0, 0, C.pants);
+    L(cyl(0.082, 0.064, 0.46), 0, -0.22, 0, C.pants);
+    L(cyl(0.086, 0.084, 0.03), 0, -0.12, 0, C.strap);                               // 허벅지 벨트
+    L(sph(0.066), 0, -0.44, 0, C.pants);                                            // 무릎
+    L(cyl(0.068, 0.056, 0.42), 0, -0.64, 0, C.boot);
+    L(sph(0.062), 0, -0.86, -0.045, C.boot, 0, 0, 1, 0.62, 1.75);                  // 발
     return { body: merge(bodyParts), leg: merge(legParts) };
   },
 
