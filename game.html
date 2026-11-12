@@ -354,6 +354,8 @@
         <label>시야각<select id="fov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
         <label>번쩍임 (피격·변신·폭발)<select id="flashFx"><option value="1">보통</option><option value="0.4">약하게</option><option value="0">끄기</option></select></label>
         <label>타격 멈춤 (히트스톱)<select id="hitStop"><option value="1">켜기</option><option value="0">끄기</option></select></label>
+        <label>속도선<select id="speedLines"><option value="1">켜기</option><option value="0">끄기</option></select></label>
+        <label>빠를수록 시야 넓힘<select id="dynFov"><option value="1">켜기</option><option value="0">끄기</option></select></label>
         <label>화면 흔들림<select id="shake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
         <button type="button" id="showPerf">성능 표시 F3</button>
       </div>
@@ -408,7 +410,7 @@
     <p id="pauseStats"></p><p id="pauseRecords" style="font-size:12px;opacity:.8;margin:2px 0 8px"></p>
     <button type="button" id="resume">계속하기</button>
     <p id="pauseHint" role="status"></p>
-    <div class="pause-actions"><button type="button" id="escapeStuck" title="몇 초 전의 안전한 자리로 옮깁니다 (회복 없음 · 20초에 한 번)">끼임 탈출</button><button type="button" id="trainToggle" title="피해를 받지 않습니다 · 켠 출격은 개인 기록에서 제외">훈련 모드 켜기</button><button type="button" id="trainTargets" hidden>표적 거인 소환</button><button type="button" id="trainHome" hidden>출발 지점으로</button><button type="button" id="tutorAgain" title="첫 출격 안내를 처음부터 다시 봅니다">조작 연습</button></div>
+    <div class="pause-actions"><button type="button" id="escapeStuck" title="몇 초 전의 안전한 자리로 옮깁니다 (회복 없음 · 20초에 한 번)">끼임 탈출</button><button type="button" id="trainToggle" title="피해를 받지 않습니다 · 켠 출격은 개인 기록에서 제외">훈련 모드 켜기</button><button type="button" id="trainTargets" hidden>표적 거인 소환</button><button type="button" id="trainHome" hidden>출발 지점으로</button><button type="button" id="trainClear" hidden>표적 정리</button><button type="button" id="tutorAgain" title="첫 출격 안내를 처음부터 다시 봅니다">조작 연습</button></div>
     <details class="pause-set"><summary>설정 · 화질 · 조작 · 소리 · 동료</summary>
     <div class="pause-grid">
       <label>시점<select id="pView"><option value="3">3인칭</option><option value="1">1인칭</option></select></label>
@@ -423,6 +425,8 @@
       <label>시야각<select id="pFov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
       <label>번쩍임<select id="pFlashFx"><option value="1">보통</option><option value="0.4">약하게</option><option value="0">끄기</option></select></label>
       <label>타격 멈춤<select id="pHitStop"><option value="1">켜기</option><option value="0">끄기</option></select></label>
+      <label>속도선<select id="pSpeedLines"><option value="1">켜기</option><option value="0">끄기</option></select></label>
+      <label>빠를수록 시야 넓힘<select id="pDynFov"><option value="1">켜기</option><option value="0">끄기</option></select></label>
       <label>화면 흔들림<select id="pShake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
       <label>프레임 제한<select id="pFpsCap"><option value="0">자동 (끊김이 계속되면 고른 30)</option><option value="120">제한 안 함</option><option value="60">60</option><option value="30">30 고정</option></select></label>
     </div>
@@ -743,6 +747,7 @@ const Effects = {
 
   // 속도선: 화면 가장자리에서 바깥으로 뻗는 흰 줄 + 어두워지는 테두리
   drawSpeedLines(speed) {
+    if (this.noSpeedLines) speed = 0;   // 64차: 속도선 끄기 설정
     if (!this.slCanvas) {
       this.slCanvas = document.getElementById('speedlines');
       this.slCtx = this.slCanvas.getContext('2d');
@@ -7079,7 +7084,7 @@ const Player = {
     camera.rotation.set(this.pitch, this.yaw, this.camRoll);
     // 속도가 빠를수록 시야각을 넓혀 속도감 표현
     const sp = this.vel.length();
-    const fov = (this.baseFov || 75) + Math.min(sp, 70) * 0.25 - Effects.slowK() * 9;   // 토벌 슬로우 중엔 살짝 줌인
+    const fov = (this.baseFov || 75) + (this.noDynFov ? 0 : Math.min(sp, 70) * 0.25) - Effects.slowK() * 9;   // 64차: 속도에 따른 시야 넓힘 끄기 설정   // 토벌 슬로우 중엔 살짝 줌인
     if (Math.abs(camera.fov - fov) > 0.1) { camera.fov += (fov - camera.fov) * 0.1; camera.updateProjectionMatrix(); }
     Effects.drawSpeedLines(sp);
 
@@ -10879,8 +10884,8 @@ const Tutor = {
     document.body.appendChild(this.el);
     // 베기·회피는 실제 함수가 불렸는지로 확인 (원래 동작은 그대로)
     const pa = Player.attack, pd = Player.dodge;
-    Player.attack = function (...a) { if (Tutor.s) Tutor.s.attacked = true; return pa.apply(this, a); };
-    Player.dodge = function (...a) { if (Tutor.s) Tutor.s.dodged = true; return pd.apply(this, a); };
+    Player.attack = function (...a) { const before = this.lastAttack; const r = pa.apply(this, a); if (Tutor.s && this.lastAttack !== before) Tutor.s.attacked = true; return r; };   // 64차: 실제로 베기가 나갔을 때만
+    Player.dodge = function (...a) { const before = this.dodgeCd; const r = pd.apply(this, a); if (Tutor.s && this.dodgeCd > (before || 0)) Tutor.s.dodged = true; return r; };
     addEventListener('keydown', e => { if (e.code === 'Backspace' && this.i >= 0 && Game.running) { e.preventDefault(); this.finish(true); } });
   },
   start(force = false) {
@@ -11092,12 +11097,15 @@ const Freeplay = {
     if ($('shake')) pair(['shake', 'pShake'], 'shake', '1', v => { Effects.shakeMul = +v; });
     if ($('flashFx')) pair(['flashFx', 'pFlashFx'], 'flash', '1', v => { Effects.flashMul = +v; });   // 56차
     if ($('hitStop')) pair(['hitStop', 'pHitStop'], 'hitstop', '1', v => { Effects.noHitStop = v === '0'; });
+    if ($('speedLines')) pair(['speedLines', 'pSpeedLines'], 'speedlines', '1', v => { Effects.noSpeedLines = v === '0'; });   // 64차
+    if ($('dynFov')) pair(['dynFov', 'pDynFov'], 'dynfov', '1', v => { Player.noDynFov = v === '0'; });
     SaveBox.init();
     Keymap.init();   // 53차: 키 바꾸기 칸(조작법 창)
     // 51차: 훈련 모드 켜고 끄기 (53차: 현장 목표 기능은 삭제함 — 훈련 중 표시는 왼쪽 위 작은 띠로)
     const tr = $('trainToggle'), badge = document.createElement('div');
     this.badge = badge; badge.id = 'trainBadge'; badge.hidden = true; badge.textContent = '훈련 모드 · 피해 없음 · 거인화 게이지 가득 · 스킬 재사용 4배 · 기록 제외'; document.body.appendChild(badge);
-    const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기'; badge.hidden = !Game.training; for (const id of ['trainTargets', 'trainHome']) if ($(id)) $(id).hidden = !Game.training; };
+    const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기'; badge.hidden = !Game.training; for (const id of ['trainTargets', 'trainHome', 'trainClear']) if ($(id)) $(id).hidden = !Game.training; };
+    if ($('trainClear')) $('trainClear').addEventListener('click', () => { let n = 0; for (const t of Titans.list) if (t.dummy && !t.dead) { t.dead = true; t.removed = true; t.root.visible = false; n++; } $('pauseHint').textContent = n ? `표적 ${n}마리를 치웠습니다` : '치울 표적이 없습니다'; });
     if ($('trainTargets')) $('trainTargets').addEventListener('click', () => { Game.trainTargets(); $('pauseHint').textContent = '정면에 표적 거인 3마리 · 계속하기를 누르세요'; });
     if ($('trainHome')) $('trainHome').addEventListener('click', () => { Game.trainHome(); $('pauseHint').textContent = '출발 지점으로 옮겼습니다'; });
     if (tr) tr.addEventListener('click', () => { Game.setTraining(!Game.training); label(); $('pauseHint').textContent = Game.training ? '훈련 모드: 피해를 받지 않습니다 · 이번 출격은 개인 기록에 넣지 않습니다' : '훈련 모드를 껐습니다'; });
@@ -11194,10 +11202,12 @@ const Game = {
   // 59차 훈련 도구: 정면 40~70m에 서 있는 표적 거인 3마리(움직이지 않음, 키 8·12·15m) / 출발 지점으로
   trainTargets() {
     if (!this.training) return;
-    for (const t of Titans.list) if (t.dummy && !t.dead) t.dead = true;
+    for (const t of Titans.list) if (t.dummy && !t.dead) { t.dead = true; t.removed = true; t.root.visible = false; }   // 다시 부르면 이전 표적은 지움(무한히 늘지 않게)
     const f = Player.forward(), r = Player.right();
     [[8, -14, 40], [12, 0, 55], [15, 14, 70]].forEach(([h, side, d]) => {
-      const x = Player.pos.x + f.x * d + r.x * side, z = Player.pos.z + f.z * d + r.z * side;
+      let x = Player.pos.x + f.x * d + r.x * side, z = Player.pos.z + f.z * d + r.z * side;
+      for (let k = 0; k < 8 && !World.isFree(x, z, 4); k++) { x += f.x * 12; z += f.z * 12; }   // 64차: 건물·벽 안이면 앞으로 밀어 빈 자리에
+      if (!World.isFree(x, z, 4)) return;
       const t = new Titan(scene, x, z, h, false, null); t.dummy = true; t.speed = 0; t.sight = 0; t.attackCd = 1e9; t.root.rotation.y = Math.atan2(-f.x, -f.z); Titans.list.push(t);
     });
     Titans._hooksDirty = true; this.toast('표적 거인 3마리 (움직이지 않음)', '#9fe0b0');
