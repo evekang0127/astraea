@@ -248,6 +248,33 @@
 #skillbar .sk.on{border-color:#FFFFFF;box-shadow:0 0 14px rgba(255,200,120,.65);}
 #skillbar .sk.hint{min-width:0;padding-right:8px;opacity:.8;border-color:rgba(255,255,255,.2);} #skillbar .sk.hint b{background:#3a4250;color:#e6eef8;font-size:10px;}
 #bolt{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 40%,rgba(255,244,200,.95),rgba(255,210,120,.35) 45%,transparent 75%);transition:opacity .35s;}
+  /* ===== 54차: 화면 규칙 통일 — 색 역할: 흰색/밝은 회색 = 본문, 빨강 = 위험·핵심, 하늘색 = 와이어·선택 표시, 초록 = 확인 ===== */
+  :root { --ui-text: #f4f4f4; --ui-sub: #cfcfcf; --ui-dim: #9a9a9a; --ui-danger: #D71A1C; --ui-ok: #9fe0b0; --ui-wire: #38d8ff; --ui-line: rgba(215,26,28,.5);
+    --ui-radius: 5px; --ui-btn-h: 38px; --ui-fs: 14px; --ui-fs-sub: 12.5px; }
+  [hidden] { display: none !important; }   /* 숨김 표시가 다른 배치 규칙에 덮이지 않게 (Google ID 칸이 보이던 원인) */
+  button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--ui-wire); outline-offset: 2px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  .fields label, .pause-grid label { color: var(--ui-sub); font-size: var(--ui-fs-sub); }
+  .fields button, .saverow button, #keybinds button, .pause-actions button { min-height: var(--ui-btn-h); color: var(--ui-text); border: 1px solid var(--ui-line); border-radius: var(--ui-radius); background: rgba(255,255,255,.04); }
+  .fields button:hover, .saverow button:hover, #keybinds button:hover, .pause-actions button:hover { border-color: #fff; background: rgba(215,26,28,.18); }
+  .panel h3.sec { margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,.14); font: 700 13px/1.2 'Noto Serif KR', serif; letter-spacing: .14em; color: var(--ui-text); }
+  .panel h3.sec small { font-weight: 400; letter-spacing: 0; color: var(--ui-dim); margin-left: 10px; font-size: 11.5px; }
+  .savebox { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
+  #resume { color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,.65); min-height: 48px; }
+  .pause-card { max-height: calc(100vh - 32px); }
+  .pause-actions { flex-wrap: wrap; }
+  .pause-actions button { flex: 1 1 150px; }
+  #atlasBtn, #modeSwitch { min-height: var(--ui-btn-h); margin-top: 8px; width: 100%; font: inherit; font-size: 13px; cursor: pointer; color: var(--ui-text); background: rgba(255,255,255,.06); border: 1px solid var(--ui-line); border-radius: var(--ui-radius); }
+  #atlasBtn:hover, #modeSwitch:hover { border-color: #fff; background: rgba(215,26,28,.18); }
+  .pause-card details { margin-top: 12px; border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; }
+  .pause-card summary { cursor: pointer; font-size: 13.5px; color: var(--ui-text); padding: 4px 0; }
+  .pause-set .pause-grid { margin-top: 10px; }
+  .pause-end { margin-top: 14px; } .pause-end button { color: var(--ui-sub); }
+  #pauseStats, #pauseHint { color: var(--ui-sub); }
+  .links { gap: 12px; }
+  .links button { padding: 9px 16px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--ui-radius); background: rgba(0,0,0,.4); }
+  .links button:hover { border-color: var(--ui-danger); }
 
 :root { color-scheme: dark; }
 </style>
@@ -281,7 +308,7 @@
         <div class="viewpick" role="group" aria-label="시점"><button type="button" data-viewpick="3" class="on">3인칭</button><button type="button" data-viewpick="1">1인칭</button></div>
       </div>
       <p id="loading" role="status">도시를 준비하고 있습니다…</p><p id="startText"></p>
-      <nav class="links" aria-label="시작 메뉴"><button type="button" data-panel="archive">거인 도감</button><button type="button" data-panel="setup">전투 설정</button><button type="button" data-panel="controls">조작법</button></nav>
+      <nav class="links" aria-label="시작 메뉴"><button type="button" data-panel="archive">거인 도감</button><button type="button" data-panel="setup">설정</button><button type="button" data-panel="controls">조작법</button></nav>
     </div>
     <aside class="gold-panel fields-list" aria-label="세계 지도">
       <div class="eyebrow"><span>WORLD MAP · 파라디 섬 1:1</span><span id="mapCount"></span></div>
@@ -303,27 +330,41 @@
   <section class="panel" id="panel-setup" hidden>
     <div class="gold-panel">
       <button type="button" class="close" data-panel="deploy">돌아가기</button>
-      <div class="eyebrow">SETTINGS</div><h2>전투 설정</h2>
+      <div class="eyebrow">SETTINGS</div><h2>설정</h2>
+      <h3 class="sec">전투</h3>
       <div class="fields">
         <label>출현 거인<select id="encounter"><option value="mixed">9거인 순환</option><option value="classic">기존 일반 거인</option></select></label>
         <label>변신할 거인 (9종 모두 사용 가능)<select id="heir"></select></label>
-        <label id="devClientId" hidden>Google 클라이언트 ID (개발용)<span class="cid"><input id="googleClientId" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false"><button type="button" id="saveClientId">저장</button></span></label>
-        <label>소리<select id="volume"><option value="1">켜기</option><option value="0.5">작게</option><option value="0">끄기</option></select></label>
         <label>동료 수<select id="allyCount"></select></label>
         <label>동료 소속<select id="allyFaction"><option value="mixed">혼성 편성</option><option value="survey">조사병단</option><option value="garrison">주둔병단</option><option value="police">헌병단</option></select></label>
-        <label>화질<select id="quality"><option value="auto">자동 · 성능 우선</option><option value="low">가볍게 · 그림자 끄기</option><option value="high">고화질</option></select></label>
+      </div>
+      <h3 class="sec">조작<small>키 바꾸기는 조작법 창 아래에 있습니다</small></h3>
+      <div class="fields">
         <label>마우스 감도<select id="mouseSens"><option value="0.5">느리게</option><option value="0.75">조금 느리게</option><option value="1">보통</option><option value="1.3">조금 빠르게</option><option value="1.7">빠르게</option></select></label>
         <label>위아래 시점<select id="invertY"><option value="0">보통</option><option value="1">반대로 (Y축 반전)</option></select></label>
+      </div>
+      <h3 class="sec">화면 · 그래픽<small>끊기면 프레임 제한을 30으로</small></h3>
+      <div class="fields">
+        <label>화질<select id="quality"><option value="auto">자동 · 성능 우선</option><option value="low">가볍게 · 그림자 끄기</option><option value="high">고화질</option></select></label>
+        <label>프레임 제한<select id="fpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
         <label>시야각<select id="fov"><option value="65">좁게 65</option><option value="75">보통 75</option><option value="85">넓게 85</option><option value="95">아주 넓게 95</option></select></label>
         <label>화면 흔들림<select id="shake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
-        <label>프레임 제한<select id="fpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
         <button type="button" id="showPerf">성능 표시 F3</button>
       </div>
+      <h3 class="sec">음향</h3>
+      <div class="fields">
+        <label>소리<select id="volume"><option value="1">켜기</option><option value="0.5">작게</option><option value="0">끄기</option></select></label>
+      </div>
+      <div id="setupAudio"></div>
+      <h3 class="sec">저장</h3>
       <div class="savebox">
         <div class="eyebrow">SAVE · 이 브라우저에만 저장됩니다 (서버 저장 없음)</div>
         <p id="saveSummary"></p>
         <div class="saverow"><button type="button" id="saveExport">기록·설정 내보내기</button><button type="button" id="saveImport">가져오기</button><button type="button" id="saveUndo" hidden>가져오기 되돌리기</button><input type="file" id="saveFile" accept="application/json,.json" hidden><button type="button" id="saveResetSet">설정 초기화</button><button type="button" id="saveWipe">개인 기록 삭제</button></div>
         <p id="saveMsg" role="status"></p>
+      </div>
+      <div class="fields">
+        <label id="devClientId" hidden>Google 클라이언트 ID (개발용)<span class="cid"><input id="googleClientId" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false"><button type="button" id="saveClientId">저장</button></span></label>
       </div>
     </div>
   </section>
@@ -360,6 +401,8 @@
     <p id="pauseStats"></p><p id="pauseRecords" style="font-size:12px;opacity:.8;margin:2px 0 8px"></p>
     <button type="button" id="resume">계속하기</button>
     <p id="pauseHint" role="status"></p>
+    <div class="pause-actions"><button type="button" id="escapeStuck" title="몇 초 전의 안전한 자리로 옮깁니다 (회복 없음 · 20초에 한 번)">끼임 탈출</button><button type="button" id="trainToggle" title="피해를 받지 않습니다 · 켠 출격은 개인 기록에서 제외">훈련 모드 켜기</button><button type="button" id="tutorAgain" title="첫 출격 안내를 처음부터 다시 봅니다">조작 연습</button></div>
+    <details class="pause-set"><summary>설정 · 화질 · 조작 · 소리 · 동료</summary>
     <div class="pause-grid">
       <label>시점<select id="pView"><option value="3">3인칭</option><option value="1">1인칭</option></select></label>
       <label>화질<select id="pQuality"></select></label>
@@ -374,8 +417,9 @@
       <label>화면 흔들림<select id="pShake"><option value="1">보통</option><option value="0.5">약하게</option><option value="0">끄기</option></select></label>
       <label>프레임 제한<select id="pFpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
     </div>
+    </details>
     <details><summary>조작 안내</summary><div class="keys">WASD 이동 · Space 점프 / 감기 · Shift 가스 · Q 회피(거인: 대시) · 사람일 때 숫자 키 1~9: 변신할 거인 고르기<br>우클릭 유지: 양손 와이어 · 좌클릭: 베기 / 돌진<br>T: 거인화 · 거인일 때 숫자 키 1~3 스킬 · 좌클릭 연타 · 우클릭 강타 · E 해제<br>V / 휠: 시점 · M: 미니맵 · F3: 성능 표시</div></details>
-    <p id="pKeyNote" style="font-size:12px;color:#e8c36a;margin:4px 0"></p><div class="pause-actions"><button type="button" id="escapeStuck">끼임 탈출 (안전한 곳으로)</button><button type="button" id="tutorAgain">조작 연습 다시 보기</button><button type="button" id="trainToggle">훈련 모드 켜기 (피해 없음 · 기록 제외)</button><button type="button" id="toMenu">메인 화면으로 (새 게임 · 점수 초기화)</button></div>
+    <p id="pKeyNote" style="font-size:12px;color:#e8c36a;margin:4px 0"></p><div class="pause-actions pause-end"><button type="button" id="toMenu">메인 화면으로 (새 게임 · 점수 초기화)</button></div>
   </div>
 </div>
 <div id="bolt"></div>
@@ -9612,6 +9656,8 @@ Object.assign(Shifter, {
   },
 
   // ---------- 시조: 땅울림 ----------
+  // 54차: 땅울림 거인의 키 260m (카리파 군항 앞바다 장면의 벽 거인과 같은 크기, 예전 60m). 어깨가 겹치지 않게 간격은 키의 42%, 수는 맵 너비에 맞춰 최대 24
+  RUMBLE_H: 260,
   startRumbling() {
     if (this.rumble) return;
     const B = World.BOUND, f = Player.forward(); f.y = 0; f.normalize();
@@ -9622,13 +9668,15 @@ Object.assign(Shifter, {
       for (const w of walls) for (let d = -w.half; d <= w.half; d += 26) pts.push(new THREE.Vector3(w.cx + w.tx * d, 0, w.cz + w.tz * d));
       let back = pts.filter(q => q.dot(f) < B * 0.1);
       if (back.length < 12) back = pts;
-      pts.length = 0; const step = Math.max(1, back.length / 39);
-      for (let i = 0; i < back.length && pts.length < 39; i += step) pts.push(back[Math.floor(i)]);
+      pts.length = 0; const gap = this.RUMBLE_H * 0.42;
+      const lat = q => q.x * side.x + q.z * side.z;   // 나아가는 방향에 가로인 위치
+      back.sort((a, b) => lat(a) - lat(b));
+      let last = -1e9; for (const q of back) { if (pts.length >= 24) break; if (lat(q) - last >= gap) { pts.push(q); last = lat(q); } }   // 가로로 키의 42% 이상 떨어진 자리만(어깨가 겹치지 않게)
       World.crumbleWalls();
       for (const q of walls) Effects.debris(new THREE.Vector3(q.cx, 0, q.cz), 3, 30);
     } else {
       // 성벽이 없는 맵: 맵 끝(뒤쪽)에서 한 줄로 나타남
-      for (let s = -B; s <= B; s += 31) { const q = f.clone().multiplyScalar(-B * 0.9).addScaledVector(side, s); if (q.length() < B * 1.05) pts.push(q); }
+      for (let s = -B; s <= B; s += this.RUMBLE_H * 0.42) { const q = f.clone().multiplyScalar(-B * 0.9).addScaledVector(side, s); if (q.length() < B * 1.05) pts.push(q); }
     }
     this.rumble = { t: 0, dir: f, speed: (B * 2.1) / 10, list: pts.map((q, i) => ({ pos: q.clone(), delay: i * 0.018, titan: null, step: Math.random() })) };
     Game.toast('땅울림 · 벽 속의 초대형 거인들이 깨어났다', '#bfe6ff');
@@ -9644,24 +9692,24 @@ Object.assign(Shifter, {
       alive++;
       if (!r.titan) {
         if (R.t < r.delay) continue;
-        const t = r.titan = new Titan(this.scene, r.pos.x, r.pos.z, 60, false, 'colossal');
-        t.rumbler = true; t.root.rotation.y = Math.atan2(R.dir.x, R.dir.z); t.root.position.y = -60;
+        const t = r.titan = new Titan(this.scene, r.pos.x, r.pos.z, this.RUMBLE_H, false, 'colossal');
+        t.rumbler = true; t.root.rotation.y = Math.atan2(R.dir.x, R.dir.z); t.root.position.y = -this.RUMBLE_H;
         for (const o of t.detail || []) o.visible = false;
-        Effects.debris(r.pos, 2.5, 26); Effects.shockwave(r.pos, 40, 0xbfe6ff, 0.8);
+        Effects.debris(r.pos, 4, 26); Effects.shockwave(r.pos, this.RUMBLE_H * 0.67, 0xbfe6ff, 0.8);
         r.born = R.t;
       }
-      const t = r.titan, age = R.t - r.born;
-      t.root.position.y = Math.min(0, -60 + age * 110);                      // 땅·벽 속에서 솟아오름
+      const t = r.titan, age = R.t - r.born, H = this.RUMBLE_H;
+      t.root.position.y = Math.min(0, -H + age * H / 0.55);                      // 땅·벽 속에서 솟아오름
       if (age > 0.45) { r.pos.addScaledVector(R.dir, R.speed * dt); t.pos.x = r.pos.x; t.pos.z = r.pos.z; }
-      t.speed = 34; t.animateWalk(dt, true, null);
+      t.speed = 34 * H / 60; t.animateWalk(dt, true, null);   // 걸음 박자는 예전과 같게(보폭만 커짐)
       if ((r.step -= dt) <= 0) {                                             // 발 구름: 먼지·파편·충격파
         r.step = 0.42;
         Effects.debris(r.pos, 1.4, 8);
-        if (Math.random() < 0.35) Effects.shockwave(r.pos, 34, 0xd9c49e, 0.5);
+        if (Math.random() < 0.35) Effects.shockwave(r.pos, H * 0.57, 0xd9c49e, 0.5);
       }
-      if (Math.random() < 0.12) Effects.steam.emit(this._rv.set(r.pos.x + Effects.rand(8), 40 + Math.random() * 15, r.pos.z + Effects.rand(8)), Effects._v.set(Effects.rand(3), 7, Effects.rand(3)), 1.8, 7, 16);
-      for (const e of Titans.list) if (!e.dead && Math.hypot(e.pos.x - r.pos.x, e.pos.z - r.pos.z) < 36 + e.scale) this.execute(e);   // 밟힘
-      const out = r.pos.dot(R.dir) > World.BOUND + 80 || R.t > 10.5;
+      if (Math.random() < 0.12) Effects.steam.emit(this._rv.set(r.pos.x + Effects.rand(H * 0.13), H * (0.55 + Math.random() * 0.3), r.pos.z + Effects.rand(H * 0.13)), Effects._v.set(Effects.rand(3), 7, Effects.rand(3)), 2.2, 16, 30);
+      for (const e of Titans.list) if (!e.dead && Math.hypot(e.pos.x - r.pos.x, e.pos.z - r.pos.z) < H * 0.6 + e.scale) this.execute(e);   // 밟힘
+      const out = r.pos.dot(R.dir) > World.BOUND + 80 + H || R.t > 13;   // 큰 몸이 맵 밖으로 다 나간 뒤에 사라짐
       if (out) { this.removeTemp(t); r.done = true; alive--; }
     }
     this._quiet = false;
@@ -10954,7 +11002,7 @@ const Freeplay = {
     // 51차: 훈련 모드 켜고 끄기 (53차: 현장 목표 기능은 삭제함 — 훈련 중 표시는 왼쪽 위 작은 띠로)
     const tr = $('trainToggle'), badge = document.createElement('div');
     this.badge = badge; badge.id = 'trainBadge'; badge.hidden = true; badge.textContent = '훈련 모드 · 피해 없음 · 이번 출격은 기록 제외'; document.body.appendChild(badge);
-    const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기 (피해 없음 · 기록 제외)'; badge.hidden = !Game.training; };
+    const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기'; badge.hidden = !Game.training; };
     if (tr) tr.addEventListener('click', () => { Game.setTraining(!Game.training); label(); $('pauseHint').textContent = Game.training ? '훈련 모드: 피해를 받지 않습니다 · 이번 출격은 개인 기록에 넣지 않습니다' : '훈련 모드를 껐습니다'; });
     label();
     for (const id of ['fpsCap', 'pFpsCap']) {
@@ -10972,7 +11020,6 @@ const Freeplay = {
 };
 
 </script>
-
 <script>
 // ===== 게임 메인: 렌더러, 입력, HUD, 메인 루프 =====
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -11131,7 +11178,7 @@ const Game = {
     { const v = p.vel.length(); if (v > this.topSpeed && v < 400) this.topSpeed = v; }
     this.setHud('scoreText', 'text', `${this.score}점`);
     this.setHud('waveText', 'text', this.clock());
-    this.setHud('hpText', 'text', String(Math.ceil(p.hp)));
+    this.setHud('hpText', 'text', '체력 ' + Math.ceil(p.hp));
     this.setHud('hpbar', 'width', (p.hp / p.maxHp * 100).toFixed(1) + '%');
     // 와이어가 닿는 곳을 조준하면 조준점이 파랗게 (조준점 주황 깜빡임은 Effects가 따로 붙였다 뗌)
     const aimOk = !!p.aimHit(camera), ch = this.$('crosshair');
@@ -12713,7 +12760,7 @@ const Music = {
       ${this.SLOTS.map(s => `<div class="mrow" data-id="${s.id}"><span>${s.artist} - ${s.title}<i>${s.use}</i></span>
         <span class="st">없음</span><span><label class="pick">파일 넣기<input type="file" accept="audio/*" hidden></label> <button type="button" class="del" hidden>빼기</button></span></div>`).join('')}
       <div class="vol">음악 볼륨<select id="musicVol"></select></div>`;
-    document.querySelector('#panel-setup .fields').appendChild(box);
+    (document.getElementById('setupAudio') || document.querySelector('#panel-setup .fields')).appendChild(box);
     box.querySelector('.all input').addEventListener('change', e => { if (e.target.files.length) this.putMany(e.target.files); e.target.value = ''; });
     box.querySelectorAll('.mrow').forEach(r => {
       const id = r.dataset.id;
