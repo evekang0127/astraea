@@ -9358,8 +9358,9 @@ Object.assign(Effects, {
       const y = base + (stem ? Math.random() * radius * 0.25 : radius * (0.45 + Math.random() * 0.3));
       this.steam.emit(this._p.set(at.x + this.rand(radius * 0.15), y, at.z + this.rand(radius * 0.15)), v, 1.6 + Math.random() * 1.8, Math.max(2, radius * 0.1), radius * 0.3);
     }
-    this.debris(at, Math.min(4, 0.6 + radius / 30), Math.min(110, 30 + radius));
-    for (let i = 0; i < Math.min(60, radius); i++) { v.set(this.rand(30), 8 + Math.random() * 30, this.rand(30)); this.sparks.emit(at, v, 0.5 + Math.random() * 0.5, 0.5); }
+    // 67차: 파편·불꽃은 다음 장면에 냄(폭발 한 번에 입자 300개 가까이를 한 장면에 몰지 않게)
+    const ap = new THREE.Vector3(at.x, at.y || 0, at.z);
+    this.later(1, () => { this.debris(ap, Math.min(4, 0.6 + radius / 30), Math.min(110, 30 + radius)); const w = this._v; for (let i = 0; i < Math.min(60, radius); i++) { w.set(this.rand(30), 8 + Math.random() * 30, this.rand(30)); this.sparks.emit(ap, w, 0.5 + Math.random() * 0.5, 0.5); } });
     this.shake(Math.min(2.2, 0.6 + radius / 70));
     this.hitStop = Math.max(this.hitStop, o.stop ?? 0.06);
     if (o.flash !== false) this.screenFlash(o.flashColor || color, o.flashAmt || Math.min(0.7, 0.25 + radius / 300));
@@ -9761,7 +9762,7 @@ Object.assign(Shifter, {
       // 성벽이 없는 맵: 맵 끝(뒤쪽)에서 한 줄로 나타남
       for (let s = -B; s <= B; s += this.RUMBLE_H * 0.42) { const q = f.clone().multiplyScalar(-B * 0.9).addScaledVector(side, s); if (q.length() < B * 1.05) pts.push(q); }
     }
-    this.rumble = { t: 0, dir: f, speed: (B * 2.1) / 10, list: pts.map((q, i) => ({ pos: q.clone(), delay: i * 0.018, titan: null, step: Math.random() })) };
+    this.rumble = { t: 0, dir: f, speed: (B * 2.1) / 10, list: pts.map((q, i) => ({ pos: q.clone(), delay: i * 0.06, titan: null, step: Math.random() })) };   // 67차: 260m 거인을 한 장면에 여럿 만들지 않게 0.06초 간격
     Game.toast('땅울림 · 벽 속의 초대형 거인들이 깨어났다', '#bfe6ff');
   },
   updateRumbling(dt) {
