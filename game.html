@@ -408,7 +408,7 @@
     <p id="pauseStats"></p><p id="pauseRecords" style="font-size:12px;opacity:.8;margin:2px 0 8px"></p>
     <button type="button" id="resume">계속하기</button>
     <p id="pauseHint" role="status"></p>
-    <div class="pause-actions"><button type="button" id="escapeStuck" title="몇 초 전의 안전한 자리로 옮깁니다 (회복 없음 · 20초에 한 번)">끼임 탈출</button><button type="button" id="trainToggle" title="피해를 받지 않습니다 · 켠 출격은 개인 기록에서 제외">훈련 모드 켜기</button><button type="button" id="tutorAgain" title="첫 출격 안내를 처음부터 다시 봅니다">조작 연습</button></div>
+    <div class="pause-actions"><button type="button" id="escapeStuck" title="몇 초 전의 안전한 자리로 옮깁니다 (회복 없음 · 20초에 한 번)">끼임 탈출</button><button type="button" id="trainToggle" title="피해를 받지 않습니다 · 켠 출격은 개인 기록에서 제외">훈련 모드 켜기</button><button type="button" id="trainTargets" hidden>표적 거인 소환</button><button type="button" id="trainHome" hidden>출발 지점으로</button><button type="button" id="tutorAgain" title="첫 출격 안내를 처음부터 다시 봅니다">조작 연습</button></div>
     <details class="pause-set"><summary>설정 · 화질 · 조작 · 소리 · 동료</summary>
     <div class="pause-grid">
       <label>시점<select id="pView"><option value="3">3인칭</option><option value="1">1인칭</option></select></label>
@@ -7914,7 +7914,8 @@ class Titan {
       if (this.rallyT > 0) this.rallyT -= dt;
       this.turnTo(player.pos.x, player.pos.z, this.fast ? 2.5 : 1.4, dt);
       const inFront = this.forward().dot(new THREE.Vector3(dx, 0, dz).normalize()) > 0.3;
-      if (dist < reach && player.pos.y - this.root.position.y < this.height * 1.05 && this.attackCd <= 0 && inFront) {
+      if (this.dummy) { /* 59차: 훈련 표적 — 제자리 */ }
+      else if (dist < reach && player.pos.y - this.root.position.y < this.height * 1.05 && this.attackCd <= 0 && inFront) {
         this.attackT = 0;
         this.attackHit = false;
         this.attackType = Math.floor(Math.random() * 3);   // 0 오른팔 / 1 왼팔 / 2 두 손 내려찍기
@@ -7930,6 +7931,7 @@ class Titan {
       moving = true;
     }
 
+    if (this.dummy) moving = false;   // 59차: 훈련 표적은 제자리
     if (moving) this.move(dt);
     this.animateWalk(dt, moving, dist < this.sight ? player : null);
     this.pushPlayer(player);
@@ -9883,7 +9885,9 @@ Object.assign(Shifter, {
   const S = Shifter, baseUpdate = S.update, basePost = S.postUpdate, baseRender = S.renderList, baseTransform = S.transform, baseInit = S.init, baseAttack = S.attack;
   S.init = function (scene) { baseInit.call(this, scene); Effects.initGrand(scene); };
   S.update = function (dt) {
-    for (let i = 0; i < this.cds.length; i++) this.cds[i] -= dt;
+    const tk = typeof Game !== 'undefined' && Game.training ? 4 : 1;   // 59차: 훈련 모드는 스킬 재사용 4배 빠름
+    for (let i = 0; i < this.cds.length; i++) this.cds[i] -= dt * tk;
+    if (tk > 1) { this.heavyCd -= dt * 3; if (this.active) this.timeLeft = Math.max(this.timeLeft, 30); }   // 훈련 중엔 거인화가 끝나지 않음
     this.heavyCd -= dt;
     this.cd = this.cds[0];   // 원래 코드(1번 조준 고리 표시)가 쓰는 값
     if (this.lungeT > 0 && this.titan) { this.lungeT -= dt; Player.pos.addScaledVector(this.titan.forward(), this.stats[this.kind].speed * 2.2 * dt); }   // 주먹마다 앞으로 파고듦
@@ -11060,8 +11064,10 @@ const Freeplay = {
     Keymap.init();   // 53차: 키 바꾸기 칸(조작법 창)
     // 51차: 훈련 모드 켜고 끄기 (53차: 현장 목표 기능은 삭제함 — 훈련 중 표시는 왼쪽 위 작은 띠로)
     const tr = $('trainToggle'), badge = document.createElement('div');
-    this.badge = badge; badge.id = 'trainBadge'; badge.hidden = true; badge.textContent = '훈련 모드 · 피해 없음 · 이번 출격은 기록 제외'; document.body.appendChild(badge);
-    const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기'; badge.hidden = !Game.training; };
+    this.badge = badge; badge.id = 'trainBadge'; badge.hidden = true; badge.textContent = '훈련 모드 · 피해 없음 · 거인화 게이지 가득 · 스킬 재사용 4배 · 기록 제외'; document.body.appendChild(badge);
+    const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기'; badge.hidden = !Game.training; for (const id of ['trainTargets', 'trainHome']) if ($(id)) $(id).hidden = !Game.training; };
+    if ($('trainTargets')) $('trainTargets').addEventListener('click', () => { Game.trainTargets(); $('pauseHint').textContent = '정면에 표적 거인 3마리 · 계속하기를 누르세요'; });
+    if ($('trainHome')) $('trainHome').addEventListener('click', () => { Game.trainHome(); $('pauseHint').textContent = '출발 지점으로 옮겼습니다'; });
     if (tr) tr.addEventListener('click', () => { Game.setTraining(!Game.training); label(); $('pauseHint').textContent = Game.training ? '훈련 모드: 피해를 받지 않습니다 · 이번 출격은 개인 기록에 넣지 않습니다' : '훈련 모드를 껐습니다'; });
     label();
     for (const id of ['fpsCap', 'pFpsCap']) {
@@ -11153,6 +11159,18 @@ const Game = {
   damageMul() { return 1; },
   // 51차 훈련 모드: 피해를 받지 않고 연습. 한 번이라도 켠 출격은 개인 기록에 넣지 않음(조건이 다른 기록을 섞지 않게)
   training: false, trainedRun: false,
+  // 59차 훈련 도구: 정면 40~70m에 서 있는 표적 거인 3마리(움직이지 않음, 키 8·12·15m) / 출발 지점으로
+  trainTargets() {
+    if (!this.training) return;
+    for (const t of Titans.list) if (t.dummy && !t.dead) t.dead = true;
+    const f = Player.forward(), r = Player.right();
+    [[8, -14, 40], [12, 0, 55], [15, 14, 70]].forEach(([h, side, d]) => {
+      const x = Player.pos.x + f.x * d + r.x * side, z = Player.pos.z + f.z * d + r.z * side;
+      const t = new Titan(scene, x, z, h, false, null); t.dummy = true; t.speed = 0; t.sight = 0; t.attackCd = 1e9; t.root.rotation.y = Math.atan2(-f.x, -f.z); Titans.list.push(t);
+    });
+    Titans._hooksDirty = true; this.toast('표적 거인 3마리 (움직이지 않음)', '#9fe0b0');
+  },
+  trainHome() { if (!this.training) return; Player.releaseHook(); Player.pos.copy(World.START); Player.vel.set(0, 0, 0); Player.yaw = World.START_YAW; this.toast('출발 지점으로', '#9fe0b0'); },
   setTraining(on) { this.training = !!on; if (on) this.trainedRun = true; this.toast(on ? '훈련 모드 · 피해 없음 (이번 출격은 기록 제외)' : '훈련 모드 끔 · 이번 출격은 계속 기록 제외', '#9fe0b0'); },
 
   // 동시에 있을 거인 수: 처음 5마리, 40초마다 1마리씩 늘어 최대 24마리
@@ -11198,6 +11216,7 @@ const Game = {
   // 거인 계속 출현 + 동료 증원 + 체력 자연 회복
   update(dt) {
     this.time += dt;
+    if (this.training && !Shifter.active) Shifter.charge = 1;   // 59차: 훈련 중엔 거인화 게이지가 늘 가득
     const p = Player;
     if (this.time - this.lastHit > 4) p.hp = Math.min(p.maxHp, p.hp + 4 * dt);
     if (!this.alliesReady) { this.alliesReady = true; Allies.reinforce(p); }   // 첫 출격 때 동료 합류
