@@ -343,11 +343,13 @@
         <span><kbd>H</kbd><kbd>G</kbd></span><span>말 부르기·타기·내리기 (Shift 질주) · 들판에서 가까운 장소로 들어가기</span>
         <span><kbd>M</kbd><kbd>Esc</kbd><kbd>F3</kbd></span><span>미니맵 확대·축소 (160m → 800m → 4km → 섬 전체 지도) · 일시정지(세계 지도·빠른 이동) · 성능 표시</span>
       </div>
+      <p id="keyNote" style="font-size:12px;color:#e8c36a;margin:6px 0 0"></p>
       <div class="guide-grid">
         <div class="guide-card"><div><span>양손 와이어</span><span><kbd>우클릭</kbd><kbd>Space</kbd></span></div><p>누르고 있으면 와이어 발사, 떼면 해제. <strong>Space</strong>로 최고 속도까지 빨리 감기.</p></div>
         <div class="guide-card"><div><span>베기 · 돌진</span><span><kbd>좌클릭</kbd></span></div><p>목덜미 근처에서 베기, 조금 멀면 돌진. 빠를수록·회전 베기일수록 즉사 확률↑.</p></div>
         <div class="guide-card"><div><span>거인화</span><span><kbd>T</kbd><kbd>1~9</kbd><kbd>E</kbd></span></div><p>게이지가 차면 <strong>T</strong>로 변신, <strong>숫자 키 1·2·3</strong> 거인 스킬, 좌클릭 연타·우클릭 강타, <strong>E</strong>로 목덜미에서 빠져나옴.</p></div>
       </div>
+      <div id="keybinds"></div>
     </div>
   </section>
 </div>
@@ -373,7 +375,7 @@
       <label>프레임 제한<select id="pFpsCap"><option value="0">화면 주사율 그대로</option><option value="60">60</option><option value="30">30 · 노트북 안정</option></select></label>
     </div>
     <details><summary>조작 안내</summary><div class="keys">WASD 이동 · Space 점프 / 감기 · Shift 가스 · Q 회피(거인: 대시) · 사람일 때 숫자 키 1~9: 변신할 거인 고르기<br>우클릭 유지: 양손 와이어 · 좌클릭: 베기 / 돌진<br>T: 거인화 · 거인일 때 숫자 키 1~3 스킬 · 좌클릭 연타 · 우클릭 강타 · E 해제<br>V / 휠: 시점 · M: 미니맵 · F3: 성능 표시</div></details>
-    <div class="pause-actions"><button type="button" id="escapeStuck">끼임 탈출 (안전한 곳으로)</button><button type="button" id="tutorAgain">조작 연습 다시 보기</button><button type="button" id="trainToggle">훈련 모드 켜기 (피해 없음 · 기록 제외)</button><button type="button" id="objToggle">현장 목표 끄기</button><button type="button" id="toMenu">메인 화면으로 (새 게임 · 점수 초기화)</button></div>
+    <p id="pKeyNote" style="font-size:12px;color:#e8c36a;margin:4px 0"></p><div class="pause-actions"><button type="button" id="escapeStuck">끼임 탈출 (안전한 곳으로)</button><button type="button" id="tutorAgain">조작 연습 다시 보기</button><button type="button" id="trainToggle">훈련 모드 켜기 (피해 없음 · 기록 제외)</button><button type="button" id="toMenu">메인 화면으로 (새 게임 · 점수 초기화)</button></div>
   </div>
 </div>
 <div id="bolt"></div>
@@ -9182,7 +9184,12 @@ const Shifter = {
     const hit = ray.intersectObjects(World.hookables, false)[0];
     if (hit) dist = Math.max(2, hit.distance - 1);
     camera.position.copy(eye).addScaledVector(dir, dist);
-    if (camera.position.y < 1.5) camera.position.y = 1.5;
+    // 53차: 카메라가 땅 밑으로 들어가지 않게 — 그 자리의 땅(물이면 수면) 높이 기준.
+    // 예전엔 '높이 1.5 아래로 못 감'이라, 땅이 0보다 낮은 들판에서는 카메라가 거인 머리 위 수십 m에 걸려 내려다보는 화면이 됐음
+    { const cx = camera.position.x, cz = camera.position.z, wl = World.waterLevel(cx, cz);
+      let gy = wl !== null ? wl : World.open ? Field.height(cx, cz) : 0;
+      if (World.map.groundAt) { const h = World.map.groundAt(cx, cz, 1e9); if (h !== null) gy = Math.max(gy, h); }
+      if (camera.position.y < gy + 1.5) camera.position.y = gy + 1.5; }
   },
 };
 
@@ -10137,7 +10144,6 @@ const Minimap = {
     }
 
     // 거인: 범위 밖이면 가장자리에 붙여서 방향만 표시
-    if (typeof Objectives !== 'undefined') Objectives.drawMini(ctx, k, px, pz, this.RANGE);   // 51차: 현장 목표 지점
     for (const t of Titans.list) {
       if (t.dead) continue;
       let dx = t.pos.x - px, dz = t.pos.z - pz;
@@ -10628,6 +10634,87 @@ const Perf = {
 // 47차: 자유 모드 편의 기능 — 첫 출격 안내(Tutor), 끼임 탈출·좌표 복구(Safe), 프레임 제한(FpsCap), 시작 방향 보정(StartView)
 // 게임 규칙(피해·판정·출현)은 바꾸지 않음. game.js 루프에서 Freeplay.update(dt)만 부름.
 
+// ---------- 키 재지정 (53차) ----------
+// 게임 코드는 기본 키 이름(KeyW·Space·KeyQ …)으로 읽고, 여기서 '실제로 누른 키 → 기본 키'로 바꿔 줌 → 기존 조작 코드를 건드리지 않음.
+// 마우스 버튼·숫자 키(스킬·거인 고르기)·Esc·F3·Backspace·Enter는 바꿀 수 없음. 같은 키를 두 동작에 주면 서로 바꿈. 이 브라우저에 저장
+const Keymap = {
+  KEY: 'astraea-set-keys',
+  ACTIONS: [['forward', '앞으로', 'KeyW'], ['back', '뒤로', 'KeyS'], ['left', '왼쪽', 'KeyA'], ['right', '오른쪽', 'KeyD'], ['jump', '점프 · 와이어 감기', 'Space'], ['gas', '달리기 · 가스', 'ShiftLeft'],
+    ['dodge', '회피 · 거인 대시', 'KeyQ'], ['shift', '거인화', 'KeyT'], ['exit', '거인화 해제', 'KeyE'], ['view', '시점 전환', 'KeyV'], ['horse', '말 부르기·타기', 'KeyH'], ['enter', '장소 들어가기', 'KeyG'], ['map', '미니맵 확대·축소', 'KeyM']],
+  bind: {}, logical: {}, waiting: null,
+  reserved(code) { return /^(Escape|F\d+|Backspace|Enter|NumpadEnter|Tab|Meta.*|Digit[1-9]|Numpad[1-9])$/.test(code); },
+  label(code) {
+    const m = { Space: 'Space', ShiftLeft: '왼쪽 Shift', ShiftRight: '오른쪽 Shift', ControlLeft: '왼쪽 Ctrl', ControlRight: '오른쪽 Ctrl', AltLeft: '왼쪽 Alt', AltRight: '오른쪽 Alt', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', CapsLock: 'CapsLock' };
+    return m[code] || code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, '숫자패드 ');
+  },
+  phys(id) { const a = this.ACTIONS.find(x => x[0] === id); return this.bind[id] || a[2]; },
+  custom() { return Object.keys(this.bind).length > 0; },
+  // 물리 키 → 기본 키. 다른 동작에 넘겨준 기본 키는 아무 동작도 하지 않게 함
+  rebuild() {
+    this.logical = {};
+    const used = new Set(this.ACTIONS.map(a => this.phys(a[0])));
+    for (const [id, , def] of this.ACTIONS) { if (!used.has(def)) this.logical[def] = 'Unbound'; }
+    for (const [id, , def] of this.ACTIONS) this.logical[this.phys(id)] = def;
+  },
+  to(code) { return this.logical[code] || code; },
+  load() {
+    let d = null; try { d = JSON.parse(localStorage.getItem(this.KEY) || 'null'); } catch (_) {}
+    this.bind = {};
+    if (d && typeof d === 'object') for (const [id, , def] of this.ACTIONS) { const c = d[id]; if (typeof c === 'string' && c.length < 20 && c !== def && !this.reserved(c)) this.bind[id] = c; }
+    // 저장값이 서로 겹치면(손으로 고친 파일 등) 전부 기본값으로
+    const all = this.ACTIONS.map(a => this.phys(a[0])); if (new Set(all).size !== all.length) this.bind = {};
+    this.rebuild();
+  },
+  save() { try { if (this.custom()) localStorage.setItem(this.KEY, JSON.stringify(this.bind)); else localStorage.removeItem(this.KEY); } catch (_) {} },
+  // id 동작에 code 키를 줌. 그 키를 쓰던 다른 동작이 있으면 서로 바꿈. 결과 안내 문구를 돌려줌
+  set(id, code) {
+    if (this.reserved(code)) return { ok: false, msg: `${this.label(code)} 키는 쓸 수 없습니다 (Esc·F키·Enter·Backspace·숫자 1~9 제외)` };
+    const a = this.ACTIONS.find(x => x[0] === id), old = this.phys(id);
+    if (code === old) return { ok: true, msg: '' };
+    const other = this.ACTIONS.find(x => x[0] !== id && this.phys(x[0]) === code);
+    const put = (act, c) => { if (c === act[2]) delete this.bind[act[0]]; else this.bind[act[0]] = c; };
+    put(a, code); if (other) put(other, old);
+    this.rebuild(); this.save();
+    return { ok: true, msg: other ? `'${other[1]}'와(과) 키를 서로 바꿨습니다` : `'${a[1]}' = ${this.label(code)}` };
+  },
+  reset() { this.bind = {}; this.rebuild(); this.save(); },
+  // 안내 글의 <kbd>기본 키</kbd>를 지금 키로 바꿔 보여 줌
+  relabel(html) {
+    if (!this.custom()) return html;
+    const map = {}; for (const [id, , def] of this.ACTIONS) if (this.bind[id]) map[this.label(def)] = this.label(this.bind[id]);
+    return html.replace(/<kbd>([^<]+)<\/kbd>/g, (m, k) => (map[k] ? `<kbd>${map[k]}</kbd>` : m));
+  },
+  note() { return this.custom() ? '바꾼 키: ' + this.ACTIONS.filter(a => this.bind[a[0]]).map(a => `${a[1]} = ${this.label(this.bind[a[0]])}`).join(' · ') : ''; },
+  init() {
+    const box = document.getElementById('keybinds'); if (!box) return;
+    const css = document.createElement('style');
+    css.textContent = `#keybinds{margin-top:14px;padding-top:12px;border-top:1px solid rgba(200,178,122,.25)}#keybinds .kb{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px 10px;margin:8px 0}
+#keybinds .kb button{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;font-size:12.5px;text-align:left}#keybinds .kb button b{color:#e8c36a;font-weight:700}#keybinds .kb button.wait{outline:2px solid #38d8ff}#keybinds p{margin:4px 0;font-size:12px;color:#b9c2cf;min-height:16px}`;
+    document.head.appendChild(css);
+    const draw = msg => {
+      box.innerHTML = `<div class="eyebrow">KEYS · 키 바꾸기 (눌러서 새 키 입력 · Esc 취소)</div><div class="kb">` +
+        this.ACTIONS.map(a => `<button type="button" data-act="${a[0]}"${this.waiting === a[0] ? ' class="wait"' : ''}><span>${a[1]}</span><b>${this.waiting === a[0] ? '키를 누르세요…' : this.label(this.phys(a[0]))}</b></button>`).join('') +
+        `</div><p id="keyMsg" role="status">${msg || ''}</p><button type="button" id="keyReset">기본 키로 되돌리기</button>`;
+      const n1 = document.getElementById('keyNote'), n2 = document.getElementById('pKeyNote'); if (n1) n1.textContent = this.note(); if (n2) n2.textContent = this.note();
+    };
+    box.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.id === 'keyReset') { this.waiting = null; this.reset(); draw('기본 키로 되돌렸습니다'); return; }
+      this.waiting = b.dataset.act; draw('바꿀 키를 누르세요');
+    });
+    // 키 입력을 기다리는 동안에는 다른 단축키보다 먼저 받아서 그 키만 등록
+    addEventListener('keydown', e => {
+      if (!this.waiting) return;
+      e.preventDefault(); e.stopPropagation();
+      const id = this.waiting; this.waiting = null;
+      if (e.code === 'Escape') { draw('취소했습니다'); return; }
+      const r = this.set(id, e.code); draw(r.msg);
+    }, true);
+    draw('');
+  },
+};
+Keymap.load();
+
 // ---------- 첫 출격 안내: 읽는 설명창이 아니라 한 번에 한 가지씩, 실제로 해 보면 다음으로 넘어감 ----------
 // 처음 한 번만 자동으로 나오고(이 브라우저에 기억), Backspace로 건너뜀. 일시정지 화면에서 다시 볼 수 있음. 스토리에서는 나오지 않음
 const Tutor = {
@@ -10649,7 +10736,7 @@ const Tutor = {
     const css = document.createElement('style');
     css.textContent = `#tutor{position:fixed;left:50%;top:92px;transform:translateX(-50%);z-index:30;max-width:min(680px,92vw);padding:10px 18px 9px;background:rgba(8,11,18,.82);border:1px solid rgba(56,216,255,.5);border-radius:8px;color:#f1ece0;font-size:15px;line-height:1.6;text-align:center;pointer-events:none}
 #tutor[hidden]{display:none}#tutor kbd{display:inline-block;min-width:22px;padding:0 6px;margin:0 2px;border:1px solid #9fb4c8;border-radius:4px;background:#1a2230;color:#fff;font:700 13px system-ui,sans-serif}
-#tutor small{display:block;margin-top:3px;font-size:11.5px;color:#9fb4c8;letter-spacing:.5px}#tutor.ok{border-color:#9fe0b0}.savebox{margin-top:14px;padding-top:12px;border-top:1px solid rgba(200,178,122,.25)}.savebox p{margin:6px 0;font-size:12.5px;color:#d9d3c4}.saverow{display:flex;flex-wrap:wrap;gap:8px}.saverow button{padding:7px 12px;font-size:12.5px}#saveMsg{min-height:16px;color:#9fe0b0}.title #tutor,html.dying #tutor{display:none}`;
+#tutor small{display:block;margin-top:3px;font-size:11.5px;color:#9fb4c8;letter-spacing:.5px}#tutor.ok{border-color:#9fe0b0}#trainBadge{position:fixed;left:18px;top:16px;z-index:25;padding:6px 12px;background:rgba(10,12,18,.74);border-left:3px solid #9fe0b0;border-radius:0 6px 6px 0;color:#9fe0b0;font-size:12.5px;pointer-events:none}#trainBadge[hidden]{display:none}.title #trainBadge,html.dying #trainBadge{display:none}.savebox{margin-top:14px;padding-top:12px;border-top:1px solid rgba(200,178,122,.25)}.savebox p{margin:6px 0;font-size:12.5px;color:#d9d3c4}.saverow{display:flex;flex-wrap:wrap;gap:8px}.saverow button{padding:7px 12px;font-size:12.5px}#saveMsg{min-height:16px;color:#9fe0b0}.title #tutor,html.dying #tutor{display:none}`;
     document.head.appendChild(css);
     this.el = document.createElement('div'); this.el.id = 'tutor'; this.el.hidden = true; this.el.setAttribute('role', 'status');
     document.body.appendChild(this.el);
@@ -10667,7 +10754,7 @@ const Tutor = {
   show() {
     const st = this.steps[this.i];
     this.el.className = '';
-    this.el.innerHTML = `${st.text}<small>안내 ${this.i + 1}/${this.steps.length} · Backspace 건너뛰기</small>`;
+    this.el.innerHTML = `${Keymap.relabel(st.text)}<small>안내 ${this.i + 1}/${this.steps.length} · Backspace 건너뛰기</small>`;
     this.el.hidden = false;
   },
   finish(skipped) {
@@ -10686,7 +10773,7 @@ const Tutor = {
     } else this.last = { x: 0, z: 0, yaw: 0, pitch: 0 };
     this.last.x = p.pos.x; this.last.z = p.pos.z; this.last.yaw = p.yaw; this.last.pitch = p.pitch;
     const hooked = !!(p.hooks && p.hooks.some(h => h && h.attached));
-    if (hooked) { s.hooked = true; if (p.keys.Space) s.reeled = true; }
+    if (hooked) { s.hooked = true; if (p.keys.Space) s.reeled = true; }   // keys는 기본 키 이름(재지정해도 Space)
     else if (s.wasHooked) s.released = true;
     s.wasHooked = hooked;
     if (typeof Shifter !== 'undefined' && Shifter.active) s.shifted = true;
@@ -10863,11 +10950,12 @@ const Freeplay = {
     if ($('fov')) pair(['fov', 'pFov'], 'fov', '75', v => { Player.baseFov = +v || 75; });
     if ($('shake')) pair(['shake', 'pShake'], 'shake', '1', v => { Effects.shakeMul = +v; });
     SaveBox.init();
-    // 51차: 훈련 모드 · 현장 목표 켜고 끄기
-    const tr = $('trainToggle'), ob = $('objToggle');
-    const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기 (피해 없음 · 기록 제외)'; if (ob && typeof Objectives !== 'undefined') ob.textContent = Objectives.on ? '현장 목표 끄기' : '현장 목표 켜기'; };
+    Keymap.init();   // 53차: 키 바꾸기 칸(조작법 창)
+    // 51차: 훈련 모드 켜고 끄기 (53차: 현장 목표 기능은 삭제함 — 훈련 중 표시는 왼쪽 위 작은 띠로)
+    const tr = $('trainToggle'), badge = document.createElement('div');
+    this.badge = badge; badge.id = 'trainBadge'; badge.hidden = true; badge.textContent = '훈련 모드 · 피해 없음 · 이번 출격은 기록 제외'; document.body.appendChild(badge);
+    const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기 (피해 없음 · 기록 제외)'; badge.hidden = !Game.training; };
     if (tr) tr.addEventListener('click', () => { Game.setTraining(!Game.training); label(); $('pauseHint').textContent = Game.training ? '훈련 모드: 피해를 받지 않습니다 · 이번 출격은 개인 기록에 넣지 않습니다' : '훈련 모드를 껐습니다'; });
-    if (ob) ob.addEventListener('click', () => { Objectives.setOn(!Objectives.on); label(); });
     label();
     for (const id of ['fpsCap', 'pFpsCap']) {
       const sel = $(id); if (!sel) continue;
@@ -10879,167 +10967,12 @@ const Freeplay = {
     if (!this.began && Game.started) { this.began = true; Tutor.start(false); }
     Safe.update(dt);
     Tutor.update(dt);
+    if (this.badge && this.badge.hidden === !!Game.training) this.badge.hidden = !Game.training;
   },
 };
 
 </script>
-<script>
-// 51차: 선택형 현장 목표 + 훈련 모드 (자유 모드 전용)
-// 원칙: 강제하지 않음. 한 번에 하나만 제안하고, 무시하면 사라짐. 팝업 없이 왼쪽 위 한 칸에만 표시. 보상은 점수와 개인 기록(목표 완료 횟수)뿐 — 능력치 성장 없음.
-// 종류: ① 입체기동 도전(고리 5개를 시간 안에 통과) ② 위협 제거(표시된 거인 3마리 처치). 벽 안·건물 안·경계 밖에는 만들지 않고, 자리를 못 찾으면 제안 자체를 건너뜀.
-const Objectives = {
-  on: true, cur: null, cool: 45, total: 0, el: null, gates: [], pillar: null, hudT: 0, lastHtml: null,
-  KEY: 'astraea-set-objectives', GATES: 5, GATE_R: 8,
-  init(scene) {
-    this.scene = scene;
-    try { if (localStorage.getItem(this.KEY) === '0') this.on = false; } catch (_) {}
-    const css = document.createElement('style');
-    css.textContent = `#objective{position:fixed;left:18px;top:16px;z-index:25;max-width:360px;padding:8px 13px 8px 11px;background:rgba(10,12,18,.74);border-left:3px solid #e8c36a;border-radius:0 6px 6px 0;color:#f1ece0;font-size:13.5px;line-height:1.5;pointer-events:none}
-#objective[hidden]{display:none}#objective b{color:#e8c36a}#objective small{display:block;color:#b9c2cf;font-size:11.5px}#objective .tr{color:#9fe0b0}.title #objective,html.dying #objective{display:none}`;
-    document.head.appendChild(css);
-    this.el = document.createElement('div'); this.el.id = 'objective'; this.el.hidden = true; this.el.setAttribute('role', 'status');
-    document.body.appendChild(this.el);
-    // 표시물: 금빛 고리 5개와 빛기둥 1개를 미리 만들어 돌려 씀 (폭발 빛 구체와 같은 종류의 재질 → 새 셰이더 없음)
-    const mat = (o, add) => new THREE.MeshBasicMaterial({ color: add ? 0xe8c36a : 0xf2b632, transparent: true, opacity: o, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: false, side: THREE.DoubleSide });
-    const torus = new THREE.TorusGeometry(this.GATE_R, 0.75, 8, 40);   // 고리 굵기 0.75m: 100m 밖에서도 보이게
-    for (let i = 0; i < this.GATES; i++) { const m = new THREE.Mesh(torus, mat(0.3, false)); m.visible = false; scene.add(m); this.gates.push(m); }
-    this.pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 1, 12, 1, true), mat(0.28, true)); this.pillar.visible = false; scene.add(this.pillar);
-  },
-  setOn(v) { this.on = !!v; try { localStorage.setItem(this.KEY, this.on ? '1' : '0'); } catch (_) {} if (!this.on) this.clear(30); },
-  ground(x, z) {
-    let g = World.open ? Field.height(x, z) : 0;
-    if (World.map.groundAt) { const h = World.map.groundAt(x, z, 1e9); if (h !== null) g = Math.max(g, h); }
-    return g;
-  },
-  // 공중의 한 점 주변 6m가 건물·벽·기둥에 걸리지 않는가
-  airFree(x, y, z) {
-    const W = World, m = 6;
-    if (!W.open && Math.hypot(x, z) > W.BOUND - 40) return false;
-    for (const b of W.near(x - m, z - m, x + m, z + m)) if (x > b.min.x - m && x < b.max.x + m && z > b.min.z - m && z < b.max.z + m && y > b.min.y - m && y < b.max.y + m + (b.roof ? b.roof.h : 0)) return false;
-    for (const c of W.cylinders) if (y < c.h + m && Math.hypot(x - c.x, z - c.z) < c.r + m) return false;
-    for (const w of W.walls) { if (y > w.h + m || y < w.y0 - m) continue; const ox = x - w.cx, oz = z - w.cz; if (Math.abs(ox * w.tx + oz * w.tz) < w.half + m && Math.abs(-ox * w.tz + oz * w.tx) < w.thick + m) return false; }
-    return true;
-  },
-  makeCourse() {
-    const p = Player.pos, pts = []; let yaw = Player.yaw + (Math.random() - 0.5) * 1.2, x = p.x, z = p.z;
-    for (let i = 0; i < this.GATES; i++) {
-      let ok = false;
-      for (let t = 0; t < 12 && !ok; t++) {
-        const a = yaw + (Math.random() - 0.5) * (t < 6 ? 0.9 : 2.6), d = (i ? 70 : 90) + Math.random() * 40;
-        const nx = x - Math.sin(a) * d, nz = z - Math.cos(a) * d;
-        let y = Math.max(this.ground(nx, nz), World.waterLevel(nx, nz) ?? -1e9) + 18 + Math.random() * 16, free = false;
-        for (let k = 0; k < 4 && !free; k++) { free = this.airFree(nx, y, nz); if (!free) y += 12; }
-        if (!free) continue;
-        pts.push(new THREE.Vector3(nx, y, nz)); x = nx; z = nz; yaw = a; ok = true;
-      }
-      if (!ok) return null;
-    }
-    return { type: 'course', pts, i: 0, state: 'offer', t: 60, limit: 0, from: p.clone() };
-  },
-  makeHunt() {
-    const p = Player.pos;
-    for (let t = 0; t < 24; t++) {
-      const a = Math.random() * Math.PI * 2, d = 150 + Math.random() * 110, x = p.x + Math.cos(a) * d, z = p.z + Math.sin(a) * d;
-      if (!World.open && Math.hypot(x, z) > World.BOUND - 60) continue;
-      if (World.waterLevel(x, z) !== null || !World.isFree(x, z, 9)) continue;
-      const titans = [];
-      for (let i = 0; i < 3; i++) {
-        const tx = x + Math.cos(i * 2.1) * 7, tz = z + Math.sin(i * 2.1) * 7;
-        const ti = new Titan(this.scene, tx, tz, 8 + Math.random() * 6, false, null);
-        ti.objective = true; Titans.list.push(ti); titans.push(ti);
-      }
-      Titans._hooksDirty = true;
-      return { type: 'hunt', at: new THREE.Vector3(x, this.ground(x, z), z), titans, state: 'offer', t: 180 };
-    }
-    return null;
-  },
-  offer() {
-    const first = this.total % 2 === 0 ? 'course' : 'hunt';
-    const mk = k => (k === 'course' ? (Shifter.active ? null : this.makeCourse()) : this.makeHunt());
-    this.cur = mk(first) || mk(first === 'course' ? 'hunt' : 'course');
-    if (!this.cur) { this.cool = 30; return; }
-    this.total++;
-    if (this.cur.type === 'course') this.placeGates();
-    this.hudT = 0; this.hud();
-  },
-  placeGates() {
-    const c = this.cur;
-    for (let i = 0; i < this.GATES; i++) {
-      const g = this.gates[i], at = c.pts[i], prev = i ? c.pts[i - 1] : c.from;
-      g.position.copy(at); g.lookAt(prev.x, at.y, prev.z); g.visible = true;
-    }
-  },
-  clear(cool) {
-    this.cur = null; this.cool = cool;
-    for (const g of this.gates) g.visible = false;
-    this.pillar.visible = false;
-    this.hud();
-  },
-  finish(bonus, text) {
-    Game.score += bonus;
-    Game.toast(`${text} +${bonus}`, '#e8c36a');
-    if (!Game.trainedRun && typeof Records !== 'undefined') Records.bump('objectives');
-    this.clear(60 + Math.random() * 30);
-  },
-  target() { const c = this.cur; if (!c) return null; if (c.type === 'course') return c.pts[c.i]; return c.at; },
-  update(dt) {
-    const off = !this.on || Game.over || Game.dying || (typeof Story !== 'undefined' && Story.active);
-    if (off) { if (this.cur) this.clear(30); else if (Game.training) { if ((this.hudT -= dt) <= 0) { this.hudT = 0.5; this.hud(); } } else if (this.lastHtml) this.hud(); return; }
-    const c = this.cur, p = Player.pos;
-    if (!c) { if ((this.cool -= dt) <= 0) this.offer(); else if ((this.hudT -= dt) <= 0) { this.hudT = 0.5; this.hud(); } return; }
-    if (c.type === 'course') {
-      const at = c.pts[c.i], by = Shifter.active ? p.y + Shifter.titan.height * 0.6 : p.y + 1;
-      if (Math.hypot(p.x - at.x, by - at.y, p.z - at.z) < this.GATE_R + 1.5) {
-        this.gates[c.i].visible = false; c.i++;
-        if (c.state === 'offer') {
-          c.state = 'run'; let len = 0; for (let i = 1; i < c.pts.length; i++) len += c.pts[i].distanceTo(c.pts[i - 1]);
-          c.limit = c.total = len / 13 + 12; Game.toast('입체기동 도전 시작', '#e8c36a');
-        }
-        if (c.i >= c.pts.length) { this.finish(300 + Math.round(c.limit) * 20, '입체기동 도전 완료'); return; }
-      }
-      if (c.state === 'offer') { if ((c.t -= dt) <= 0) { this.clear(50); return; } }
-      else if ((c.limit -= dt) <= 0) { Game.toast('입체기동 도전 · 시간 초과', '#cfd8e6'); this.clear(40); return; }
-      // 다음 고리는 밝게 맥박치고, 그 뒤 고리는 흐리게
-      const pulse = 0.75 + 0.2 * Math.sin(performance.now() * 0.006);
-      for (let i = c.i; i < this.GATES; i++) this.gates[i].material.opacity = i === c.i ? pulse : 0.4;
-      const g = this.ground(at.x, at.z), h = Math.max(4, at.y - g);
-      this.pillar.position.set(at.x, g + h / 2, at.z); this.pillar.scale.set(1, h, 1); this.pillar.visible = true;
-    } else {
-      const alive = c.titans.filter(t => !t.dead);
-      if (!alive.length) { this.finish(450, '위협 제거 완료'); return; }
-      if ((c.t -= dt) <= 0) { for (const t of c.titans) t.objective = false; this.clear(50); return; }
-      let x = 0, z = 0; for (const t of alive) { x += t.pos.x; z += t.pos.z; } x /= alive.length; z /= alive.length;
-      c.at.set(x, this.ground(x, z), z); c.left = alive.length;
-      this.pillar.position.set(x, c.at.y + 35, z); this.pillar.scale.set(1.6, 70, 1.6); this.pillar.visible = true;
-    }
-    if ((this.hudT -= dt) <= 0) { this.hudT = 0.2; this.hud(); }
-  },
-  hud() {
-    if (!this.el) return;
-    const c = this.cur, p = Player.pos; let html = '';
-    if (c) {
-      const at = this.target(), d = Math.round(Math.hypot(p.x - at.x, p.z - at.z));
-      if (c.type === 'course') html = c.state === 'offer'
-        ? `<b>◆ 근처 목표 · 입체기동 도전</b> 첫 고리까지 ${d}m<small>금빛 고리 5개를 차례로 통과 · 무시하면 ${Math.ceil(c.t)}초 뒤 사라짐</small>`
-        : `<b>◆ 입체기동 도전</b> 고리 ${c.i + 1}/${c.pts.length} · 남은 ${Math.ceil(c.limit)}초 · ${d}m`;
-      else html = `<b>◆ 근처 목표 · 위협 제거</b> 표시된 거인 ${c.left ?? 3}마리 · ${d}m<small>빛기둥 아래 거인을 모두 쓰러뜨리기 · 무시해도 됨(${Math.ceil(c.t)}초)</small>`;
-    }
-    if (Game.training) html += `<small class="tr">훈련 모드 · 피해 없음 · 이번 출격은 기록 제외</small>`;
-    if (html === this.lastHtml) return;
-    this.lastHtml = html; this.el.innerHTML = html; this.el.hidden = !html;
-  },
-  // 미니맵: 목표 지점을 금빛 마름모로 (범위 밖이면 가장자리에)
-  drawMini(ctx, k, px, pz, range) {
-    const at = this.target(); if (!at) return;
-    let dx = at.x - px, dz = at.z - pz; const d = Math.hypot(dx, dz), lim = range * 0.93;
-    if (d > lim) { dx *= lim / d; dz *= lim / d; }
-    const x = dx * k, y = dz * k, s = 5;
-    ctx.fillStyle = '#e8c36a'; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath(); ctx.fill(); ctx.stroke();
-  },
-};
 
-</script>
 <script>
 // ===== 게임 메인: 렌더러, 입력, HUD, 메인 루프 =====
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -11267,7 +11200,7 @@ const Session = {
 // 개인 기록: 이 브라우저(localStorage)에 남음. 자유 모드만 셈(스토리 제외). 매 프레임 저장하지 않고 전사·일시정지·이동·창 닫을 때만 저장
 const Records = {
   KEY: 'astraea-records', base: { kills: 0, own: 0, ally: 0 }, kinds: {},
-  blank() { return { v: 1, bestTime: 0, bestScore: 0, bestKills: 0, topSpeed: 0, totalKills: 0, ownKills: 0, allyKills: 0, runs: 0, objectives: 0, kinds: {}, updated: 0 }; },
+  blank() { return { v: 1, bestTime: 0, bestScore: 0, bestKills: 0, topSpeed: 0, totalKills: 0, ownKills: 0, allyKills: 0, runs: 0, kinds: {}, updated: 0 }; },
   load() {
     let d = null; try { d = JSON.parse(localStorage.getItem(this.KEY) || 'null'); } catch (_) { d = null; }
     const b = this.blank(); if (!d || typeof d !== 'object') return b;
@@ -11275,7 +11208,6 @@ const Records = {
     if (d.kinds && typeof d.kinds === 'object') for (const k in d.kinds) if (typeof d.kinds[k] === 'number' && isFinite(d.kinds[k])) b.kinds[k] = d.kinds[k];
     b.v = 1; return b;
   },
-  bump(k) { const d = this.load(); d[k] = (d[k] || 0) + 1; d.updated = Date.now(); try { localStorage.setItem(this.KEY, JSON.stringify(d)); } catch (_) { this.failed = true; } },   // 51차: 현장 목표 완료 횟수
   kill(titan, credit) { if (!credit) { const k = titan.kind || 'pure'; this.kinds[k] = (this.kinds[k] || 0) + 1; } },
   // 이번 출격 값을 기록에 반영. final(전사)이면 새 기록 안내 문구(HTML)를 돌려줌
   commit(final = false) {
@@ -11295,7 +11227,7 @@ const Records = {
     return news.length ? `<p class="again" style="color:#e8c36a">새 기록 · ${news.join(' · ')}</p>` : '';
   },
   clockOf(t) { const s = Math.floor(t); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; },
-  summary() { const d = this.load(); return d.totalKills || d.bestTime ? `개인 기록 — 최장 생존 ${this.clockOf(d.bestTime)} · 최고 점수 ${d.bestScore} · 누적 토벌 ${d.totalKills} (직접 ${d.ownKills}) · 최고 속도 ${d.topSpeed} m/s · 목표 완료 ${d.objectives}` + (this.failed ? ' · 저장 실패(브라우저 저장 공간 확인)' : '') : '개인 기록 — 아직 없음 (이 브라우저에 저장됩니다)'; },
+  summary() { const d = this.load(); return d.totalKills || d.bestTime ? `개인 기록 — 최장 생존 ${this.clockOf(d.bestTime)} · 최고 점수 ${d.bestScore} · 누적 토벌 ${d.totalKills} (직접 ${d.ownKills}) · 최고 속도 ${d.topSpeed} m/s` + (this.failed ? ' · 저장 실패(브라우저 저장 공간 확인)' : '') : '개인 기록 — 아직 없음 (이 브라우저에 저장됩니다)'; },
 };
 addEventListener('pagehide', () => { if (Game.started && !Game.over) Records.commit(); });
 
@@ -11354,24 +11286,25 @@ document.addEventListener('keydown', e => {
   // 잠금 없는 환경: 일시정지 화면에서 Esc를 다시 누르면 계속
   if (e.code === 'Escape' && !Game.running && Game.noLock && !pauseEl.hidden) { setPaused(false); return; }
   if (!Game.running) return;
-  Player.keys[e.code] = true;
+  const code = typeof Keymap !== 'undefined' ? Keymap.to(e.code) : e.code;   // 53차: 키 재지정(누른 키 → 기본 키 이름)
+  Player.keys[code] = true;
   // V (한글 입력 상태면 ㅍ로 들어올 수 있어서 같이 확인)
-  const isV = e.code === 'KeyV' || e.key === 'v' || e.key === 'V' || e.key === 'ㅍ';
+  const isV = code === 'KeyV' || (!(typeof Keymap !== 'undefined' && Keymap.custom()) && (e.key === 'v' || e.key === 'V' || e.key === 'ㅍ'));
   if (isV && !e.repeat) Player.thirdPerson = !Player.thirdPerson;
-  if (e.code === 'KeyM' && !e.repeat) Minimap.toggle();
+  if (code === 'KeyM' && !e.repeat) Minimap.toggle();
   if (!e.repeat) {
-    if (e.code === 'KeyT') Shifter.transform();                    // 거인화 (게이지가 찼을 때)
-    if (e.code === 'KeyQ') { if (Shifter.active) Shifter.dash(); else Player.dodge(); }   // Q: 회피(사람) · 대시(거인)
-    if (e.code === 'KeyH' && typeof Horse !== 'undefined') Horse.key();          // 22차: 말 부르기·타기·내리기
-    if (e.code === 'KeyG' && typeof Field !== 'undefined') Field.enter();        // 22차: 가까운 장소로 들어가기
+    if (code === 'KeyT') Shifter.transform();                    // 거인화 (게이지가 찼을 때)
+    if (code === 'KeyQ') { if (Shifter.active) Shifter.dash(); else Player.dodge(); }   // Q: 회피(사람) · 대시(거인)
+    if (code === 'KeyH' && typeof Horse !== 'undefined') Horse.key();          // 22차: 말 부르기·타기·내리기
+    if (code === 'KeyG' && typeof Field !== 'undefined') Field.enter();        // 22차: 가까운 장소로 들어가기
     const num = /^(Digit|Numpad)([1-9])$/.exec(e.code);
     if (num) { if (Shifter.active) Shifter.useSkill(+num[2]); else Shifter.pickHeir(+num[2]); }   // 거인: 스킬 · 사람: 변신할 거인 고르기
-    if (e.code === 'KeyE' && Shifter.active) Shifter.exit();       // 해제
+    if (code === 'KeyE' && Shifter.active) Shifter.exit();       // 해제
   }
   if (e.code === 'Escape' && Game.running) setPaused(true);
-  if (e.code === 'Space') e.preventDefault();
+  if (e.code === 'Space' || code === 'Space') e.preventDefault();
 });
-document.addEventListener('keyup', e => { Player.keys[e.code] = false; });
+document.addEventListener('keyup', e => { Player.keys[typeof Keymap !== 'undefined' ? Keymap.to(e.code) : e.code] = false; });
 // 마우스 우클릭 누르고 있기 = 와이어 발사, 떼면 해제
 document.addEventListener('mousedown', e => {
   if (!Game.running) return;
@@ -11399,7 +11332,6 @@ Menu.init();
 Quality.applyShadows();
 Player.updateCamera(camera);
 TitanRenderer.warmup(renderer, camera);
-if (typeof Objectives !== 'undefined') Objectives.init(scene);   // 51차: 목표 표시물(셰이더 미리 준비에 포함되게 그 앞에서)
 World.warmShaders(renderer, camera);   // 44차: 숨겨진 효과·물체 셰이더도 미리
 if (typeof Freeplay !== 'undefined') Freeplay.init();   // 47차: 첫 출격 안내·끼임 탈출·프레임 제한
 // 행렬은 루프에서 한 번만 갱신 (렌더러가 다시 갱신하지 않게)
@@ -11445,7 +11377,6 @@ function loop(now = performance.now()) {
     Effects.update(dt);
     if (typeof Field !== 'undefined') { Field.update(dt); Horse.update(dt); }   // 22차: 1:1 들판 스트리밍 · 말
     if (typeof Freeplay !== 'undefined') Freeplay.update(realDt);
-    if (typeof Objectives !== 'undefined') Objectives.update(realDt);   // 51차: 선택형 현장 목표
   }
   if (Game.dying) { Death.update(realDt); Effects.update(realDt); }   // 전사 연출: 거인에게 잡아먹히는 장면 (death.js)
   }
