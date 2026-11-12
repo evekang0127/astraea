@@ -11092,11 +11092,30 @@ const SaveBox = {
   },
 };
 
+// ---------- 69차: 그래픽 장치가 끊겼을 때(WebGL context lost) — 흰 화면으로 멈추지 않게 안내하고, 마지막 출격을 저장한 뒤 다시 불러오기 ----------
+const GlGuard = {
+  init(canvas) {
+    if (!canvas || this.on) return; this.on = true;
+    canvas.addEventListener('webglcontextlost', e => {
+      e.preventDefault();
+      try { if (typeof Resume !== 'undefined') Resume.snap(); } catch (_) {}
+      if (typeof Game !== 'undefined' && Game.running) { try { setPaused(true); } catch (_) {} }
+      let d = document.getElementById('glLost');
+      if (!d) { d = document.createElement('div'); d.id = 'glLost'; document.body.appendChild(d); }
+      d.style.cssText = 'position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:rgba(5,7,13,.92);color:#f1ece0;font:15px "Malgun Gothic",sans-serif;text-align:center';
+      d.innerHTML = '<div>그래픽 장치 연결이 끊겼습니다 (절전·드라이버·다른 프로그램 때문일 수 있음)<br><small style="color:#b9c2cf">이번 출격은 저장했습니다 · 다시 불러온 뒤 시작 화면의 이어하기로 계속할 수 있습니다</small><br><button type="button" id="glReload" style="margin-top:14px;padding:10px 22px;color:#fff;background:#8e1214;border:1px solid rgba(255,255,255,.35);border-radius:5px;cursor:pointer">다시 불러오기</button></div>';
+      document.getElementById('glReload').onclick = () => location.reload();
+    }, false);
+    canvas.addEventListener('webglcontextrestored', () => { const d = document.getElementById('glLost'); if (d) d.querySelector('small').textContent = '연결이 돌아왔지만 화면을 다시 만들려면 다시 불러와야 합니다'; }, false);
+  },
+};
+
 const Freeplay = {
   ready: false, began: false,
   init() {
     if (this.ready) return; this.ready = true;
     Tutor.init();
+    GlGuard.init(renderer.domElement);   // 69차
     const $ = id => document.getElementById(id);
     // 일시정지 화면 버튼
     const esc = $('escapeStuck'), tut = $('tutorAgain');
