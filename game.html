@@ -5042,7 +5042,8 @@ const Citizens = {
     this.list = []; this.W = W;
     const st = typeof Arch !== 'undefined' && Arch.OF[W.mapId]; if (!st || { skyroot: 1, slava: 1, slatoa: 1 }[W.mapId]) return;   // 숲·전장 요새엔 주민 없음
     const R = Math.min(W.BOUND - 30, 1250), low = typeof Quality !== 'undefined' && Quality.mode === 'low', n = Math.round(Math.min(500, Math.round((this.N[st] || 0) * Math.max(1, (R / 560) ** 2))) * (low ? 0.35 : 1));   // 넓은 구역은 넓이만큼 주민 늘림(최대 500)
-    const free = (x, z) => { if (W.waterLevel && W.waterLevel(x, z) !== null) return false; for (const b of W.near(x - 0.6, z - 0.6, x + 0.6, z + 0.6)) if (x > b.min.x - 0.6 && x < b.max.x + 0.6 && z > b.min.z - 0.6 && z < b.max.z + 0.6 && b.max.y > 0.7) return false; return true; };
+    const fc = new Map(), free0 = (x, z) => { if (W.waterLevel && W.waterLevel(x, z) !== null) return false; for (const b of W.near(x - 0.6, z - 0.6, x + 0.6, z + 0.6)) if (x > b.min.x - 0.6 && x < b.max.x + 0.6 && z > b.min.z - 0.6 && z < b.max.z + 0.6 && b.max.y > 0.7) return false; return true; };
+    const free = (x, z) => { const k = Math.floor(x * 2) * 100003 + Math.floor(z * 2); let v = fc.get(k); if (v === undefined) { v = free0(x, z); if (fc.size > 200000) fc.clear(); fc.set(k, v); } return v; };   // 83차: 0.5m 칸마다 걸을 수 있는지 기억(건물·물은 그대로라 매 프레임 다시 볼 필요 없음)
     const cloth = st === 'marley' ? [0x4a4a52, 0x5a4a3a, 0x3a4a5a, 0x6a6a62, 0x7a5a4a] : st === 'royal' ? [0x6a2a3a, 0x2a3a6a, 0x5a5a2a, 0xd8d0c0, 0x3a5a3a] : [0x8a6a4a, 0x6a7a5a, 0xa89a7a, 0x5a6a7a, 0x8a4a3a, 0xc8b898];
     for (let tries = 0; tries < n * 30 && this.list.length < n; tries++) {
       const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * R, x = Math.cos(a) * r, z = Math.sin(a) * r;
@@ -5066,12 +5067,14 @@ const Citizens = {
     for (let i = 0; i < this.list.length; i++) {
       const p = this.list[i];
       // 42차: 카메라에서 260m 넘게 먼 주민은 8프레임에 한 번만(그만큼 dt를 모아서) 움직임 — 500명 갱신 2.1ms → 약 0.5ms
-      if (cam && (p.x - cam.x) ** 2 + (p.z - cam.z) ** 2 > 67600 && i % 8 !== slot) { p.acc = (p.acc || 0) + dt; continue; }
+      const cd2 = cam ? (p.x - cam.x) ** 2 + (p.z - cam.z) ** 2 : 0;
+      if (cam && cd2 > 67600 && i % 8 !== slot) { p.acc = (p.acc || 0) + dt; continue; }
+      if (cam && cd2 > 8100 && cd2 <= 67600 && (i & 1) !== (this.frame & 1)) { p.acc = (p.acc || 0) + dt; continue; }   // 83차: 90~260m는 2프레임에 한 번
       const dtp = dt + (p.acc || 0); p.acc = 0;
       // 가까운 거인 → 반대 방향으로 달림
       let fx = 0, fz = 0;
       for (const t of T) { if (t.dead || !t.root) continue; const dx = p.x - t.root.position.x, dz = p.z - t.root.position.z, d = Math.hypot(dx, dz); if (d < 80) { fx += dx / (d + 1); fz += dz / (d + 1); } }
-      if (fx || fz) { const L = Math.hypot(fx, fz); p.tx = p.x + fx / L * 20; p.tz = p.z + fz / L * 20; p.run = 1; p.wait = 0; }
+      if (fx || fz) { const L = Math.hypot(fx, fz); p.tx = p.x + fx / L * 20; p.tz = p.z + fz / L * 20; p.run = 1; p.wait = 0; p.drawn = false; }
       if (p.wait > 0) { p.wait -= dtp; }
       else {
         const dx = p.tx - p.x, dz = p.tz - p.z, d = Math.hypot(dx, dz), sp = p.sp * (p.run ? 4 : 1);
@@ -5082,6 +5085,8 @@ const Citizens = {
           else { p.tx = p.x - dx; p.tz = p.z - dz; p.wait = 0.3; }
         }
       }
+      if (p.wait > 0 && p.drawn) continue;   // 83차: 서 있는 동안은 자세가 그대로 — 다시 계산·기록하지 않음
+      p.drawn = p.wait > 0;
       const y = this.ground(p.x, p.z), bob = p.wait > 0 ? 0 : Math.abs(Math.sin(p.ph)) * 0.06, s = p.s;
       this.q.setFromEuler(this.e.set(0, p.yaw || 0, 0));
       this.body.setMatrixAt(i, this.m.compose(this.v.set(p.x, y + (1.2 + bob) * s, p.z), this.q, this.sc.set(s, s, s)));
@@ -5874,6 +5879,12 @@ const Field = {
   },
   // 80차: 해안선까지 실제 거리(m, 땅 +, 바다 −). 100m 칸으로만 바다를 정해 해안이 계단처럼 깎이던 것 → 섬·대륙 윤곽선(직선 조각)까지의 거리로 매끈하게.
   // 해안에서 멀면(사방 300m가 모두 같은 땅/바다) null — 대부분의 점은 칸 기억(seaW)만 보고 끝남
+  // 83차: 물리용(바다·강 판정)은 16m 칸 기억 — 주민·플레이어·거인이 프레임당 200번 가까이 부르던 것(약 0.3~0.5ms)
+  coastSDc(X, Y) {
+    const k = Math.floor(X / 16) * 2000003 + Math.floor(Y / 16), M = this._csd || (this._csd = new Map()); let c = M.get(k);
+    if (c === undefined) { c = this.coastSD(X, Y); if (M.size > 120000) M.clear(); M.set(k, c); }
+    return c;
+  },
   coastSD(X, Y) {
     const s = this.seaW(X, Y), D = 300, d2 = 212;
     if (s === this.seaW(X + D, Y) && s === this.seaW(X - D, Y) && s === this.seaW(X, Y + D) && s === this.seaW(X, Y - D) &&
@@ -5893,7 +5904,7 @@ const Field = {
   },
   // 해안 근처 높이: 바다 쪽은 얕은 물에서 -8m까지 깊어지고, 땅 쪽은 모래사장(해수면 0.15m 바로 위)에서 350m에 걸쳐 원래 땅 높이로
   coastH(sd, h) { if (sd <= 0) return Math.max(-8, sd * 0.12); const q = Math.min(1, sd / 350), k = q * q * (3 - 2 * q); return (0.4 + sd * 0.03) * (1 - k) + h * k; },
-  sea(x, z) { const [X, Y] = this.toWorld(x, z), sd = this.coastSD(X, Y); return sd !== null ? sd <= 0 : this.seaW(X, Y); },   // 게임 좌표 (80차: 해안은 실제 윤곽선 기준)
+  sea(x, z) { const [X, Y] = this.toWorld(x, z), sd = this.coastSDc(X, Y); return sd !== null ? sd <= 0 : this.seaW(X, Y); },   // 게임 좌표 (80차: 해안은 실제 윤곽선 기준)
   peakAt(peaks, x, y) { return peaks.some(([px, py, r]) => Math.hypot(x - px, y - py) < r); },
   // 산 위 땅 높이 (원뿔): 플레이어가 산비탈을 딛고 오를 수 있게
   // 38차: 그려진 땅 메시(150x150 격자, 40m)의 삼각형 위 높이. PlaneGeometry 삼각형 분할(a,b,d)/(b,c,d)과 똑같이 보간
@@ -5933,7 +5944,7 @@ const Field = {
     return [h, inFlat];
   },
   terrW(X, Y) {
-    const sd = this.coastSD(X, Y);
+    const sd = this.coastSDc(X, Y);
     if (sd !== null && sd <= 0) return Math.max(-8, sd * 0.12);
     if (sd === null && this.seaW(X, Y)) return -8;
     const [h0, inFlat] = this.terrBase(X, Y), h = sd !== null && !inFlat ? this.coastH(sd, h0) : h0;
@@ -5944,7 +5955,7 @@ const Field = {
   // 강 수면(세계 높이) — 강 안쪽이면 둑 높이보다 6.3m 아래, 아니면 null
   riverLevelW(X, Y) {
     if (this.seaW(X, Y)) return null;
-    { const sd = this.coastSD(X, Y); if (sd !== null && sd < 400) return null; }   // 80차: 바닷가에서는 강물판 없음
+    { const sd = this.coastSDc(X, Y); if (sd !== null && sd < 400) return null; }   // 80차: 바닷가에서는 강물판 없음
     const k = this.riverK(X, Y); if (k < 0.74) return null;   // 수면(둑-6.3m)이 강바닥(둑-9k m)보다 위인 곳만
     const [h, inFlat] = this.terrBase(X, Y); return inFlat ? null : h - 6.3;
   },
@@ -6175,6 +6186,7 @@ const Field = {
       for (const pk of ch.peaks) this.peaks.push(pk);
       const far = Math.hypot(ch.cx - p.x, ch.cz - p.z) > this.LEAF_NEAR;
       for (const k in this.CAP) {
+        if (k === 'trunk' && far) continue;   // 83차: 먼 나무 줄기 생략
         const src = k === 'leaf' && far ? ch.buf.leafFar : ch.buf[k];
         if (!src || n[k] + src.n > this.CAP[k]) continue;
         const m = I[k];
@@ -12186,7 +12198,8 @@ const Rocket = {
     this.cur = r; r.throttle = 0;
     Player.model.visible = false; if (Player.viewModel) Player.viewModel.visible = false;
     Player.yaw = 0; Player.pitch = 0.55;
-    Game.toast('로켓 탑승 · W 추력을 50% 넘게 올리면 발사 · 마우스로 방향 · Shift 부스트 · [ ] 시간 배속 · F 내리기', '#9fe0b0');
+    r.count = 5; r.orbit = false; r.az = Math.atan2(r.home.z, r.home.x) + Math.PI;   // 83차: 자동 운행 — 5초 카운트다운, 비스듬히 기우는 방향(맵 가운데 쪽)
+    Game.toast('로켓 탑승 · 자동 발사 5초 전 · 마우스로 둘러보기 · 휠 확대 · [ ] 시간 배속 · F 내리기', '#9fe0b0');
     return true;
   },
   alt(r) { return r.root.position.y - this.floorAt(r.root.position.x, r.root.position.z); },
@@ -12212,7 +12225,7 @@ const Rocket = {
   },
   reset(r) {
     r.root.position.copy(r.home); r.dir.set(0, 1, 0); r.vel.set(0, 0, 0); r.throttle = 0; r.launched = false; r.root.visible = true;
-    r.root.quaternion.identity(); r.flameO.visible = r.flameI.visible = false;
+    r.root.quaternion.identity(); r.flameO.visible = r.flameI.visible = false; r.count = 0; r.orbit = false;
   },
   crash(r) {
     const at = r.root.position.clone().add(new THREE.Vector3(0, 10, 0));
@@ -12242,13 +12255,16 @@ const Rocket = {
   },
   step(r, dt, ctl) {
     const k = Player.keys, p = r.root.position, g = 9.8;
-    if (ctl) { if (k.KeyW) r.throttle = Math.min(1, r.throttle + dt * 0.5); if (k.KeyS) r.throttle = Math.max(0, r.throttle - dt * 0.7); }
-    else r.throttle = Math.max(0, r.throttle - dt * 0.4);
-    const boost = ctl && (k.ShiftLeft || k.ShiftRight) ? 1.5 : 1;
+    // 83차: 자동 운행 — 카운트다운 → 추력 최대 → 1km부터 천천히 기울어 61km에서 약 69° → 120km 궤도(엔진 끔·높이 유지). 마우스로는 조종하지 않음
+    if (ctl && r.count > 0) { const c0 = Math.ceil(r.count); r.count -= dt; if (Math.ceil(r.count) !== c0 && r.count > 0) Game.toast(`발사 ${Math.ceil(r.count)}`, '#ffb347'); }
+    if (ctl && r.orbit) r.throttle = 0;
+    else if (ctl && r.count <= 0) r.throttle = Math.min(1, r.throttle + dt * 0.5);
+    else if (!ctl) r.throttle = Math.max(0, r.throttle - dt * 0.4);
+    const boost = 1;
     const alt = p.y - this.floorAt(p.x, p.z), thrust = r.throttle * 2.2 * g * boost;
     // 방향: 발사탑 높이 전에는 똑바로 위, 그 뒤엔 마우스 방향으로 초당 0.35rad까지 (우주에서는 0.6rad)
     if (r.launched && alt > 110) {
-      const want = ctl ? Player.lookDir() : r.dir.clone();
+      const th = Math.min(1, Math.max(0, (alt - 1000) / 60000)) * 1.2, want = ctl ? new THREE.Vector3(Math.sin(th) * Math.cos(r.az), Math.cos(th), Math.sin(th) * Math.sin(r.az)) : r.dir.clone();
       const ang = r.dir.angleTo(want), max = (alt > 40000 ? 0.6 : 0.35) * dt;
       if (ang > 1e-4) { const q = new THREE.Quaternion().setFromUnitVectors(r.dir, want); if (ang > max) q.slerp(new THREE.Quaternion(), 1 - max / ang); r.dir.applyQuaternion(q).normalize(); }
     } else r.dir.set(0, 1, 0);
@@ -12258,6 +12274,8 @@ const Rocket = {
       if (thrust > g) { r.launched = true; Game.toast('발사!', '#ffb347'); Effects.shake(1.2); }
       else { v.set(0, 0, 0); if (ctl) { Player.pos.copy(p).addScaledVector(r.dir, 80); Player.vel.set(0, 0, 0); } return; }
     }
+    if (ctl && !r.orbit && alt > 120000) { r.orbit = true; Game.toast('궤도 진입 · 엔진 끔 · F 발사대로 귀환', '#9fe0b0'); }
+    if (r.orbit) { v.multiplyScalar(Math.max(0, 1 - dt * 0.8)); p.addScaledVector(v, dt); r.root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), r.dir); if (ctl) { Player.pos.copy(p).addScaledVector(r.dir, 80); Player.vel.copy(v); } if (typeof Space !== 'undefined' && Space.planet) Space.planet.rotation.z += dt * 0.004; return; }   // 궤도: 높이 유지, 행성이 천천히 돌아 지나가는 느낌
     v.addScaledVector(r.dir, thrust * dt); v.y -= g * dt;
     if (sp > 0.01) v.multiplyScalar(Math.max(0, 1 - 0.00028 * rho * sp * dt));
     p.addScaledVector(v, dt);
@@ -12311,7 +12329,7 @@ const Rocket = {
     E.th.textContent = Math.round(r.throttle * 100); E.tb.style.width = (r.throttle * 100).toFixed(0) + '%';
     E.boost.classList.toggle('on', !!(Player.keys.ShiftLeft || Player.keys.ShiftRight));
     E.sts.className = 'sts';
-    E.sts.textContent = !r.launched ? `발사대 · W로 추력 50% 넘게 → 발사 · 시간 배속 ×${this.warp}` : alt > Space.KARMAN ? `🚀 우주 · 고도 ${(alt / 1000).toFixed(0)}km · F 발사대로 귀환 · ×${this.warp}` : `상승 중 · 우주(100km)까지 ${((Space.KARMAN - alt) / 1000).toFixed(1)}km · ×${this.warp} ([ ] 배속) · F 탈출`;
+    E.sts.textContent = !r.launched ? (r.count > 0 ? `자동 발사 ${Math.ceil(r.count)}초 전 · 시간 배속 ×${this.warp} · F 내리기` : '점화 · 추력 올리는 중') : r.orbit ? `🛰 궤도 · 고도 ${(alt / 1000).toFixed(0)}km · F 발사대로 귀환` : alt > Space.KARMAN ? `🚀 우주 · 고도 ${(alt / 1000).toFixed(0)}km · F 발사대로 귀환 · ×${this.warp}` : `자동 상승 · 우주(100km)까지 ${((Space.KARMAN - alt) / 1000).toFixed(1)}km · ×${this.warp} ([ ] 배속) · F 탈출`;
   },
 };
 
@@ -12573,7 +12591,8 @@ const Game = {
     this.setHud('hpText', 'text', '체력 ' + Math.ceil(p.hp));
     this.setHud('hpbar', 'width', (p.hp / p.maxHp * 100).toFixed(1) + '%');
     // 와이어가 닿는 곳을 조준하면 조준점이 파랗게 (조준점 주황 깜빡임은 Effects가 따로 붙였다 뗌)
-    const aimOk = !!p.aimHit(camera), ch = this.$('crosshair');
+    if ((this._aimN = (this._aimN || 0) + 1) % 2 === 1 || this._aimOk === undefined) this._aimOk = !!p.aimHit(camera);   // 83차: 0.1초마다(광선 검사 0.7ms)
+    const aimOk = this._aimOk, ch = this.$('crosshair');
     ch.classList.toggle('lock', aimOk);
     // 50차: 걸 수 있는 것이 사거리 밖에 있으면 조준점이 빈 고리 (0.2초마다만 검사)
     if (!aimOk && !Shifter.active) { if ((this._farN = (this._farN || 0) + 1) % 4 === 0) this._far = p.aimFar(camera) !== null; } else this._far = false;
