@@ -5405,6 +5405,7 @@ html.title .fields-list{display:none!important}   /* 37차: 메인 화면을 깔
       sel(id); pick.style.display = 'none';
       info.innerHTML = `<b>${p.name}</b><i>${p.en} · ${p.where}</i><br>${id === cur ? '지금 있는 곳' : `여기서 ${km.toLocaleString()}km · ${this.travel(km)}${p.overseas ? ' (배로 건너감)' : ''}`}${chs ? `<br>스토리: ${chs}` : ''}${id === cur ? '' : '<button type="button" class="go">이곳으로 빠른 이동</button>'}`;
       const go = info.querySelector('.go'); if (go) go.onclick = e => { e.stopPropagation(); this.travelTo(id); };
+      if (id !== cur) this.apButton(info, { name: p.name, pos: p.pos, id });   // 81차
     };
     box.querySelectorAll('[data-place]').forEach(g => g.addEventListener('click', e => { e.stopPropagation(); show(g.dataset.place); }));
     svg.addEventListener('click', e => {
@@ -5418,6 +5419,7 @@ html.title .fields-list{display:none!important}   /* 37차: 메인 화면을 깔
       const km = here ? Math.round(this.km(here.pos, p)) : 0;
       info.innerHTML = `<b>선택한 지점 · ${this.zone(p)}</b><i>미트라스에서 ${Math.round(Math.hypot(p[0], p[1]))}km${p[1] > 560 && p[0] > -700 ? ' · 북쪽 산맥' : ''}</i><br>여기서 ${km.toLocaleString()}km · ${this.travel(km)}<button type="button" class="go">이 지점으로 빠른 이동</button>`;
       info.querySelector('.go').onclick = ev => { ev.stopPropagation(); this.warp(p); };
+      this.apButton(info, { name: `${this.zone(p)} 지점`, pos: [p[0], p[1]] });   // 81차
     });
     if (cur === 'wild') { const p = this.wildPos(); info.innerHTML = `<b>들판 · ${this.zone(p)}</b><i>미트라스에서 ${Math.round(Math.hypot(p[0], p[1]))}km · 지금 있는 곳</i><br>지도나 목록에서 갈 곳을 고르세요`; }
     else if (this.PLACES[cur]) show(cur);
@@ -5671,6 +5673,16 @@ Object.assign(Atlas, {
 .atlas .me-ring{fill:none;stroke:#38d8ff;stroke-width:6;transform-box:fill-box;transform-origin:center;animation:meRing 1.6s ease-out infinite}
 .atlas .me-t{font:800 34px 'Noto Serif KR',serif;fill:#38d8ff;text-anchor:middle;paint-order:stroke;stroke:#000;stroke-width:9px}
 @keyframes meRing{0%{transform:scale(.6);opacity:1}100%{transform:scale(2.4);opacity:0}}`; document.head.appendChild(c); }
+// 81차: 지도 정보 칸에 '✈ 자동 운항' — 누르면 지도를 닫고 게임으로 돌아가 그곳으로 날아감(비행정이 없으면 불러서 탐)
+Object.assign(Atlas, {
+  apButton(info, d) {
+    if (typeof Aircraft === 'undefined' || typeof Game === 'undefined' || !Game.started || Game.over) return;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'go ap'; b.textContent = '✈ 자동 운항으로 날아가기';
+    b.onclick = e => { e.stopPropagation(); Aircraft.setDest(d); this.closeModal(true); if (typeof Minimap !== 'undefined') { Minimap.level = 0; Minimap.apply(); } };
+    info.appendChild(b);
+  },
+});
+{ const c = document.createElement('style'); c.textContent = `.atlas-info .go.ap{background:#0e3a4a;border-color:#38d8ff;color:#e8f6ff;margin-top:6px}.atlas-info .go.ap:hover{background:#145a72}`; document.head.appendChild(c); }
 
 </script>
 <script>
@@ -10442,7 +10454,7 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => Sound.in
 // 25차: M으로 확대·축소 4단계 — 근거리 160m · 중거리 800m · 원거리 4km · 섬 전체(1:1 세계 지도, 북쪽이 위, 장소·성벽·지금 위치).
 // 섬 전체 단계는 크게 보이고, Esc → '세계 지도 · 빠른 이동'으로 이어짐.
 const Minimap = {
-  LEVELS: [{ range: 160, name: '근거리 160m' }, { range: 800, name: '중거리 800m' }, { range: 4000, name: '원거리 4km' }, { world: true, name: '섬 전체 · 1:1 세계 지도' }],
+  LEVELS: [{ range: 160, name: '근거리 160m' }, { range: 800, name: '중거리 800m' }, { range: 4000, name: '원거리 4km' }, { range: 20000, name: '항공 20km' }, { world: true, name: '섬 전체 · 1:1 세계 지도' }],
   level: 0,
   RANGE: 160,          // 지금 단계의 미니맵 반지름이 나타내는 실제 거리 (m)
   visible: true,
@@ -10604,6 +10616,7 @@ const Minimap = {
     // 축척 글자
     ctx.fillStyle = 'rgba(220, 230, 240, 0.8)'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(this.RANGE >= 1000 ? this.RANGE / 1000 + 'km' : this.RANGE + 'm', R, S - 16);
+    this.drawPlaces(ctx, S, R);   // 81차
   },
   arrow(ctx, x, y, rot, s = 1) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
@@ -10668,6 +10681,40 @@ const Minimap = {
     ctx.strokeStyle = 'rgba(215,26,28,.8)'; ctx.lineWidth = 3; ctx.strokeRect(1.5, 1.5, S - 3, S - 3);
   },
 };
+// 81차: 미니맵에 장소 — 범위 안이면 빨간 점+이름, 밖이면 가장자리에 방향 표시(80km 안의 가까운 3곳 + 자동 운항 목적지).
+// 자동 운항 목적지는 금색 + 가운데에서 이어지는 점선 + 위쪽에 이름·거리
+Object.assign(Minimap, {
+  drawPlaces(ctx, S, R) {
+    if (typeof Atlas === 'undefined' || !Atlas.PLACES) return;
+    const me = this.worldKm(), k = R / this.RANGE, yaw = Player.yaw, cs = Math.cos(yaw), sn = Math.sin(yaw);
+    const rot = (dx, dz) => [dx * cs - dz * sn, dx * sn + dz * cs];   // ctx.rotate(yaw)와 같음
+    const dest = typeof Aircraft !== 'undefined' && Aircraft.dest ? Aircraft.dest : null;
+    const list = [];
+    for (const id in Atlas.PLACES) { if (id === World.mapId) continue; const q = Atlas.PLACES[id], dx = (q.pos[0] - me[0]) * 1000, dz = -(q.pos[1] - me[1]) * 1000; list.push({ id, name: Atlas.short ? Atlas.short(q.name) : q.name, dx, dz, d: Math.hypot(dx, dz) }); }
+    if (dest && !dest.id) { const dx = (dest.pos[0] - me[0]) * 1000, dz = -(dest.pos[1] - me[1]) * 1000; list.push({ id: '_pt', name: dest.name, dx, dz, d: Math.hypot(dx, dz), pt: true }); }
+    list.sort((a, b) => a.d - b.d);
+    const edge = R * 0.86; let shown = 0;
+    ctx.save(); ctx.font = 'bold 15px "Noto Serif KR", sans-serif'; ctx.textAlign = 'center';
+    for (const P of list) {
+      const isDest = dest && (P.pt || P.id === dest.id), inside = P.d * k < edge;
+      if (!inside && !isDest && (shown >= 3 || P.d > 80000)) continue;
+      if (!inside && !isDest) shown++;
+      let [x, y] = rot(P.dx, P.dz); x *= k; y *= k;
+      if (!inside) { const m = Math.hypot(x, y) || 1; x *= edge / m; y *= edge / m; }
+      x += R; y += R;
+      if (isDest) { ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,179,71,.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(R, R); ctx.lineTo(x, y); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.fillStyle = isDest ? '#ffb347' : '#ff4a3d'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+      if (inside) { ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, isDest ? 8 : 6.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      else { const a = Math.atan2(y - R, x - R); ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(-6, -7); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+      if (inside || isDest || shown <= 3) {
+        const lbl = inside ? P.name : `${P.name} ${P.d >= 10000 ? Math.round(P.d / 1000) : (P.d / 1000).toFixed(1)}km`;
+        const hw = ctx.measureText(lbl).width / 2 + 4, tx = Math.max(hw, Math.min(S - hw, x)), ty = Math.max(18, Math.min(S - 34, y - 12));   // 글자가 원 밖으로 잘리지 않게
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.strokeText(lbl, tx, ty); ctx.fillStyle = isDest ? '#ffd28a' : '#fff'; ctx.fillText(lbl, tx, ty);
+      }
+    }
+    ctx.restore();
+  },
+});
 
 </script>
 <script>
@@ -11083,7 +11130,7 @@ const Perf = {
 const Keymap = {
   KEY: 'astraea-set-keys',
   ACTIONS: [['forward', '앞으로', 'KeyW'], ['back', '뒤로', 'KeyS'], ['left', '왼쪽', 'KeyA'], ['right', '오른쪽', 'KeyD'], ['jump', '점프 · 와이어 감기', 'Space'], ['gas', '달리기 · 가스', 'ShiftLeft'],
-    ['dodge', '회피 · 거인 대시', 'KeyQ'], ['shift', '거인화', 'KeyT'], ['exit', '거인화 해제', 'KeyE'], ['view', '시점 전환', 'KeyV'], ['horse', '말 부르기·타기', 'KeyH'], ['board', '비행정 타기·내리기', 'KeyF'], ['plane', '비행정 부르기', 'KeyP'], ['enter', '장소 들어가기', 'KeyG'], ['map', '미니맵 확대·축소', 'KeyM'], ['ally', '동료 명령 바꾸기', 'KeyR']],
+    ['dodge', '회피 · 거인 대시', 'KeyQ'], ['shift', '거인화', 'KeyT'], ['exit', '거인화 해제', 'KeyE'], ['view', '시점 전환', 'KeyV'], ['horse', '말 부르기·타기', 'KeyH'], ['board', '비행정 타기·내리기', 'KeyF'], ['plane', '비행정 부르기', 'KeyP'], ['auto', '자동 운항 켜기·끄기', 'KeyO'], ['enter', '장소 들어가기', 'KeyG'], ['map', '미니맵 확대·축소', 'KeyM'], ['ally', '동료 명령 바꾸기', 'KeyR']],
   bind: {}, logical: {}, waiting: null,
   reserved(code) { return /^(Escape|F\d+|Backspace|Enter|NumpadEnter|Tab|Meta.*|Digit[1-9]|Numpad[1-9])$/.test(code); },
   label(code) {
@@ -11589,10 +11636,11 @@ const Aircraft = {
     if (!silent) Game.toast(a.onGround ? '비행정에서 내림' : '비행정에서 뛰어내림 · 비행정은 활공함', '#9fe0b0');
   },
   // 장소를 넘어갈 때 이어 갈 상태 / 새 장소에서 이어 타기
-  state() { const a = this.cur; return a ? { yaw: a.yaw, pitch: a.pitch, speed: a.vel.length(), vy: a.vel.y, throttle: a.throttle, ground: a.onGround } : null; },
+  state() { const a = this.cur; return a ? { yaw: a.yaw, pitch: a.pitch, speed: a.vel.length(), vy: a.vel.y, throttle: a.throttle, ground: a.onGround, auto: this.auto, dest: this.dest, warp: this.warp } : null; },
   resume(s) {
     const p = Player.pos, a = this.spawn(World.scene, p.x, p.y, p.z, s.yaw); if (!a) return;
     a.temp = true;   // 이어 온 비행정: 추락하면 다시 생기지 않음
+    if (s.dest) { this.dest = s.dest; this.auto = !!s.auto; this.warp = s.warp || 1; }   // 81차: 자동 운항 이어감
     a.pitch = s.ground ? 0 : s.pitch; a.throttle = s.throttle;
     const fl = this.floorAt(p.x, p.z) + this.REST;
     if (s.ground) a.root.position.y = fl; else a.root.position.y = Math.max(p.y, fl + 25);
@@ -11643,6 +11691,7 @@ const Aircraft = {
   },
   update(dt) {
     if (typeof Field !== 'undefined' && Field.planeOnStart && Game.running) { const s = Field.planeOnStart; Field.planeOnStart = null; this.resume(s); }
+    if (this.pendingCall && Game.running && !this.cur && !this.grab) { this.pendingCall = false; this.call(); }   // 81차: 지도에서 자동 운항을 고르면 비행정부터 부름
     this.updateCall(dt);   // 80차: P로 부른 비행정의 비행·올라타기
     if (this.cur && (Game.over || Game.dying)) { this.cur = null; this.noseEl().hidden = true; this.panelEl().hidden = true; }
     for (const a of this.list) {
@@ -11657,12 +11706,14 @@ const Aircraft = {
     const k = Player.keys, p = a.root.position, g = 9.8;
     const v = a.vel, sp = v.length(), L = (sp / this.VS) * (sp / this.VS);
     // 추력: W 올림 · S 내림 (조종사가 없으면 2초에 걸쳐 꺼짐)
-    if (ctl) { if (k.KeyW) a.throttle = Math.min(1, a.throttle + dt * 0.7); if (k.KeyS) a.throttle = Math.max(0, a.throttle - dt * 0.9); }
+    const at = ctl && this.auto && this.dest ? this.autoTarget(a) : null;   // 81차: 자동 운항
+    if (at) a.throttle = Math.min(1, a.throttle + dt * 0.7);
+    else if (ctl) { if (k.KeyW) a.throttle = Math.min(1, a.throttle + dt * 0.7); if (k.KeyS) a.throttle = Math.max(0, a.throttle - dt * 0.9); }
     else a.throttle = Math.max(0, a.throttle - dt * 0.5);
     // 목표 방향: 조종사가 있으면 마우스(캐릭터와 같은 감도) + A/D 보정, 없으면 수평 유지·살짝 기수 내림
-    if (ctl) { if (k.KeyA) Player.yaw += 1.2 * dt; if (k.KeyD) Player.yaw -= 1.2 * dt; }
-    const ty = ctl ? Player.yaw : a.yaw;
-    let tp = ctl ? Math.max(-0.8, Math.min(0.8, Player.pitch)) : -0.1;
+    if (ctl && !at) { if (k.KeyA) Player.yaw += 1.2 * dt; if (k.KeyD) Player.yaw -= 1.2 * dt; }
+    const ty = at ? at.yaw : ctl ? Player.yaw : a.yaw;
+    let tp = at ? at.pitch : ctl ? Math.max(-0.8, Math.min(0.8, Player.pitch)) : -0.2;   // 조종사가 없으면 기수를 더 숙여 빨리 내려감
     if (a.onGround) tp = sp > this.VR ? Math.max(0, Math.min(0.26, tp)) : 0;   // 땅·물 위: 이륙 속도 전에는 기수를 못 듦
     const hs0 = Math.hypot(v.x, v.z);
     const yawMax = a.onGround ? 0.9 * Math.min(1, hs0 / 10) : 2.6, pitchMax = a.onGround ? 0.5 : 2.2;   // 땅에서는 굴러가야 방향이 바뀜(제자리 회전 없음)
@@ -11675,6 +11726,7 @@ const Aircraft = {
     // 힘: 추력(기수 방향) − 공기 저항 − 땅·물 마찰/브레이크, 중력, 양력(속도를 기수 쪽으로 돌리고 중력을 받침)
     const f = this.fwd(a, this._f || (this._f = new THREE.Vector3()));
     const boost = ctl && (k.ShiftLeft || k.ShiftRight) ? 1.6 : 1;
+    this.updateFlames(a, boost > 1 && a.throttle > 0.2, dt);   // 81차: 부스트 불꽃
     v.addScaledVector(f, a.throttle * 26 * boost * dt);
     let drag = 0.0018 * sp * sp;
     if (a.onGround) drag += (a.onWater ? 0.1 : 0.03) * sp + (ctl && k.KeyS && a.throttle === 0 ? 9 : 0) + (!ctl && a.throttle === 0 ? 3 : 0);
@@ -11684,10 +11736,10 @@ const Aircraft = {
       const vdir = this._d || (this._d = new THREE.Vector3()); vdir.copy(v).divideScalar(s2);
       v.addScaledVector(vdir, -g * vdir.y * lk * dt);                         // 오르면 속도가 줄고 내려가면 늘어남
       const want = this._w || (this._w = new THREE.Vector3()); want.copy(f).multiplyScalar(v.length());
-      v.lerp(want, Math.min(1, dt * (a.onGround ? 6 : 3) * Math.max(lk, a.onGround ? 1 : 0.15)));   // 속도가 기수 방향으로 (땅에서는 선체가 붙잡음)
+      v.lerp(want, Math.min(1, dt * (a.onGround ? 6 : 3) * (a.onGround ? 1 : lk * lk)));   // 82차: 느리면 날개가 속도를 거의 못 붙잡음(예전엔 최소 15%로 붙잡아 실속·추락이 둥둥 떠 느리게 내려왔음)   // 속도가 기수 방향으로 (땅에서는 선체가 붙잡음)
     }
     v.y -= g * (1 - lk) * dt;                                                  // 양력이 모자란 만큼 떨어짐
-    p.addScaledVector(v, dt);
+    p.addScaledVector(v, dt * (at ? this.warp : 1));   // 81차: 자동 운항 순항 배속
     // 스토리 진행 중·끝없는 길에서만 장소 경계에서 막음(그 밖에는 경계를 넘어 들판·다른 장소로 이어짐)
     if (!World.open && ((typeof Story !== 'undefined' && Story.active) || World.mapId === 'paths' || !(typeof Atlas !== 'undefined' && Atlas.PLACES[World.mapId]))) { const r = Math.hypot(p.x, p.z), lim = World.BOUND - 10; if (r > lim) { const nx = p.x / r, nz = p.z / r; p.x = nx * lim; p.z = nz * lim; const vn = v.x * nx + v.z * nz; if (vn > 0) { v.x -= vn * nx; v.z -= vn * nz; } } }
     // 바닥: 착지 판정
@@ -11711,8 +11763,8 @@ const Aircraft = {
   // 카메라: 캐릭터와 같음 — 마우스 방향 그대로, 비행정 뒤·위에서. 빠를수록 조금 멀어지고 시야가 넓어짐
   updateCamera(camera) {
     const a = this.cur, p = a.root.position, sp = a.vel.length();
-    const look = Player.lookDir(), D = 30 + Math.min(sp, 150) * 0.07;
-    camera.position.copy(p).addScaledVector(look, -D); camera.position.y += 7;
+    const look = Player.lookDir(), D = (30 + Math.min(sp, 150) * 0.07) * this.zoom;   // 81차: 휠로 0.35~3배
+    camera.position.copy(p).addScaledVector(look, -D); camera.position.y += 7 * Math.min(1.6, this.zoom);
     const gy = this.floorAt(camera.position.x, camera.position.z) + 1.5; if (camera.position.y < gy) camera.position.y = gy;
     camera.rotation.set(Player.pitch, Player.yaw, 0);
     const fov = (Player.baseFov || 75) + Math.min(sp, 150) * 0.1;
@@ -11721,7 +11773,7 @@ const Aircraft = {
     // 기수가 향한 곳 표시(초록 동그라미) — 가운데 조준점과 겹치면 그 방향으로 날고 있음
     camera.updateMatrixWorld();
     const n = this._n || (this._n = new THREE.Vector3()); this.fwd(a, n).multiplyScalar(400).add(p).project(camera);
-    const el = this.noseEl(); el.style.display = n.z < 1 ? '' : 'none';
+    const el = this.noseEl(); el.style.display = n.z < 1 && Game.running ? '' : 'none';
     el.style.transform = `translate(${((n.x + 1) / 2 * innerWidth).toFixed(0)}px, ${((1 - n.y) / 2 * innerHeight).toFixed(0)}px)`;
     this.panel();
   },
@@ -11836,7 +11888,7 @@ box-shadow:0 6px 24px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);paddin
 #flightHud .row{display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:12px;align-items:start}
 #flightHud .k{font-size:10px;letter-spacing:2px;color:#7fb8d0}#flightHud .v{font:800 24px/1.05 'Inter','Noto Serif KR',sans-serif;color:#fff}#flightHud .u{font-size:11px;color:#9fc7d8;margin-left:3px}
 #flightHud .vs{font-size:11px;margin-left:6px}#flightHud .vs.up{color:#9fe0b0}#flightHud .vs.dn{color:#ffb347}
-#flightHud .bar{height:7px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:5px;position:relative}
+#flightHud .bar{width:auto;height:7px;border:0;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;margin:5px 0 0;position:relative;box-sizing:border-box}#flightHud .row>div{min-width:0;overflow:hidden}
 #flightHud .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,#38d8ff,#9fe0b0)}#flightHud .bar.th i{background:linear-gradient(90deg,#ffb347,#ff7a3a)}
 #flightHud .bar .st{position:absolute;top:-2px;bottom:-2px;width:2px;background:#ff6a5a}
 #flightHud .boost{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;font-size:10px;background:#ff7a3a;color:#000;font-weight:800;visibility:hidden}#flightHud .boost.on{visibility:visible}
@@ -11864,13 +11916,13 @@ html.title #flightHud,html.dying #flightHud{display:none}`;
     return el;
   },
   panel() {
-    const a = this.cur, el = this.panelEl(); if (!a) { el.hidden = true; return; }
+    const a = this.cur, el = this.panelEl(); if (!a || !Game.running || Game.dying) { el.hidden = true; return; }   // 81차: 일시정지·메뉴·지도 위에 남던 것
     el.hidden = false;
     const now = performance.now(); if (now - (this._pt || 0) < 60) return; this._pt = now;
     const E = this._pe, sp = a.vel.length(), kmh = Math.round(sp * 3.6), top = 150, hdg = ((-a.yaw * 180 / Math.PI) % 360 + 360) % 360;
     const w = E.cmp.clientWidth || 400; E.tape.style.transform = `translateX(${(w / 2 - (hdg + 360) * 3).toFixed(1)}px)`;
     E.hdg.textContent = String(Math.round(hdg)).padStart(3, '0') + '°';
-    E.sp.textContent = kmh; E.sb.style.width = Math.min(100, sp / top * 100).toFixed(1) + '%'; E.st.style.left = (this.VS / top * 100).toFixed(1) + '%';
+    const wp = this.auto && this.warp > 1 ? this.warp : 1; E.sp.textContent = kmh * wp + (wp > 1 ? ' ×' + wp : ''); E.sb.style.width = Math.min(100, sp / top * 100).toFixed(1) + '%'; E.st.style.left = (this.VS / top * 100).toFixed(1) + '%';
     const alt = Math.max(0, Math.round(a.root.position.y - this.REST - a.floor)); E.al.textContent = alt;
     const vy = a.vel.y; E.vs.textContent = Math.abs(vy) < 0.5 ? '' : (vy > 0 ? '▲' : '▼') + Math.abs(vy).toFixed(0);
     E.vs.className = 'vs ' + (vy > 0 ? 'up' : 'dn');
@@ -11878,7 +11930,84 @@ html.title #flightHud,html.dying #flightHud{display:none}`;
     E.boost.classList.toggle('on', !!(Player.keys.ShiftLeft || Player.keys.ShiftRight));
     const stall = !a.onGround && sp < this.VS;
     E.sts.className = 'sts' + (stall ? ' warn' : '');
+    const di = this.auto && this.dest ? this.destInfo() : null;
+    if (di && !stall) { const eta = di.km * 1000 / Math.max(20, sp * wp); E.sts.textContent = `✈ 자동 운항 → ${this.dest.name} · ${di.km < 10 ? di.km.toFixed(1) : Math.round(di.km)}km · 약 ${eta < 90 ? Math.round(eta) + '초' : Math.round(eta / 60) + '분'} · ×${this.warp} ([ ] 배속 · O 끄기)`; return; }
     E.sts.textContent = stall ? '⚠ 실속 · 기수를 내려 속도를 올리세요' : a.onGround ? (sp < this.VR ? `${a.onWater ? '수상' : '지상'} 활주 · 이륙 ${Math.round(this.VR * 3.6)}km/h부터 마우스 위로` : '이륙 가능 · 마우스를 위로') : (alt < 40 ? '저고도 비행' : '비행 중');
+  },
+});
+// ===== 81차: 자동 운항 · 부스트 불꽃 · 휠 확대/축소 =====
+// 자동 운항: 세계 지도(M·일시정지)에서 장소나 지점을 골라 '✈ 자동 운항'을 누르면 그곳으로 날아감. 비행정을 타고 있지 않으면 바로 불러서(P처럼) 올라탄 뒤 시작.
+//   방향은 목적지 쪽으로, 높이는 앞쪽 지형(1·2·4·8초 뒤 지점) 중 가장 높은 곳 + 220m를 유지, 추력 최대. 마우스는 자유롭게 둘러보기.
+//   [ ] 로 순항 배속(×1·×2·×4·×8·×16 — 실제 이동 속도를 배로), O로 켜고 끄기. 장소 경계를 넘을 때도 목적지·배속이 이어짐(핸드오프).
+//   목적지에서 1.5km 안(또는 그 장소 안)에 오면 도착 — 자동 운항 끔·배속 ×1, 손으로 조종.
+// 부스트(Shift): 엔진 4개 뒤로 주황 불꽃+노란 심지가 길게 일렁이고 불티가 튐.
+// 휠: 비행 중 카메라 거리 0.35~3배 (거인 시점과 같음).
+Object.assign(Aircraft, {
+  auto: false, dest: null, warp: 1, WARPS: [1, 2, 4, 8, 16], zoom: 1,
+  hideUi() { if (this._panel) this._panel.hidden = true; if (this._nose) this._nose.style.display = 'none'; },
+  setDest(d) {
+    this.dest = d; this.auto = true;
+    if (!this.cur) { this.pendingCall = true; Game.toast(`자동 운항 목적지: ${d.name} · 비행정을 부르는 중`, '#9fe0b0'); }
+    else Game.toast(`자동 운항 시작 → ${d.name} · [ ] 배속 · O 끄기`, '#9fe0b0');
+  },
+  toggleAuto() {
+    if (!this.dest) { Game.toast('목적지가 없습니다 · 세계 지도(M 끝까지 또는 일시정지)에서 장소를 고르고 ✈ 자동 운항', '#cfd8e6'); return; }
+    this.auto = !this.auto;
+    if (!this.auto) { this.warp = 1; if (this.cur) { Player.yaw = this.cur.yaw; Player.pitch = this.cur.pitch; } }
+    if (this.auto && !this.cur) { this.pendingCall = true; return; }
+    Game.toast(this.auto ? `자동 운항 → ${this.dest.name}` : '자동 운항 끔 · 손으로 조종', '#9fe0b0');
+  },
+  stepWarp(d) {
+    if (!this.auto || !this.cur) { Game.toast('배속은 자동 운항 중에만 · O로 켜기', '#cfd8e6'); return; }
+    const i = Math.max(0, Math.min(this.WARPS.length - 1, this.WARPS.indexOf(this.warp) + d)); this.warp = this.WARPS[i];
+    Game.toast(`순항 배속 ×${this.warp}`, '#9fe0b0');
+  },
+  destInfo() {
+    if (!this.dest || typeof Atlas === 'undefined') return null;
+    const me = Atlas.mePos(); if (!me) return null;
+    const dxm = (this.dest.pos[0] - me[0]) * 1000, dzm = -(this.dest.pos[1] - me[1]) * 1000;
+    return { dxm, dzm, km: Math.hypot(dxm, dzm) / 1000 };
+  },
+  // 자동 운항 목표 방향(yaw)·기수(pitch)
+  autoTarget(a) {
+    const di = this.destInfo(); if (!di) return null;
+    if (di.km < 1.5 || (this.dest.id && World.mapId === this.dest.id)) {
+      this.auto = false; this.warp = 1; Player.yaw = a.yaw; Player.pitch = 0;
+      Game.toast(`목적지 도착 · ${this.dest.name} · 자동 운항 끔`, '#9fe0b0'); this.dest = null; return null;
+    }
+    const yaw = Math.atan2(-di.dxm, -di.dzm), p = a.root.position, sp = Math.max(30, a.vel.length()) * this.warp;
+    let fl = this.floorAt(p.x, p.z);
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    for (const t of [1, 2, 4, 8]) fl = Math.max(fl, this.floorAt(p.x + fx * sp * t, p.z + fz * sp * t));
+    const want = fl + this.REST + 220;
+    return { yaw, pitch: Math.max(-0.25, Math.min(0.35, (want - p.y) / Math.max(200, sp * 2))) };
+  },
+  buildFlames(a) {
+    const add = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false });
+    const outer = new THREE.ConeGeometry(1.05, 1, 12, 1, true); outer.translate(0, 0.5, 0); outer.rotateX(Math.PI / 2);   // 밑면이 엔진 뒤, 끝이 뒤(+z)로
+    const inner = new THREE.ConeGeometry(0.55, 1, 10, 1, true); inner.translate(0, 0.5, 0); inner.rotateX(Math.PI / 2);
+    const mo = add(0xff6a12, 0.85), mi = add(0xffe27a, 0.95);
+    a.flames = [];
+    for (const x of [-16, -8, 8, 16]) {
+      const y = 3.6 + Math.max(0, (Math.abs(x) - 3) / 23) * 0.9 - 0.75;
+      for (const [g, m] of [[outer, mo], [inner, mi]]) { const f = new THREE.Mesh(g, m); f.position.set(x, y, -2.05); f.visible = false; f.renderOrder = 4; a.root.add(f); a.flames.push(f); }
+    }
+  },
+  updateFlames(a, on, dt) {
+    if (!a.flames) this.buildFlames(a);
+    a.flameK = Math.max(0, Math.min(1, (a.flameK || 0) + (on ? 4 : -5) * dt));
+    const k = a.flameK, vis = k > 0.02;
+    for (let i = 0; i < a.flames.length; i++) {
+      const f = a.flames[i]; f.visible = vis; if (!vis) continue;
+      const inner = i % 2 === 1, len = (inner ? 6 : 12) * k * (0.8 + Math.random() * 0.45);
+      f.scale.set(0.85 + Math.random() * 0.3, 0.85 + Math.random() * 0.3, len);
+    }
+    if (vis && this.cur === a && Effects.sparks) for (let n = 0; n < 2; n++) if (Math.random() < 0.8 * k) {
+      const f = a.flames[(Math.random() * 4 | 0) * 2], q = this._fq || (this._fq = new THREE.Vector3());
+      q.set(f.position.x, f.position.y, f.position.z + 9).applyMatrix4(a.root.matrixWorld);
+      const v = this._fv || (this._fv = new THREE.Vector3()); v.copy(a.vel).multiplyScalar(0.6).add(new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8));
+      Effects.sparks.emit(q, v, 0.3 + Math.random() * 0.3, 0.5);
+    }
   },
 });
 
@@ -12224,6 +12353,7 @@ function setPaused(paused) {
   if (Game.over) { pauseEl.hidden = true; Game.running = false; return; }   // 전사 화면은 그대로 둠
   overlay.style.display = paused && !Game.started ? '' : 'none';   // '' = 스타일시트의 grid 배치
   pauseEl.hidden = !(paused && Game.started);
+  if (paused && typeof Aircraft !== 'undefined' && Aircraft.hideUi) Aircraft.hideUi();   // 81차: 일시정지·지도 위에 비행 계기판이 남던 것 (멈춘 동안은 카메라 갱신이 없어서)
   if (paused) {
     { const pf = document.getElementById('perf'); if (pf && !pf.hidden && !/일시정지/.test(pf.textContent)) pf.textContent = '(일시정지 전 측정값) ' + pf.textContent; if (typeof Perf !== 'undefined') Perf.hist = []; }   // 63차
     Player.keys = {}; Player.releaseHook();
@@ -12265,6 +12395,7 @@ document.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('cl
 addEventListener('wheel', e => {
   if (!Game.running) return;
   // 38차: 거인일 때는 휠로 카메라 거리를 점점 당기고 밀기(시조처럼 큰 거인이 화면을 가리지 않게)
+  if (typeof Aircraft !== 'undefined' && Aircraft.cur) { Aircraft.zoom = Math.max(0.35, Math.min(3, Aircraft.zoom * Math.pow(1.0015, Math.max(-200, Math.min(200, e.deltaY))))); return; }   // 81차: 비행 중 휠 = 카메라 거리
   if (typeof Shifter !== 'undefined' && Shifter.active) { Player.camZoom = Math.max(0.25, Math.min(2.5, (Player.camZoom || 1) * Math.pow(1.0015, Math.max(-200, Math.min(200, e.deltaY))))); Player.thirdPerson = true; return; }
   Player.thirdPerson = e.deltaY > 0;
 });
@@ -12284,7 +12415,9 @@ document.addEventListener('keydown', e => {
     if (code === 'KeyT') Shifter.transform();                    // 거인화 (게이지가 찼을 때)
     if (code === 'KeyQ') { if (Shifter.active) Shifter.dash(); else Player.dodge(); }   // Q: 회피(사람) · 대시(거인)
     if (code === 'KeyF' && typeof Aircraft !== 'undefined') Aircraft.key();
-    if (code === 'KeyP' && typeof Aircraft !== 'undefined') Aircraft.call();   // 80차: 하늘에서 비행정 부르기   // 78차: 비행정 타기·내리기
+    if (code === 'KeyP' && typeof Aircraft !== 'undefined') Aircraft.call();   // 80차: 하늘에서 비행정 부르기
+    if (code === 'KeyO' && typeof Aircraft !== 'undefined') Aircraft.toggleAuto();   // 81차: 자동 운항 켜기/끄기
+    if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && typeof Aircraft !== 'undefined') Aircraft.stepWarp(e.code === 'BracketRight' ? 1 : -1);   // 81차: 순항 배속   // 78차: 비행정 타기·내리기
     if (code === 'KeyH' && typeof Horse !== 'undefined') Horse.key();          // 22차: 말 부르기·타기·내리기
     if (code === 'KeyG' && typeof Field !== 'undefined') Field.enter();        // 22차: 가까운 장소로 들어가기
     const num = /^(Digit|Numpad)([1-9])$/.exec(e.code);
