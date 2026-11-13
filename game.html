@@ -5532,7 +5532,7 @@ addEventListener('keydown', e => {
       <text x="1500" y="-880" class="cn sm">HIZURU · 히즈루</text>
       <text x="-850" y="-120" class="sea">바 다</text>
       <text x="-1660" y="-560" class="cn tiny">철도</text>
-      ${marks}${wild}<g class="pick" style="display:none"><g class="s"><circle r="22" fill="none" stroke="#D71A1C" stroke-width="8"/><path d="M-36 0 H36 M0 -36 V36" stroke="#D71A1C" stroke-width="6"/></g></g>
+      ${marks}${wild}${this.meMark()}<g class="pick" style="display:none"><g class="s"><circle r="22" fill="none" stroke="#D71A1C" stroke-width="8"/><path d="M-36 0 H36 M0 -36 V36" stroke="#D71A1C" stroke-width="6"/></g></g>
       <g transform="translate(1600 -1350)"><circle r="70" fill="none" stroke="#898989" stroke-width="4"/><path d="M0 -95 L18 0 L0 -12 L-18 0Z" fill="#D71A1C"/><text y="-108" class="cn sm" style="font-size:44px">N</text></g>
       <text x="1780" y="1620" class="sc">눈금 한 칸 250km · 대륙 배치는 게임용 대략</text>
       </svg>`;
@@ -5573,7 +5573,7 @@ addEventListener('keydown', e => {
         const z = b.dataset.z;
         if (z === 'in') zoom(0.7); else if (z === 'out') zoom(1 / 0.7);
         else if (z === 'all') { v.splice(0, 4, ...V); fit(); }
-        else { const p = cur === 'wild' ? this.wildPos() : (this.PLACES[cur] || { pos: [0, 0] }).pos, w = 1500; v.splice(0, 4, p[0] - w / 2, -p[1] - w * V[3] / V[2] / 2, w, w * V[3] / V[2]); fit(); }
+        else { const p = this.mePos() || (cur === 'wild' ? this.wildPos() : (this.PLACES[cur] || { pos: [0, 0] }).pos), w = 1500; v.splice(0, 4, p[0] - w / 2, -p[1] - w * V[3] / V[2] / 2, w, w * V[3] / V[2]); fit(); }   // 80차: 지금 = 내 실제 위치
       });
       svg.parentNode.style.position = 'relative'; svg.parentNode.appendChild(ctl);
       fit();
@@ -5653,6 +5653,24 @@ addEventListener('keydown', e => {
   P.odiha.pos = [-1420, edge(-1420, -1700, 0) + 0.09]; P.odiha.where = '마레 대륙 남동쪽 해안 · 아즈마비토 격납고·히즈루 저택 (게임 배치)';
   P.slava.pos = [-1620, edge(-1620, 1800, 0) - 0.4]; P.slava.where = '마레 대륙 북쪽 해안 · 중동 연합과의 경계 전선 (게임 배치)';
 })();
+// 80차: 세계 지도에 내 실제 위치(들판·장소 안·비행 중 어디든) — 하늘색 점 + 퍼지는 고리 + 바라보는 방향 화살표 + '내 위치' 글자
+Object.assign(Atlas, {
+  mePos() {
+    if (typeof Game === 'undefined' || !Game.started || typeof Player === 'undefined' || typeof World === 'undefined' || !World.mapId) return null;
+    if (typeof Field !== 'undefined' && Field.on && Field.toWorld && Field.ox !== undefined) { const [X, Y] = Field.toWorld(Player.pos.x, Player.pos.z); return [X / 1000, Y / 1000]; }
+    const q = World.mapId === 'wild' ? { pos: this.wildPos() } : this.PLACES[World.mapId]; if (!q) return null;
+    return [q.pos[0] + Player.pos.x / 1000, q.pos[1] - Player.pos.z / 1000];
+  },
+  meMark() {
+    const p = this.mePos(); if (!p) return '';
+    const hdg = ((-Player.yaw * 180 / Math.PI) % 360 + 360) % 360, fly = typeof Aircraft !== 'undefined' && Aircraft.cur;
+    return `<g class="pl me-pt" transform="translate(${p[0].toFixed(2)} ${(-p[1]).toFixed(2)})"><g class="s"><circle r="30" class="me-ring"/><g transform="rotate(${hdg.toFixed(0)})"><path d="M0 -58 L16 -26 L0 -34 L-16 -26Z" class="me-arrow"/></g><circle r="15" class="me-dot"/><text y="62" class="me-t">${fly ? '내 위치 · 비행 중' : '내 위치'}</text></g></g>`;
+  },
+});
+{ const c = document.createElement('style'); c.textContent = `.atlas .me-pt{pointer-events:none}.atlas .me-dot{fill:#38d8ff;stroke:#fff;stroke-width:5}.atlas .me-arrow{fill:#38d8ff;stroke:#00161f;stroke-width:3}
+.atlas .me-ring{fill:none;stroke:#38d8ff;stroke-width:6;transform-box:fill-box;transform-origin:center;animation:meRing 1.6s ease-out infinite}
+.atlas .me-t{font:800 34px 'Noto Serif KR',serif;fill:#38d8ff;text-anchor:middle;paint-order:stroke;stroke:#000;stroke-width:9px}
+@keyframes meRing{0%{transform:scale(.6);opacity:1}100%{transform:scale(2.4);opacity:0}}`; document.head.appendChild(c); }
 
 </script>
 <script>
@@ -5788,7 +5806,7 @@ const Field = {
     for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
       const x = X0 + 50 + a * 100, y = Y0 + 50 + b * 100;
       if (this.seaW(x, y)) out.water.push([x, y]);
-      else { anyLand = true; if (this.seaW(x + 100, y) || this.seaW(x - 100, y) || this.seaW(x, y + 100) || this.seaW(x, y - 100)) out.sand.push([x, y]); }
+      else { anyLand = true; if (this.seaW(x + 100, y) || this.seaW(x - 100, y) || this.seaW(x, y + 100) || this.seaW(x, y - 100) || this.seaW(x + 100, y + 100) || this.seaW(x - 100, y - 100) || this.seaW(x + 100, y - 100) || this.seaW(x - 100, y + 100)) out.water.push([x, y]); }   // 80차: 해안 땅 칸에도 물판
     }
     if (!anyLand) return out;
     // 북쪽 산맥 (미트라스에서 북쪽 560km 넘는 곳): 칸마다 0~2개 봉우리 (반지름 250~700m, 높이는 반지름의 1.4~2배)
@@ -5841,7 +5859,28 @@ const Field = {
     this.sea0.set(k, !inside);
     return !inside;
   },
-  sea(x, z) { const [X, Y] = this.toWorld(x, z); return this.seaW(X, Y); },   // 게임 좌표
+  // 80차: 해안선까지 실제 거리(m, 땅 +, 바다 −). 100m 칸으로만 바다를 정해 해안이 계단처럼 깎이던 것 → 섬·대륙 윤곽선(직선 조각)까지의 거리로 매끈하게.
+  // 해안에서 멀면(사방 300m가 모두 같은 땅/바다) null — 대부분의 점은 칸 기억(seaW)만 보고 끝남
+  coastSD(X, Y) {
+    const s = this.seaW(X, Y), D = 300, d2 = 212;
+    if (s === this.seaW(X + D, Y) && s === this.seaW(X - D, Y) && s === this.seaW(X, Y + D) && s === this.seaW(X, Y - D) &&
+        s === this.seaW(X + d2, Y + d2) && s === this.seaW(X - d2, Y + d2) && s === this.seaW(X + d2, Y - d2) && s === this.seaW(X - d2, Y - d2)) return null;
+    const x = X / 1000, y = Y / 1000; let best = Infinity, inside = false;
+    for (const O of [Atlas.outline(), Atlas.MARLEY || []]) {
+      let ins = false;
+      for (let i = 0, j = O.length - 1; i < O.length; j = i++) {
+        const [xi, yi] = O[i], [xj, yj] = O[j], dx = xi - xj, dy = yi - yj, l2 = dx * dx + dy * dy;
+        const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - xj) * dx + (y - yj) * dy) / l2)) : 0, ex = xj + dx * t - x, ey = yj + dy * t - y, d = ex * ex + ey * ey;
+        if (d < best) best = d;
+        if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) ins = !ins;
+      }
+      if (ins) inside = true;
+    }
+    return (inside ? 1 : -1) * Math.sqrt(best) * 1000;
+  },
+  // 해안 근처 높이: 바다 쪽은 얕은 물에서 -8m까지 깊어지고, 땅 쪽은 모래사장(해수면 0.15m 바로 위)에서 350m에 걸쳐 원래 땅 높이로
+  coastH(sd, h) { if (sd <= 0) return Math.max(-8, sd * 0.12); const q = Math.min(1, sd / 350), k = q * q * (3 - 2 * q); return (0.4 + sd * 0.03) * (1 - k) + h * k; },
+  sea(x, z) { const [X, Y] = this.toWorld(x, z), sd = this.coastSD(X, Y); return sd !== null ? sd <= 0 : this.seaW(X, Y); },   // 게임 좌표 (80차: 해안은 실제 윤곽선 기준)
   peakAt(peaks, x, y) { return peaks.some(([px, py, r]) => Math.hypot(x - px, y - py) < r); },
   // 산 위 땅 높이 (원뿔): 플레이어가 산비탈을 딛고 오를 수 있게
   // 38차: 그려진 땅 메시(150x150 격자, 40m)의 삼각형 위 높이. PlaneGeometry 삼각형 분할(a,b,d)/(b,c,d)과 똑같이 보간
@@ -5881,8 +5920,10 @@ const Field = {
     return [h, inFlat];
   },
   terrW(X, Y) {
-    if (this.seaW(X, Y)) return -8;
-    const [h, inFlat] = this.terrBase(X, Y);
+    const sd = this.coastSD(X, Y);
+    if (sd !== null && sd <= 0) return Math.max(-8, sd * 0.12);
+    if (sd === null && this.seaW(X, Y)) return -8;
+    const [h0, inFlat] = this.terrBase(X, Y), h = sd !== null && !inFlat ? this.coastH(sd, h0) : h0;
     if (inFlat) return h;
     const k = this.riverK(X, Y);
     return k > 0 ? h - k * 9 : h;   // 강바닥은 9m 아래로 파임
@@ -5890,11 +5931,12 @@ const Field = {
   // 강 수면(세계 높이) — 강 안쪽이면 둑 높이보다 6.3m 아래, 아니면 null
   riverLevelW(X, Y) {
     if (this.seaW(X, Y)) return null;
+    { const sd = this.coastSD(X, Y); if (sd !== null && sd < 400) return null; }   // 80차: 바닷가에서는 강물판 없음
     const k = this.riverK(X, Y); if (k < 0.74) return null;   // 수면(둑-6.3m)이 강바닥(둑-9k m)보다 위인 곳만
     const [h, inFlat] = this.terrBase(X, Y); return inFlat ? null : h - 6.3;
   },
   riverLevel(x, z) { if (!this.flat) return null; const [X, Y] = this.toWorld(x, z), v = this.riverLevelW(X, Y); return v === null ? null : v - this.h0; },
-  tlBase(x, z) { if (!this.flat) return 0; const [X, Y] = this.toWorld(x, z); return this.seaW(X, Y) ? -8 - this.h0 : this.terrBase(X, Y)[0] - this.h0; },
+  tlBase(x, z) { if (!this.flat) return 0; const [X, Y] = this.toWorld(x, z), sd = this.coastSD(X, Y); if (sd !== null) { const [h, inF] = this.terrBase(X, Y); return (sd <= 0 ? Math.max(-8, sd * 0.12) : inF ? h : this.coastH(sd, h)) - this.h0; } return this.seaW(X, Y) ? -8 - this.h0 : this.terrBase(X, Y)[0] - this.h0; },
   tl(x, z) { if (!this.flat) return 0; const [X, Y] = this.toWorld(x, z); return this.terrW(X, Y) - this.h0; },   // 지금 장소 기준 상대 높이
   initTerrain(W) {
     this.flat = [];
@@ -5917,10 +5959,10 @@ const Field = {
     for (; i < end; i++) {
       if ((i & 63) === 0 && budget !== Infinity && performance.now() - t0 > 2.5) break;
       const x = gx + pa.getX(i), z = gz - pa.getY(i), [X, Y] = this.toWorld(x, z);
-      const sea = this.seaW(X, Y), rk = sea ? 0 : this.riverK(X, Y);
-      if (sea) { J.zs[i] = -8 - h0 + 0.05; J.ws[i] = J.zs[i] - 30; }   // 46차: 강이 아닌 곳의 강물판은 땅 30m 아래(3m면 먼 언덕에서 땅을 뚫고 파란 줄무늬로 비쳤음)
+      const sd = this.coastSD(X, Y), sea = sd !== null ? sd <= 0 : this.seaW(X, Y), rk = sea || (sd !== null && sd < 400) ? 0 : this.riverK(X, Y);
+      if (sea) { J.zs[i] = (sd !== null ? Math.max(-8, sd * 0.12) : -8) - h0 + 0.05; J.ws[i] = J.zs[i] - 30; }   // 46차: 강이 아닌 곳의 강물판은 땅 30m 아래(3m면 먼 언덕에서 땅을 뚫고 파란 줄무늬로 비쳤음)
       else {
-        const [h, inFlat] = this.terrBase(X, Y);
+        const [hb, inFlat] = this.terrBase(X, Y), h = sd !== null && !inFlat ? this.coastH(sd, hb) : hb;
         J.zs[i] = (!inFlat && rk > 0 ? h - rk * 9 : h) - h0 + 0.05;   // = tl(x, z) + 0.05
         if (!inFlat && rk >= 0.74) { J.ws[i] = h - 6.3 - h0; J.anyRiver = true; } else J.ws[i] = J.zs[i] - (rk > 0.3 ? 3 : 30);   // = riverLevelW
       }
@@ -5928,7 +5970,7 @@ const Field = {
       let c = [1, 1, 1];
       const inW = Math.hypot(X, Y) < 480000, fo = this.noise(X / 3200, Y / 3200);
       if (inW && fo < 0.6 && Y < 560000) { const hh = this.hash(Math.floor(X / 140), Math.floor(Y / 110)); if (hh < 0.62) c = crop[Math.floor(hh * 6.4) % 4]; }
-      if (sea) c = [0.95, 0.9, 0.75];
+      if (sea || (sd !== null && sd < 110)) c = [0.95, 0.9, 0.75];   // 80차: 물속 바닥 + 해안 모래사장(110m)
       { if (rk > 0.12) { const m = Math.min(1, rk * 1.4); c = [c[0] * (1 - m) + 0.72 * m, c[1] * (1 - m) + 0.62 * m, c[2] * (1 - m) + 0.46 * m]; } }
       { const sh = 0.78 + 0.42 * this.noise(X / 380 + 4, Y / 380 + 2) - Math.max(0, this.noise(X / 620 + 21, Y / 620 + 17) - 0.6) * 0.6; c = [c[0] * sh, c[1] * sh, c[2] * sh]; }   // 37차: 구릉 꼭대기는 밝게, 파인 곳은 어둡게(원작 들판의 밝고 짙은 초록 띠)
       J.cs[i * 3] = c[0]; J.cs[i * 3 + 1] = c[1]; J.cs[i * 3 + 2] = c[2];
@@ -6004,7 +6046,7 @@ const Field = {
   // ---------- 칸 불러오기/버리기: 충돌 상자(격자)와 와이어 판정 사본까지 ----------
   load(ix, iy) {
     const W = this.W, g = this.gen(ix, iy), boxes = [], tris = [];
-    const pr = this.placeR + 40, keep = (X, Y) => { const [x, z] = this.toLocal(X, Y); return Math.hypot(x, z) > pr ? [x, z] : null; };
+    const pr = this.placeR + 40, keep = (X, Y) => { const sd = this.coastSD(X, Y); if (sd !== null && sd < 25) return null; const [x, z] = this.toLocal(X, Y); return Math.hypot(x, z) > pr ? [x, z] : null; };   // 80차: 물가 25m 안·물속에는 나무·집을 두지 않음
     const addBox = (x0, y0, z0, x1, y1, z1) => {
       const tt = this.tl((x0 + x1) / 2, (z0 + z1) / 2); y0 += tt; y1 += tt;   // 36차: 지형 위 충돌 상자
       const b = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1)); boxes.push(b);
@@ -6086,7 +6128,8 @@ const Field = {
       for (let t = -d / 2; t <= d / 2; t += 8) for (const sx of [-1, 1]) { const lx = sx * w / 2, lz = t; o.rotation.set(0, rot, 0); o.position.set(x + lx * cs + lz * sn, 0.7, z - lx * sn + lz * cs); o.scale.set(0.18, 1.4, 0.18); put('post'); }
     }
     // 36차: 밭은 평평한 상자 대신 지형 색으로 칠함(reshape) — 굴곡진 땅 위에 상자가 떠서 땅을 가렸음
-    for (const [x, z] of ch.water) { o.rotation.set(0, 0, 0); o.position.set(x, 0.1, z); o.scale.set(100.5, 0.1, 100.5); put('sea'); }
+    const wy = 0.13 - (this.h0 || 0);   // 80차: 실제 해수면(물리 waterLevel = 0.15 - h0). 예전엔 장소 땅 높이 기준 0.1이라 바다가 언덕 중턱에 떠서 계단처럼 깨져 보였음
+    for (const [x, z] of ch.water) { o.rotation.set(0, 0, 0); o.position.set(x, wy - 0.05 - this.tl(x, z), z); o.scale.set(100.6, 0.1, 100.6); put('sea'); }   // put이 칸 가운데 땅 높이를 더하므로 미리 뺌 → 모든 물판이 같은 해수면 (예전엔 칸마다 땅 높이를 따라 높낮이가 달라 계단처럼 깨졌음)
     for (const [x, z] of ch.sand) { o.rotation.set(0, 0, 0); o.position.set(x, 0.02, z); o.scale.set(100.5, 0.04, 100.5); put('sand'); }
     for (const [x, z, r, h] of ch.peaks) {
       o.rotation.set(0, x % 3, 0); o.position.set(x, h / 2, z); o.scale.set(r, h, r); put('rock');
@@ -11040,7 +11083,7 @@ const Perf = {
 const Keymap = {
   KEY: 'astraea-set-keys',
   ACTIONS: [['forward', '앞으로', 'KeyW'], ['back', '뒤로', 'KeyS'], ['left', '왼쪽', 'KeyA'], ['right', '오른쪽', 'KeyD'], ['jump', '점프 · 와이어 감기', 'Space'], ['gas', '달리기 · 가스', 'ShiftLeft'],
-    ['dodge', '회피 · 거인 대시', 'KeyQ'], ['shift', '거인화', 'KeyT'], ['exit', '거인화 해제', 'KeyE'], ['view', '시점 전환', 'KeyV'], ['horse', '말 부르기·타기', 'KeyH'], ['board', '비행정 타기·내리기', 'KeyF'], ['enter', '장소 들어가기', 'KeyG'], ['map', '미니맵 확대·축소', 'KeyM'], ['ally', '동료 명령 바꾸기', 'KeyR']],
+    ['dodge', '회피 · 거인 대시', 'KeyQ'], ['shift', '거인화', 'KeyT'], ['exit', '거인화 해제', 'KeyE'], ['view', '시점 전환', 'KeyV'], ['horse', '말 부르기·타기', 'KeyH'], ['board', '비행정 타기·내리기', 'KeyF'], ['plane', '비행정 부르기', 'KeyP'], ['enter', '장소 들어가기', 'KeyG'], ['map', '미니맵 확대·축소', 'KeyM'], ['ally', '동료 명령 바꾸기', 'KeyR']],
   bind: {}, logical: {}, waiting: null,
   reserved(code) { return /^(Escape|F\d+|Backspace|Enter|NumpadEnter|Tab|Meta.*|Digit[1-9]|Numpad[1-9])$/.test(code); },
   label(code) {
@@ -11512,7 +11555,7 @@ const Aircraft = {
   },
   findNear() {
     let best = null, bd = 22;
-    for (const a of this.list) { if (a.crashT > 0 || a.gone) continue; const d = a.root.position.distanceTo(Player.pos); if (d < bd) { bd = d; best = a; } }
+    for (const a of this.list) { if (a.crashT > 0 || a.gone || a.auto) continue; const d = a.root.position.distanceTo(Player.pos); if (d < bd) { bd = d; best = a; } }
     return best;
   },
   key() {
@@ -11532,7 +11575,7 @@ const Aircraft = {
   },
   exit(silent) {
     const a = this.cur; if (!a) return;
-    this.cur = null; this.noseEl().hidden = true;
+    this.cur = null; this.noseEl().hidden = true; this.panelEl().hidden = true;
     const p = a.root.position, side = new THREE.Vector3(-Math.cos(a.yaw), 0, Math.sin(a.yaw)), sp = a.vel.length();
     if (a.onGround && sp < 6) {   // 서 있거나 천천히 움직일 때: 왼쪽 문 옆 땅(물)에 내려섬
       Player.pos.copy(p).addScaledVector(side, 6); Player.pos.y = a.floor; Player.vel.set(0, 0, 0);
@@ -11600,13 +11643,14 @@ const Aircraft = {
   },
   update(dt) {
     if (typeof Field !== 'undefined' && Field.planeOnStart && Game.running) { const s = Field.planeOnStart; Field.planeOnStart = null; this.resume(s); }
-    if (this.cur && (Game.over || Game.dying)) { this.cur = null; this.noseEl().hidden = true; }
+    this.updateCall(dt);   // 80차: P로 부른 비행정의 비행·올라타기
+    if (this.cur && (Game.over || Game.dying)) { this.cur = null; this.noseEl().hidden = true; this.panelEl().hidden = true; }
     for (const a of this.list) {
       if (a.gone) continue;
       if (a.crashT > 0) { if ((a.crashT -= dt) <= 0) this.respawn(a); continue; }
       a.spin = a.throttle > 0 || a === this.cur ? 5 + a.throttle * 45 : Math.max(0, a.spin - dt * 10);
       for (const h of a.props) h.rotation.z += a.spin * dt;
-      if (!a.parked) this.step(a, dt, a === this.cur);
+      if (!a.parked && !a.auto) this.step(a, dt, a === this.cur);
     }
   },
   step(a, dt, ctl) {
@@ -11679,6 +11723,7 @@ const Aircraft = {
     const n = this._n || (this._n = new THREE.Vector3()); this.fwd(a, n).multiplyScalar(400).add(p).project(camera);
     const el = this.noseEl(); el.style.display = n.z < 1 ? '' : 'none';
     el.style.transform = `translate(${((n.x + 1) / 2 * innerWidth).toFixed(0)}px, ${((1 - n.y) / 2 * innerHeight).toFixed(0)}px)`;
+    this.panel();
   },
   noseEl() {
     if (!this._nose) {
@@ -11690,11 +11735,152 @@ const Aircraft = {
   },
   hud() {
     const a = this.cur;
+    if (this.grab) return '';
     if (!a) { const n = this.findNear(); return n && !(typeof Shifter !== 'undefined' && Shifter.active) ? 'F · 비행정 타기' : ''; }
+    return '';   // 80차: 조종 중 정보는 화면 아래 계기판(panel)
     const sp = a.vel.length(), stall = !a.onGround && sp < this.VS;
     return `${stall ? '⚠ 실속 · 기수를 내려 속도를 올리세요 · ' : ''}비행정 · ${Math.round(sp * 3.6)}km/h · 추력 ${Math.round(a.throttle * 100)}% · 고도 ${Math.max(0, Math.round(a.root.position.y - this.REST - a.floor))}m${a.onGround && sp < this.VR && a.throttle > 0 ? ' · 이륙 속도 ' + Math.round(this.VR * 3.6) + 'km/h' : ''} · F 내리기`;
   },
 };
+// ===== 80차: 비행 계기판(화면 아래) + P키 비행정 부르기(하늘에서 날아와 입체기동으로 올라탐) =====
+// 계기판: 위쪽 나침반 띠(15° 눈금, N·NE·E…), 속도(km/h)·고도(m, 오르내림 m/s)·추력 막대(부스트 표시), 상태줄(지상 활주·이륙 속도/실속 경고), 조작 안내.
+//   0.06초마다만 글자를 고침(매 프레임 쓰면 화면 배치 다시 계산). 조종 중일 때만 보임.
+// P: 어디서나(장소·들판) — 플레이어가 바라보는 방향 뒤쪽 520m·60m 위에서 비행정이 내려오며 날아옴(초속 75m). 70m 안으로 오면
+//   자동으로 와이어 2줄을 비행정에 박고 가스를 뿜으며 1.1초에 걸쳐 문 쪽으로 끌려 올라가 탑승. 못 타고 지나가면 사라짐(다시 P).
+//   불러온 비행정은 한 번에 하나(새로 부르면 이전 것은 치움, 지금 타고 있는 것 제외). 거인화 중·조종 중에는 부를 수 없음.
+Object.assign(Aircraft, {
+  call() {
+    if (this.cur || this.grab || !Game.running || Game.over || Game.dying) return;
+    if (typeof Shifter !== 'undefined' && (Shifter.active || Shifter.charging)) { Game.toast('거인화 중에는 비행정을 부를 수 없다', '#cfd8e6'); return; }
+    for (const a of this.list) if (a.called && a !== this.cur) { a.gone = true; a.root.visible = false; if (a.root.parent) a.root.parent.remove(a.root); }
+    this.list = this.list.filter(a => !(a.called && a.gone));
+    const P = Player.pos, f = Player.forward(), dir = new THREE.Vector3(f.x, 0, f.z).normalize();
+    const alt = Math.max(P.y, this.floorAt(P.x, P.z)) + 28;
+    const from = P.clone().addScaledVector(dir, -520); from.y = alt + 60;
+    const a = this.spawn(World.scene, from.x, from.y, from.z, Math.atan2(-dir.x, -dir.z)); if (!a) return;
+    a.called = true; a.temp = true; a.parked = false; a.onGround = false; a.throttle = 0.8;
+    a.auto = { t: 0, from, dir, alt, speed: 75 };
+    Game.toast('비행정 호출 · 하늘에서 날아옵니다 — 가까이 오면 와이어로 올라탐', '#9fe0b0');
+  },
+  // 불러온 비행정의 정해진 비행(내려오며 플레이어 머리 위로) + 올라타기
+  updateCall(dt) {
+    for (const a of this.list) {
+      const au = a.auto; if (!au || a.gone) continue;
+      au.t += dt;
+      const along = au.speed * au.t, p = a.root.position;
+      p.copy(au.from).addScaledVector(au.dir, along);
+      const drop = 60 * Math.max(0, 1 - along / 420);
+      p.y = Math.max(au.alt + drop, this.floorAt(p.x, p.z) + this.REST + 15);
+      a.pitch = along < 420 ? -0.14 : 0; a.roll = 0;
+      a.vel.copy(au.dir).multiplyScalar(au.speed); a.vel.y = along < 420 ? -au.speed * 60 / 420 : 0;
+      a.root.rotation.set(a.pitch, a.yaw, 0, 'YXZ');
+      if (!this.grab && !this.cur && along < 560 && p.distanceTo(Player.pos) < 70 && !(typeof Shifter !== 'undefined' && (Shifter.active || Shifter.charging))) this.startGrab(a);
+      if (along > 1150 && this.grab?.a !== a) { a.gone = true; a.root.visible = false; if (a.root.parent) a.root.parent.remove(a.root); Game.toast('비행정이 지나갔다 · P로 다시 부르기', '#cfd8e6'); }
+    }
+    this.list = this.list.filter(a => !(a.called && a.gone));
+    if (this.grab) this.updateGrab(dt);
+  },
+  startGrab(a) {
+    Player.releaseHook && Player.releaseHook();
+    if (typeof Horse !== 'undefined' && Horse.riding) Horse.dismount();
+    this.grab = { a, t: 0, from: Player.pos.clone(), last: Player.pos.clone() };
+    if (!this.ropes) {
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(12), 3));
+      this.ropes = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x2a2a2a })); this.ropes.frustumCulled = false; World.scene.add(this.ropes);
+    } else if (!this.ropes.parent) World.scene.add(this.ropes);
+    this.ropes.visible = true;
+    const back = new THREE.Vector3().subVectors(Player.pos, a.root.position).normalize();
+    if (Effects.gasBurst) Effects.gasBurst(Player.pos, back);
+    Effects.shake(0.3);
+  },
+  updateGrab(dt) {
+    const G = this.grab, a = G.a, D = 1.1;
+    G.t += dt;
+    const u = Math.min(1, G.t / D), e = u * u * (3 - 2 * u);
+    a.root.updateMatrixWorld();
+    const door = this._door || (this._door = new THREE.Vector3()); door.set(-4.2, -0.5, 3).applyMatrix4(a.root.matrixWorld);   // 왼쪽 문 앞
+    // 끌려 올라가는 곡선: 시작점 → (위로 휘는 중간점) → 문. 문이 움직이므로 끝점을 매 프레임 다시 잡음
+    const mid = this._mid || (this._mid = new THREE.Vector3()); mid.copy(G.from).lerp(door, 0.5); mid.y += 14;
+    const q = Player.pos, v1 = 1 - e;
+    q.set(v1 * v1 * G.from.x + 2 * v1 * e * mid.x + e * e * door.x, v1 * v1 * G.from.y + 2 * v1 * e * mid.y + e * e * door.y, v1 * v1 * G.from.z + 2 * v1 * e * mid.z + e * e * door.z);
+    Player.vel.subVectors(q, G.last).divideScalar(Math.max(dt, 1e-4)); G.last.copy(q); Player.onGround = false;
+    Player.model.position.copy(q); Player.model.rotation.y = Math.atan2(-(door.x - q.x), -(door.z - q.z));
+    // 와이어 2줄: 허리 양옆 → 비행정 문 위·아래
+    const r = this.ropes.geometry.attributes.position, side = this._sd || (this._sd = new THREE.Vector3());
+    side.set(Math.cos(Player.model.rotation.y), 0, -Math.sin(Player.model.rotation.y)).multiplyScalar(0.35);
+    const anc = this._an || (this._an = new THREE.Vector3());
+    anc.set(-3.3, 1.6, 2).applyMatrix4(a.root.matrixWorld); r.setXYZ(0, q.x + side.x, q.y + 1.1, q.z + side.z); r.setXYZ(1, anc.x, anc.y, anc.z);
+    anc.set(-3.3, 1.6, 5).applyMatrix4(a.root.matrixWorld); r.setXYZ(2, q.x - side.x, q.y + 1.1, q.z - side.z); r.setXYZ(3, anc.x, anc.y, anc.z);
+    r.needsUpdate = true;
+    if (Effects.gasPuff && Math.random() < 0.7) Effects.gasPuff(q, this._sd.set(-Player.vel.x, -Player.vel.y, -Player.vel.z).normalize(), 1.4);
+    if (u >= 1) {
+      this.grab = null; this.ropes.visible = false;
+      a.auto = null; a.onGround = false; a.pitch = 0; this.fwd(a, a.vel).multiplyScalar(75); a.throttle = 0.75;
+      this.board(a);
+    }
+  },
+  // ---------- 계기판 ----------
+  panelEl() {
+    if (this._panel) return this._panel;
+    const css = document.createElement('style');
+    css.textContent = `#flightHud{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);width:min(560px,calc(100vw - 460px));min-width:300px;z-index:15;pointer-events:none;
+font:600 12px 'Noto Serif KR','Inter',sans-serif;color:#e8f6ff;background:linear-gradient(180deg,rgba(10,18,30,.82),rgba(6,10,18,.9));border:1px solid rgba(56,216,255,.45);border-radius:12px;
+box-shadow:0 6px 24px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);padding:8px 14px 9px;text-shadow:0 1px 2px #000}
+#flightHud[hidden]{display:none}
+#flightHud .cmp{position:relative;height:24px;overflow:hidden;border-bottom:1px solid rgba(56,216,255,.25);margin-bottom:7px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
+#flightHud .tape{position:absolute;left:0;top:0;height:24px;white-space:nowrap;will-change:transform}
+#flightHud .tk{position:absolute;bottom:0;width:1px;background:rgba(232,246,255,.45);height:6px}#flightHud .tk.m{height:10px;background:#e8f6ff}
+#flightHud .tl{position:absolute;top:0;transform:translateX(-50%);font-size:11px;color:#bfe9ff}#flightHud .tl.c{color:#38d8ff;font-weight:800}#flightHud .tl.n{color:#ff6a5a;font-weight:800}
+#flightHud .ptr{position:absolute;left:50%;bottom:-1px;margin-left:-6px;border:6px solid transparent;border-bottom-color:#ffb347}
+#flightHud .hdg{position:absolute;left:50%;top:0;transform:translateX(-50%);font-size:11px;font-weight:800;color:#ffb347;background:#0b1420;padding:0 6px;border:1px solid rgba(255,179,71,.6);border-radius:3px;line-height:14px}
+#flightHud .row{display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:12px;align-items:start}
+#flightHud .k{font-size:10px;letter-spacing:2px;color:#7fb8d0}#flightHud .v{font:800 24px/1.05 'Inter','Noto Serif KR',sans-serif;color:#fff}#flightHud .u{font-size:11px;color:#9fc7d8;margin-left:3px}
+#flightHud .vs{font-size:11px;margin-left:6px}#flightHud .vs.up{color:#9fe0b0}#flightHud .vs.dn{color:#ffb347}
+#flightHud .bar{height:7px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:5px;position:relative}
+#flightHud .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,#38d8ff,#9fe0b0)}#flightHud .bar.th i{background:linear-gradient(90deg,#ffb347,#ff7a3a)}
+#flightHud .bar .st{position:absolute;top:-2px;bottom:-2px;width:2px;background:#ff6a5a}
+#flightHud .boost{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;font-size:10px;background:#ff7a3a;color:#000;font-weight:800;visibility:hidden}#flightHud .boost.on{visibility:visible}
+#flightHud .state{margin-top:7px;display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#9fc7d8}
+#flightHud .state b{color:#9fe0b0;font-weight:700}#flightHud .state b.warn{color:#fff;background:#d7261c;padding:0 8px;border-radius:3px;animation:fhBlink .5s steps(2) infinite}
+@keyframes fhBlink{50%{opacity:.35}}
+html.title #flightHud,html.dying #flightHud{display:none}`;
+    document.head.appendChild(css);
+    const el = this._panel = document.createElement('div'); el.id = 'flightHud'; el.hidden = true;
+    const PX = 3; let tape = '';
+    const names = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
+    for (let d = 0; d <= 720; d += 5) {
+      const x = d * PX, a = d % 360;
+      tape += `<span class="tk${d % 15 === 0 ? ' m' : ''}" style="left:${x}px"></span>`;
+      if (d % 15 === 0) tape += `<span class="tl${names[a] ? (a === 0 ? ' n' : ' c') : ''}" style="left:${x}px">${names[a] || a}</span>`;
+    }
+    el.innerHTML = `<div class="cmp"><div class="tape">${tape}</div><div class="ptr"></div><div class="hdg"></div></div>
+<div class="row"><div><div class="k">속도 SPD</div><div><span class="v sp">0</span><span class="u">km/h</span></div><div class="bar sb"><i></i><span class="st"></span></div></div>
+<div><div class="k">고도 ALT</div><div><span class="v al">0</span><span class="u">m</span><span class="vs"></span></div></div>
+<div><div class="k">추력 THR <span class="boost">BOOST</span></div><div><span class="v th">0</span><span class="u">%</span></div><div class="bar th"><i></i></div></div></div>
+<div class="state"><b class="sts"></b><span>W/S 추력 · Shift 부스트 · 마우스 방향 · F 내리기 · P 부르기</span></div>`;
+    document.body.appendChild(el);
+    const $ = s => el.querySelector(s);
+    this._pe = { tape: $('.tape'), cmp: $('.cmp'), hdg: $('.hdg'), sp: $('.sp'), sb: $('.sb i'), st: $('.sb .st'), al: $('.al'), vs: $('.vs'), th: $('.v.th'), tb: $('.bar.th i'), boost: $('.boost'), sts: $('.sts') };
+    return el;
+  },
+  panel() {
+    const a = this.cur, el = this.panelEl(); if (!a) { el.hidden = true; return; }
+    el.hidden = false;
+    const now = performance.now(); if (now - (this._pt || 0) < 60) return; this._pt = now;
+    const E = this._pe, sp = a.vel.length(), kmh = Math.round(sp * 3.6), top = 150, hdg = ((-a.yaw * 180 / Math.PI) % 360 + 360) % 360;
+    const w = E.cmp.clientWidth || 400; E.tape.style.transform = `translateX(${(w / 2 - (hdg + 360) * 3).toFixed(1)}px)`;
+    E.hdg.textContent = String(Math.round(hdg)).padStart(3, '0') + '°';
+    E.sp.textContent = kmh; E.sb.style.width = Math.min(100, sp / top * 100).toFixed(1) + '%'; E.st.style.left = (this.VS / top * 100).toFixed(1) + '%';
+    const alt = Math.max(0, Math.round(a.root.position.y - this.REST - a.floor)); E.al.textContent = alt;
+    const vy = a.vel.y; E.vs.textContent = Math.abs(vy) < 0.5 ? '' : (vy > 0 ? '▲' : '▼') + Math.abs(vy).toFixed(0);
+    E.vs.className = 'vs ' + (vy > 0 ? 'up' : 'dn');
+    E.th.textContent = Math.round(a.throttle * 100); E.tb.style.width = (a.throttle * 100).toFixed(0) + '%';
+    E.boost.classList.toggle('on', !!(Player.keys.ShiftLeft || Player.keys.ShiftRight));
+    const stall = !a.onGround && sp < this.VS;
+    E.sts.className = 'sts' + (stall ? ' warn' : '');
+    E.sts.textContent = stall ? '⚠ 실속 · 기수를 내려 속도를 올리세요' : a.onGround ? (sp < this.VR ? `${a.onWater ? '수상' : '지상'} 활주 · 이륙 ${Math.round(this.VR * 3.6)}km/h부터 마우스 위로` : '이륙 가능 · 마우스를 위로') : (alt < 40 ? '저고도 비행' : '비행 중');
+  },
+});
 
 </script>
 <script>
@@ -12097,7 +12283,8 @@ document.addEventListener('keydown', e => {
     if (code === 'KeyR' && typeof Allies !== 'undefined') Allies.cycleOrder();   // 57차: 동료 명령
     if (code === 'KeyT') Shifter.transform();                    // 거인화 (게이지가 찼을 때)
     if (code === 'KeyQ') { if (Shifter.active) Shifter.dash(); else Player.dodge(); }   // Q: 회피(사람) · 대시(거인)
-    if (code === 'KeyF' && typeof Aircraft !== 'undefined') Aircraft.key();   // 78차: 비행정 타기·내리기
+    if (code === 'KeyF' && typeof Aircraft !== 'undefined') Aircraft.key();
+    if (code === 'KeyP' && typeof Aircraft !== 'undefined') Aircraft.call();   // 80차: 하늘에서 비행정 부르기   // 78차: 비행정 타기·내리기
     if (code === 'KeyH' && typeof Horse !== 'undefined') Horse.key();          // 22차: 말 부르기·타기·내리기
     if (code === 'KeyG' && typeof Field !== 'undefined') Field.enter();        // 22차: 가까운 장소로 들어가기
     const num = /^(Digit|Numpad)([1-9])$/.exec(e.code);
@@ -12172,7 +12359,7 @@ function loop(now = performance.now()) {
   if (Game.running) {
     const dt = realDt * Effects.timeScale(realDt);   // 히트스톱 중엔 아주 느리게
     if (typeof Safe !== 'undefined') Safe.guard();   // 좌표가 깨졌으면 다른 계산보다 먼저 복구
-    if (Shifter.active) Shifter.update(dt); else if (!(typeof Aircraft !== 'undefined' && Aircraft.cur)) Player.update(dt);
+    if (Shifter.active) Shifter.update(dt); else if (!(typeof Aircraft !== 'undefined' && (Aircraft.cur || Aircraft.grab))) Player.update(dt);
     if (typeof Aircraft !== 'undefined') Aircraft.update(dt);   // 78차: 비행정 조종(타고 있으면 플레이어 대신 움직임)·프로펠러
     Titans.update(dt, Player);
     Shifter.postUpdate(dt);
