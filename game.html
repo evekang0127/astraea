@@ -6250,7 +6250,8 @@ html.title #fieldHud,html.cutting #fieldHud,html.dying #fieldHud{display:none}`;
     this.leaving = true;
     const k = (d + 60) / d, X = q.pos[0] + p.x * k / 1000, Y = q.pos[1] - p.z * k / 1000;
     try {
-      sessionStorage.setItem('astraea-handoff', JSON.stringify({ id: 'wild', x: 0, z: 0, yaw: Player.yaw, riding: typeof Horse !== 'undefined' && Horse.riding }));
+      const pl = typeof Aircraft !== 'undefined' ? Aircraft.state() : null;   // 79차: 비행정을 탄 채 나가면 들판에서도 같은 높이·속도로 이어 탐
+      sessionStorage.setItem('astraea-handoff', JSON.stringify({ id: 'wild', x: 0, z: 0, y: pl ? p.y : undefined, plane: pl, yaw: Player.yaw, riding: typeof Horse !== 'undefined' && Horse.riding }));
       sessionStorage.setItem('astraea-story-pending', JSON.stringify({ free: true }));
     } catch (_) {}
     Game.toast(`${q.name} 밖으로 · 들판으로 나가는 중…`, '#FFFFFF');
@@ -6268,7 +6269,8 @@ html.title #fieldHud,html.cutting #fieldHud,html.dying #fieldHud{display:none}`;
     const d = Math.hypot(x, z), lim = (m ? m.bound : 600) - 20;
     if (d > lim) { x *= lim / d; z *= lim / d; }   // G로 1.5km 밖에서 들어가면 장소 가장자리에서 시작
     try {
-      sessionStorage.setItem('astraea-handoff', JSON.stringify({ id, x, z, yaw: Player.yaw, riding: typeof Horse !== 'undefined' && Horse.riding }));
+      const pl = typeof Aircraft !== 'undefined' ? Aircraft.state() : null;   // 79차
+      sessionStorage.setItem('astraea-handoff', JSON.stringify({ id, x, z, y: pl ? Player.pos.y : undefined, plane: pl, yaw: Player.yaw, riding: typeof Horse !== 'undefined' && Horse.riding }));
       sessionStorage.setItem('astraea-story-pending', JSON.stringify({ free: true }));   // 시작 화면 '자유 모드 시작' 한 번 클릭으로 이어감
     } catch (_) {}
     Game.toast(`${q.name} 도착 · 불러오는 중…`, '#FFFFFF');
@@ -6281,6 +6283,7 @@ html.title #fieldHud,html.cutting #fieldHud,html.dying #fieldHud{display:none}`;
     if (!h || h.id !== W.mapId) return;
     W.START.set(h.x, typeof h.y === 'number' && isFinite(h.y) && Math.abs(h.y) < 2000 ? h.y : 0, h.z); W.START_YAW = h.yaw; W.handoff = true;   // 62차: 높은 곳(지붕·성벽 위)에서 저장했으면 그 높이로
     if (h.riding) this.rideOnStart = true;
+    if (h.plane) this.planeOnStart = h.plane;   // 79차: 시작하면 그 자리에서 비행정을 탄 채 이어감 (Aircraft.update)
   },
 };
 
@@ -10195,7 +10198,7 @@ Account.use('guest');
   S.transform = function (now) {   // now = true: 구체 단계 없이 바로 (시험 코드용)
     if (this.charging) return;
     if (now === true || this.active || !this.ready()) return inner.call(this);   // 게이지 부족 안내 등은 원래대로
-    if (typeof Aircraft !== 'undefined' && Aircraft.cur) { Game.toast('비행정에서는 거인화할 수 없다 · F로 내리기', '#cfd8e6'); return; }
+    if (typeof Aircraft !== 'undefined' && Aircraft.cur) Aircraft.exit(true);   // 79차: 비행정에서 뛰어내리며 그 자리에서 변신 (비행정은 혼자 활공)
     const p = Player, H = Nine.defs[this.kind].height;
     p.releaseHook(); p.lunge = null; if (p.updateRopes) p.updateRopes();
     this.charging = { t: 0, pos: p.pos.clone(), H, kind: this.kind };
@@ -10213,7 +10216,12 @@ Account.use('guest');
         if (c.t >= this.CHARGE_T) {
           this.charging = null; this.kind = c.kind;
           inner.call(this);
-          if (this.active && this.titan) { this.grow = { t: 0, titan: this.titan }; this.titan.root.scale.setScalar(0.3); }
+          if (this.active && this.titan) {
+            this.grow = { t: 0, titan: this.titan }; this.titan.root.scale.setScalar(0.3);
+            // 79차: 공중에서 변신하면 땅으로 내려놓지 않고 그 높이에서 생겨 떨어짐(높으면 거인 착지 충격)
+            const drop = c.pos.y - this.baseY;
+            if (drop > 0.5) { this.airY = drop; this.airV = 0; Player.pos.y = this.baseY + drop; this.titan.root.position.y = Player.pos.y; }
+          }
         }
       }
     }
@@ -11397,16 +11405,24 @@ const Freeplay = {
 
 </script>
 <script>
-// ===== 78차: 타고 조종하는 비행정 (오디하 항구 격납고) =====
-// 모양: 유선형 동체(회전체), 조종석 유리·창문 줄·패널 띠, 높은 주날개(끝이 좁아짐)와 날개 아래 엔진 4개(도는 3날 프로펠러),
-// 꼬리 수직·수평 날개와 방향타, 물 위에 뜨는 플로트 2개와 버팀대. 부품은 재질별로 몇 덩어리로 합쳐 그리기 횟수를 줄임(프로펠러만 따로 돎).
-// 조종(타고 있을 때): W 가속 · S 감속 · 마우스로 기수 방향(위아래·좌우) · A/D 선회 · Space 상승 · Shift 부스트 · F 내리기.
-// 비행 모델은 단순한 아케이드식: 속도 30m/s를 넘으면 뜨고, 땅·물에 닿으면 미끄러지며 멈춤. 맵 경계 밖으로 나가지 않음
+// ===== 78·79차: 타고 조종하는 비행정 (오디하 항구 격납고) =====
+// 모양: 유선형 동체(회전체)·조종석 앞유리 5장과 창틀·옆 창문·붉은 띠·문, 동체 위 날개 받침, 끝이 좁아지는 높은 주날개(상반각)·보조날개,
+// 날개에 붙은 엔진 4개(도는 3날 프로펠러)·배기관, 꼬리 수직·수평 날개와 방향타, 날개 아래 플로트 2개(버팀대 3개씩), 용골·안테나·항법등.
+// 79차: 부품을 동체 표면 반지름(rAt)·날개 높이(wingY)에 맞춰 붙임 — 78차에 창문·문·띠·방향타·엔진·플로트가 떠 보이던 것.
+// 조종(캐릭터와 같은 마우스 감도): 카메라는 마우스를 그대로 따라가고 비행정은 그 방향으로 빠르게 돌아감(초록 동그라미 = 기수가 향한 곳).
+//   W/S 추력 · Shift 부스트 · A/D 방향 보정 · 땅·물에서 추력 0일 때 S = 브레이크 · F 타기/내리기.
+// 비행: 속도 벡터 + 중력 + 양력(속도²에 비례). 실속 속도 40m/s — 땅에서는 제자리에서 돌 수 없고(굴러가는 속도에 비례해 방향 전환),
+//   34m/s부터 기수를 들 수 있어 속도가 붙으면 서서히 뜸. 오르면 속도가 줄고 내려가면 늘어남. 너무 느리면 기수가 떨어지며 가라앉음(실속 경고).
+//   착지는 내려오는 속도 9m/s 아래·기수 각도·기울기가 괜찮을 때만, 아니면 추락(폭발·조종사는 튕겨 나감, 6초 뒤 처음 자리에 새 비행정). 건물·성벽·절벽에 부딪혀도 추락.
+//   하늘에서 내리면 비행정은 멈추지 않고 추력이 꺼진 채 활공하다 착지하거나 추락함. 조종사는 비행정 속도를 그대로 가진 채 뛰어내림.
+// 세계 연결: 장소 경계를 막지 않음 → 들판이 있는 장소는 그대로 들판으로, 들판이 없는 장소(오디하 등)는 경계에서 들판으로 이어 불러오고
+//   비행정도 같은 높이·속도·방향으로 이어서 탄 채 시작(Field 핸드오프 'plane'). 들판에서 다른 장소로 날아 들어가도 그대로 이어짐.
 const Aircraft = {
-  list: [], cur: null, near: null,
-  // 오디하 격납고 자리에 하나 만듦 (x, z, 바라보는 방향)
+  list: [], cur: null,
+  REST: 3.7,                         // 바닥(땅·물)에서 동체 중심까지 높이
+  VS: 40, VR: 34,                    // 실속 속도, 기수 들기 시작 속도 (m/s)
   spawn(scene, x, y, z, yaw) {
-    const a = { root: new THREE.Group(), props: [], speed: 0, throttle: 0, yaw, pitch: 0, roll: 0, home: new THREE.Vector3(x, y, z), homeYaw: yaw, ground: y };
+    const a = { root: new THREE.Group(), props: [], vel: new THREE.Vector3(), throttle: 0, yaw, pitch: 0, roll: 0, home: new THREE.Vector3(x, y, z), homeYaw: yaw, onGround: true, parked: true, crashT: 0, floor: 0, onWater: false, spin: 0 };
     try { this.build(a); } catch (e) { console.warn('aircraft', e); return null; }   // 모델 오류가 장소 전체를 깨지 않게
     a.root.position.set(x, y, z); a.root.rotation.set(0, yaw, 0, 'YXZ');
     scene.add(a.root);
@@ -11423,59 +11439,67 @@ const Aircraft = {
       glass: new THREE.MeshStandardMaterial({ color: 0x24384a, roughness: 0.08, metalness: 0.4, emissive: 0x0a1622 }),
       wood: new THREE.MeshStandardMaterial({ color: 0x6b4a30, roughness: 0.8 }),
     };
-    // 같은 재질 부품은 한 메시로 합침(위치·회전을 굽고 합침)
-    const put = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => {
-      const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz));
+    const put = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, order = 'XYZ') => {
+      const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, order)), new THREE.Vector3(1, 1, 1));
       const gg = (geo.index ? geo.toNonIndexed() : geo.clone()).applyMatrix4(m); if (gg.attributes.uv) gg.deleteAttribute('uv');
       if (!parts.has(mat)) parts.set(mat, []); parts.get(mat).push(gg);
     };
-    // 동체: 앞이 둥글고 뒤가 가늘어지는 회전체 (길이 36m, 앞 = -z)
-    const prof = [[0, -18], [1.4, -17.4], [2.5, -16], [3.2, -13.5], [3.4, -9], [3.4, 2], [3.0, 8], [2.2, 13], [1.2, 16.5], [0.4, 18]].map(([r, z]) => new THREE.Vector2(r, z));
-    const hullGeo = new THREE.LatheGeometry(prof, 24); hullGeo.rotateX(Math.PI / 2); hullGeo.rotateX(Math.PI);   // 축을 z로
-    const hullMesh = new THREE.Mesh(hullGeo, M.hull); hullMesh.castShadow = true; g.add(hullMesh); a.hull = hullMesh;
-    // 배 밑(물에 닿는 용골)과 붉은 띠
-    put(new THREE.BoxGeometry(1.2, 0.8, 30), M.dark, 0, -3.3, 0);
-    for (const z of [-11, 6]) put(new THREE.CylinderGeometry(3.45, 3.45, 0.6, 24, 1, true), M.band, 0, 0, z, Math.PI / 2);
-    // 조종석 유리(앞 위) + 창문 줄
-    put(new THREE.SphereGeometry(2.3, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.45), M.glass, 0, 1.4, -13.2, -0.35, 0, 0, 1, 0.75, 1.5);
-    for (const s of [-1, 1]) for (let i = 0; i < 9; i++) put(new THREE.BoxGeometry(0.15, 0.9, 1.2), M.glass, s * 3.36, 0.9, -8 + i * 2.2);
-    // 문(양옆)
-    for (const s of [-1, 1]) put(new THREE.BoxGeometry(0.16, 2.6, 1.6), M.dark, s * 3.38, -0.2, 9);
-    // 주날개(높은 날개, 끝으로 좁아짐) — 사다리꼴: 상자를 늘린 뒤 끝을 좁게
+    // 동체: 앞(-z)이 둥글고 뒤가 가늘어지는 회전체 (길이 36m). [반지름, z]
+    const P = [[0, -18], [1.4, -17.4], [2.5, -16], [3.2, -13.5], [3.4, -9], [3.4, 2], [3.0, 8], [2.2, 13], [1.2, 16.5], [0.4, 18], [0, 18.3]];
+    const rAt = z => { for (let i = 1; i < P.length; i++) if (z <= P[i][1]) { const [r0, z0] = P[i - 1], [r1, z1] = P[i]; return r0 + (r1 - r0) * (z - z0) / (z1 - z0); } return 0.4; };
+    const hullGeo = new THREE.LatheGeometry(P.map(([r, z]) => new THREE.Vector2(r, z)), 28);
+    hullGeo.rotateX(Math.PI / 2);   // 회전축 y → z (프로필의 z가 그대로 앞뒤, 앞 = -z). 뒤집기(반사)가 아니라 회전이라 면 방향이 그대로 바깥
+    put(hullGeo, M.hull, 0, 0, 0);
+    // 배 밑 용골(물에 닿는 곳)과 붉은 띠
+    put(new THREE.BoxGeometry(1.2, 0.8, 22), M.dark, 0, -3.2, -3);
+    for (const z of [-11, 5]) put(new THREE.CylinderGeometry(rAt(z) + 0.05, rAt(z) + 0.05, 0.6, 28, 1, true), M.band, 0, 0, z, Math.PI / 2);
+    // 조종석 앞유리 5장: 기수 경사(약 0.27rad)에 맞춰 기울이고 동체를 따라 둘러 붙임 + 사이 창틀
+    { const z = -14.6, r = rAt(z) + 0.02;
+      for (const f of [-0.95, -0.48, 0, 0.48, 0.95]) put(new THREE.BoxGeometry(1.25, 0.08, 1.7), M.glass, r * Math.sin(f), r * Math.cos(f), z, -0.27, 0, -f, 'ZYX');
+      for (const f of [-0.72, -0.24, 0.24, 0.72]) put(new THREE.BoxGeometry(0.12, 0.12, 1.75), M.dark, (r + 0.05) * Math.sin(f), (r + 0.05) * Math.cos(f), z, -0.27, 0, -f, 'ZYX'); }
+    // 옆 창문(동체가 굵은 구간만)과 문
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 5; i++) { const z = -8 + i * 2.2; put(new THREE.BoxGeometry(0.12, 0.9, 1.2), M.glass, s * (rAt(z) - 0.02), 0.9, z); }
+      put(new THREE.BoxGeometry(0.14, 2.6, 1.6), M.dark, s * (rAt(3) - 0.04), -0.3, 3);
+    }
+    // 날개 받침: 동체 위와 날개 사이를 메움
+    put(new THREE.BoxGeometry(6.4, 0.7, 6), M.hull, 0, 3.6, -3);
+    put(new THREE.BoxGeometry(4.2, 2.2, 5), M.hull, 0, 2.6, -3);
+    // 주날개(높은 날개, 끝으로 좁고 얇고 살짝 올라감). 좌우 끝을 각각 바깥으로 계산(음수 배율로 뒤집으면 면이 뒤집혀 어둡게 보임)
+    const wingY = x => 3.6 + Math.max(0, (Math.abs(x) - 3) / 23) * 0.9;
     for (const s of [-1, 1]) {
       const w = new THREE.BoxGeometry(23, 0.7, 6, 6, 1, 1), p = w.attributes.position;
-      for (let i = 0; i < p.count; i++) { const x = p.getX(i), t = (s * x + 11.5) / 23; p.setZ(i, p.getZ(i) * (1 - t * 0.45)); p.setY(i, p.getY(i) * (1 - t * 0.4) + t * 0.9); }   // 끝으로 갈수록 좁고 얇고 살짝 올라감(상반각). 좌우 끝(t=1)을 각각 바깥으로 계산(음수 배율로 뒤집으면 면이 뒤집혀 어둡게 보였음)
+      for (let i = 0; i < p.count; i++) { const t = (s * p.getX(i) + 11.5) / 23; p.setZ(i, p.getZ(i) * (1 - t * 0.45)); p.setY(i, p.getY(i) * (1 - t * 0.4) + t * 0.9); }
       w.computeVertexNormals();
       put(w, M.hull, s * 14.5, 3.6, -3);
-      put(new THREE.BoxGeometry(2.2, 0.75, 1.0), M.band, s * 25.3, 4.4, -2.2);   // 날개 끝 붉은 표시
-      put(new THREE.BoxGeometry(20, 0.25, 1.4), M.metal, s * 15, 3.4, 0.1);       // 보조날개
-      // 날개 버팀대(동체 → 날개)
-      put(new THREE.CylinderGeometry(0.18, 0.18, 7.2, 8), M.metal, s * 6, 1.0, -3, 0, 0, s * 0.9);
-      // 플로트(물에 뜨는 통) + 버팀대
-      put(Aircraft.floatGeo || (Aircraft.floatGeo = new THREE.LatheGeometry([[0, -3.4], [0.5, -3], [0.8, -2], [0.85, 1], [0.6, 2.8], [0, 3.4]].map(([r, y]) => new THREE.Vector2(r, y)), 12)), M.hull, s * 18, -2.2, -3, -Math.PI / 2);
-      put(new THREE.CylinderGeometry(0.12, 0.12, 5.2, 6), M.metal, s * 18, 0.6, -3.8, 0.15);
-      put(new THREE.CylinderGeometry(0.12, 0.12, 5.2, 6), M.metal, s * 18, 0.6, -2.2, -0.15);
+      put(new THREE.BoxGeometry(1.6, 0.5, 3.0), M.band, s * 25.4, wingY(25.4), -3);       // 날개 끝 붉은 표시
+      put(new THREE.BoxGeometry(14, 0.22, 1.0), M.metal, s * 16, wingY(16) - 0.05, -0.9);  // 보조날개
+      // 플로트(물에 뜨는 통) + 버팀대 2개 + 안쪽 사선 버팀대
+      put(Aircraft.floatGeo || (Aircraft.floatGeo = new THREE.LatheGeometry([[0, -3.4], [0.5, -3], [0.8, -2], [0.85, 1], [0.6, 2.8], [0, 3.4]].map(([r, y]) => new THREE.Vector2(r, y)), 12)), M.hull, s * 19, 1.4, -3, -Math.PI / 2);
+      for (const z of [-4, -2]) put(new THREE.CylinderGeometry(0.12, 0.12, 1.9, 6), M.metal, s * 19, 3.1, z);
+      put(new THREE.CylinderGeometry(0.1, 0.1, 4.4, 6), M.metal, s * 17, 3.1, -3, 0, 0, s * 1.15);
     }
-    // 엔진 4개: 나셀(앞이 둥근 원통) + 배기관 + 도는 프로펠러(따로)
+    // 엔진 4개: 날개 아래에 붙은 나셀(앞이 굵고 둥근 원통) + 배기관 + 도는 프로펠러(따로)
     const propGeo = new THREE.BoxGeometry(0.35, 4.6, 0.12);
     for (const x of [-16, -8, 8, 16]) {
-      put(new THREE.CylinderGeometry(1.05, 0.75, 5.2, 14), M.dark, x, 3.0, -4.6, Math.PI / 2);
-      put(new THREE.SphereGeometry(1.05, 14, 10), M.dark, x, 3.0, -7.2, 0, 0, 0, 1, 1, 0.8);
-      put(new THREE.CylinderGeometry(0.22, 0.22, 2, 6), M.metal, x + 0.8, 2.3, -1.6, Math.PI / 2);   // 배기관
-      const hub = new THREE.Group(); hub.position.set(x, 3.0, -8.25); g.add(hub);
+      const y = wingY(x) - 0.75;
+      put(new THREE.CylinderGeometry(1.05, 0.75, 5.2, 14), M.dark, x, y, -4.6, -Math.PI / 2);
+      put(new THREE.SphereGeometry(1.05, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.dark, x, y, -7.2, -Math.PI / 2);
+      put(new THREE.CylinderGeometry(0.22, 0.22, 2, 6), M.metal, x + 0.8, y - 0.6, -1.8, Math.PI / 2);   // 배기관
+      const hub = new THREE.Group(); hub.position.set(x, y, -8.35); g.add(hub);
       const spin = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.9, 12), M.metal); spin.rotation.x = -Math.PI / 2; hub.add(spin);
       for (let b = 0; b < 3; b++) { const bl = new THREE.Mesh(propGeo, M.wood); bl.rotation.z = b * Math.PI * 2 / 3; bl.position.z = 0.2; hub.add(bl); }
       a.props.push(hub);
     }
-    // 꼬리: 수직 날개 + 방향타 + 수평 날개
+    // 꼬리: 수직 날개(위로 갈수록 좁고 뒤로 누움) + 방향타 + 수평 날개
     { const fin = new THREE.BoxGeometry(0.5, 7, 5, 1, 4, 1), p = fin.attributes.position;
       for (let i = 0; i < p.count; i++) { const t = (p.getY(i) + 3.5) / 7; p.setZ(i, p.getZ(i) * (1 - t * 0.5) + t * 1.6); }
       fin.computeVertexNormals(); put(fin, M.hull, 0, 4.4, 14.5); }
-    put(new THREE.BoxGeometry(0.55, 5.6, 1.4), M.band, 0, 4.6, 17.4);   // 방향타
-    for (const s of [-1, 1]) put(new THREE.BoxGeometry(7, 0.35, 3.2), M.hull, s * 3.6, 1.9, 15.5);
+    put(new THREE.BoxGeometry(0.55, 6, 1.3), M.band, 0, 4.0, 17.2);
+    for (const s of [-1, 1]) put(new THREE.BoxGeometry(7, 0.35, 3.2), M.hull, s * 3.6, 1.5, 15.5);
     // 등 위 안테나·항법등
-    put(new THREE.CylinderGeometry(0.06, 0.06, 3, 4), M.metal, 0, 4.2, -6, 0.2);
-    put(new THREE.SphereGeometry(0.25, 8, 6), M.glass, 0, 3.5, 12);
+    put(new THREE.CylinderGeometry(0.06, 0.06, 3, 4), M.metal, 0, 5.2, 2, 0.2);
+    put(new THREE.SphereGeometry(0.25, 8, 6), M.glass, 0, rAt(11) + 0.1, 11);
     for (const [mat, list] of parts) {
       let n = 0; for (const geo of list) n += geo.attributes.position.count;
       const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3); let k = 0;
@@ -11483,87 +11507,192 @@ const Aircraft = {
       const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); mg.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); mg.computeBoundingSphere();
       const mesh = new THREE.Mesh(mg, mat); mesh.castShadow = mat !== M.glass; mesh.receiveShadow = true; g.add(mesh);
     }
+    // 충돌 확인점(기수·양 날개 끝·꼬리)
+    a.probes = [new THREE.Vector3(0, 0, -18), new THREE.Vector3(-25.5, 4.4, -3), new THREE.Vector3(25.5, 4.4, -3), new THREE.Vector3(0, 7.5, 16)];
   },
-  // 가까운 비행정 (15m 안 — 동체 길이를 생각해 중심에서 22m)
   findNear() {
     let best = null, bd = 22;
-    for (const a of this.list) { const d = a.root.position.distanceTo(Player.pos); if (d < bd) { bd = d; best = a; } }
+    for (const a of this.list) { if (a.crashT > 0 || a.gone) continue; const d = a.root.position.distanceTo(Player.pos); if (d < bd) { bd = d; best = a; } }
     return best;
   },
   key() {
     if (this.cur) { this.exit(); return; }
     if (typeof Shifter !== 'undefined' && (Shifter.active || Shifter.charging)) return;
     const a = this.findNear();
-    if (!a) return;
+    if (a) this.board(a);
+  },
+  board(a) {
     Player.releaseHook && Player.releaseHook();
     if (typeof Horse !== 'undefined' && Horse.riding) Horse.dismount();
-    this.cur = a; a.throttle = 0; a.pitch = 0; a.roll = 0; a.yaw = a.root.rotation.y;
+    this.cur = a; a.parked = false;
     Player.model.visible = false; if (Player.viewModel) Player.viewModel.visible = false;
-    Player.yaw = a.yaw; Player.pitch = 0;
-    Game.toast('비행정 탑승 · W 가속 · 마우스 방향 · A/D 선회 · Space 상승 · F 내리기', '#9fe0b0');
+    Player.yaw = a.yaw; Player.pitch = a.pitch;
+    this.noseEl().hidden = false;
+    Game.toast('비행정 탑승 · W 추력 · 마우스로 방향 · Shift 부스트 · S 감속·브레이크 · F 내리기', '#9fe0b0');
   },
-  exit() {
+  exit(silent) {
     const a = this.cur; if (!a) return;
-    this.cur = null;
-    // 왼쪽 문 옆으로 내림. 날고 있었으면 그 자리에서 떨어짐(입체기동으로 착지)
-    const side = new THREE.Vector3(-Math.cos(a.yaw), 0, Math.sin(a.yaw));
-    Player.pos.copy(a.root.position).addScaledVector(side, 5); Player.pos.y = a.root.position.y - 1;
-    Player.vel.set(0, 0, 0).addScaledVector(this.fwd(a), a.speed * 0.6);
+    this.cur = null; this.noseEl().hidden = true;
+    const p = a.root.position, side = new THREE.Vector3(-Math.cos(a.yaw), 0, Math.sin(a.yaw)), sp = a.vel.length();
+    if (a.onGround && sp < 6) {   // 서 있거나 천천히 움직일 때: 왼쪽 문 옆 땅(물)에 내려섬
+      Player.pos.copy(p).addScaledVector(side, 6); Player.pos.y = a.floor; Player.vel.set(0, 0, 0);
+      a.throttle = 0;
+    } else {                       // 움직이는 중: 비행정 속도를 그대로 가진 채 뛰어내림(입체기동으로 착지). 비행정은 혼자 활공
+      Player.pos.copy(p).addScaledVector(side, 5); Player.pos.y -= 1.5;
+      Player.vel.copy(a.vel).addScaledVector(side, 4);
+    }
     Player.onGround = false;
     Player.model.visible = Player.thirdPerson; if (Player.viewModel) Player.viewModel.visible = !Player.thirdPerson;
-    Game.toast('비행정에서 내림', '#9fe0b0');
+    if (!silent) Game.toast(a.onGround ? '비행정에서 내림' : '비행정에서 뛰어내림 · 비행정은 활공함', '#9fe0b0');
   },
-  fwd(a) { return new THREE.Vector3(-Math.sin(a.yaw) * Math.cos(a.pitch), Math.sin(a.pitch), -Math.cos(a.yaw) * Math.cos(a.pitch)); },
-  groundAt(x, z) {
-    let g = World.open && typeof Field !== 'undefined' ? Field.height(x, z) : 0;
-    const wl = World.waterLevel(x, z); if (wl !== null) g = Math.max(g, wl);
-    return g + 3.4;   // 동체 반지름 + 플로트
+  // 장소를 넘어갈 때 이어 갈 상태 / 새 장소에서 이어 타기
+  state() { const a = this.cur; return a ? { yaw: a.yaw, pitch: a.pitch, speed: a.vel.length(), vy: a.vel.y, throttle: a.throttle, ground: a.onGround } : null; },
+  resume(s) {
+    const p = Player.pos, a = this.spawn(World.scene, p.x, p.y, p.z, s.yaw); if (!a) return;
+    a.temp = true;   // 이어 온 비행정: 추락하면 다시 생기지 않음
+    a.pitch = s.ground ? 0 : s.pitch; a.throttle = s.throttle;
+    const fl = this.floorAt(p.x, p.z) + this.REST;
+    if (s.ground) a.root.position.y = fl; else a.root.position.y = Math.max(p.y, fl + 25);
+    this.fwd(a, a.vel).multiplyScalar(s.speed); if (!s.ground) a.vel.y = Math.max(a.vel.y, s.vy);
+    a.onGround = !!s.ground; a.root.rotation.set(a.pitch, a.yaw, 0, 'YXZ');
+    this.board(a);
+  },
+  fwd(a, out = new THREE.Vector3()) { return out.set(-Math.sin(a.yaw) * Math.cos(a.pitch), Math.sin(a.pitch), -Math.cos(a.yaw) * Math.cos(a.pitch)); },
+  // 바닥 높이: 물이면 수면, 들판이면 지형, 맵 전용 바닥, 그리고 바로 아래 낮은 건물·부두 윗면(넘어설 수 있는 높이만)
+  floorAt(x, z, y) {
+    let f = World.open && typeof Field !== 'undefined' ? Field.height(x, z) : 0;
+    const wl = World.waterLevel(x, z), water = wl !== null; if (water) f = Math.max(f, wl);
+    if (World.map && World.map.groundAt) { const gg = World.map.groundAt(x, z, y === undefined ? 1e4 : y); if (gg !== null) f = Math.max(f, gg); }
+    if (y !== undefined) for (const b of World.near(x, z, x, z)) if (x >= b.min.x && x <= b.max.x && z >= b.min.z && z <= b.max.z && b.max.y <= y - this.REST + 1.6) f = Math.max(f, b.max.y);
+    this._water = water && f === wl;
+    return f;
+  },
+  // 점이 건물·바위·성벽 안에 있는가
+  solidHit(q) {
+    for (const b of World.near(q.x - 0.5, q.z - 0.5, q.x + 0.5, q.z + 0.5)) {
+      if (q.x < b.min.x || q.x > b.max.x || q.z < b.min.z || q.z > b.max.z) continue;
+      let top = b.max.y;
+      if (b.roof) { const o = b.roof.axis === 'x' ? q.x - (b.min.x + b.max.x) / 2 : q.z - (b.min.z + b.max.z) / 2; top += b.roof.h * Math.max(0, 1 - Math.abs(o) / b.roof.half); }
+      if (q.y >= b.min.y && q.y <= top) return true;
+    }
+    for (const w of World.walls || []) {
+      const ox = q.x - w.cx, oz = q.z - w.cz, u = ox * w.tx + oz * w.tz, v = -ox * w.tz + oz * w.tx;
+      if (Math.abs(u) <= w.half && Math.abs(v) <= w.thick && q.y <= w.h && q.y >= (w.y0 || 0)) return true;
+    }
+    return false;
+  },
+  crash(a) {
+    const at = a.root.position.clone();
+    Effects.impact(at, true, 3); Effects.debris(at, 2.5, 60); Effects.shockwave(at, 45, 0xffb060, 0.8); Effects.shake(1.6);
+    if (this.cur === a) {
+      this.exit(true);
+      Player.pos.copy(at).add(new THREE.Vector3(0, 3, 0)); Player.vel.copy(a.vel).multiplyScalar(0.3); Player.vel.y = 16;
+      Game.damagePlayer(Math.max(0, Math.min(35, Math.ceil(Player.hp) - 1)), new THREE.Vector3());   // 크게 다치지만 추락만으로 죽지는 않음
+    }
+    a.root.visible = false; a.vel.set(0, 0, 0); a.throttle = 0;
+    if (a.temp) { a.gone = true; a.parked = true; Game.toast('비행정 추락!', '#ff8a5a'); return; }
+    a.crashT = 6;
+    Game.toast('비행정 추락! 6초 뒤 격납고에 새 비행정', '#ff8a5a');
+  },
+  respawn(a) {
+    a.root.position.copy(a.home); a.yaw = a.homeYaw; a.pitch = 0; a.roll = 0; a.vel.set(0, 0, 0); a.throttle = 0;
+    a.onGround = true; a.parked = true; a.root.visible = true; a.root.rotation.set(0, a.yaw, 0, 'YXZ');
   },
   update(dt) {
+    if (typeof Field !== 'undefined' && Field.planeOnStart && Game.running) { const s = Field.planeOnStart; Field.planeOnStart = null; this.resume(s); }
+    if (this.cur && (Game.over || Game.dying)) { this.cur = null; this.noseEl().hidden = true; }
     for (const a of this.list) {
-      const spinK = a === this.cur ? 4 + a.throttle * 40 : 0;
-      for (const h of a.props) h.rotation.z += spinK * dt;
+      if (a.gone) continue;
+      if (a.crashT > 0) { if ((a.crashT -= dt) <= 0) this.respawn(a); continue; }
+      a.spin = a.throttle > 0 || a === this.cur ? 5 + a.throttle * 45 : Math.max(0, a.spin - dt * 10);
+      for (const h of a.props) h.rotation.z += a.spin * dt;
+      if (!a.parked) this.step(a, dt, a === this.cur);
     }
-    const a = this.cur; if (!a) return;
-    const k = Player.keys;
-    // 추력: W 올림 · S 내림 (0~1), Shift 부스트
-    if (k.KeyW) a.throttle = Math.min(1, a.throttle + dt * 0.6);
-    if (k.KeyS) a.throttle = Math.max(0, a.throttle - dt * 0.8);
-    const top = 95 * (k.ShiftLeft || k.ShiftRight ? 1.45 : 1);
-    a.speed += (a.throttle * top - a.speed) * Math.min(1, dt * 0.6);
-    // 방향: 마우스(Player.yaw/pitch)를 따라가되 선회 속도 제한. A/D로도 선회
-    let ty = Player.yaw; if (k.KeyA) ty += 0.9 * dt; if (k.KeyD) ty -= 0.9 * dt; Player.yaw = ty;
-    const dy = Math.atan2(Math.sin(ty - a.yaw), Math.cos(ty - a.yaw)), turn = Math.max(-0.9 * dt, Math.min(0.9 * dt, dy));
-    a.yaw += turn;
-    const airborne = a.root.position.y > a.ground + 0.6;
-    const wantPitch = Math.max(-0.6, Math.min(0.6, Player.pitch + (k.Space ? 0.35 : 0)));
-    a.pitch += (wantPitch * (a.speed > 30 || airborne ? 1 : 0) - a.pitch) * Math.min(1, dt * 1.5);
-    const rate = turn / Math.max(dt, 1e-4); a.roll += (rate * 0.9 - a.roll) * Math.min(1, dt * 2.5);   // 왼쪽으로 돌면 왼쪽 날개가 내려감
-    a.roll = Math.max(-0.8, Math.min(0.8, a.roll));
-    // 이동: 30m/s 아래에서는 땅 위를 굴러감(뜨지 않음), 넘으면 기수 방향으로. 느리면 천천히 가라앉음
-    const f = this.fwd(a), p = a.root.position;
-    p.addScaledVector(f, a.speed * dt);
-    if (a.speed < 30 && airborne) p.y -= (30 - a.speed) * 0.35 * dt;
-    a.ground = this.groundAt(p.x, p.z);
-    if (p.y < a.ground) { p.y = a.ground; if (a.pitch < 0) a.pitch = 0; if (a.speed > 45 && f.y < -0.25) { a.speed *= 0.5; Effects.shake(0.8); Game.toast('거친 착륙!', '#ffb347'); } }
-    // 맵 경계(닫힌 장소)
-    if (!World.open) { const r = Math.hypot(p.x, p.z), lim = World.BOUND - 30; if (r > lim) { p.x *= lim / r; p.z *= lim / r; a.yaw += Math.PI * dt; } }
-    a.root.rotation.set(a.pitch, a.yaw, a.roll, 'YXZ');   // 양수 = 기수 위
-    // 플레이어는 조종석에 (거인·미니맵·들판 불러오기가 이 위치를 씀)
-    Player.pos.copy(p); Player.vel.copy(f).multiplyScalar(a.speed); Player.onGround = false;
   },
+  step(a, dt, ctl) {
+    const k = Player.keys, p = a.root.position, g = 9.8;
+    const v = a.vel, sp = v.length(), L = (sp / this.VS) * (sp / this.VS);
+    // 추력: W 올림 · S 내림 (조종사가 없으면 2초에 걸쳐 꺼짐)
+    if (ctl) { if (k.KeyW) a.throttle = Math.min(1, a.throttle + dt * 0.7); if (k.KeyS) a.throttle = Math.max(0, a.throttle - dt * 0.9); }
+    else a.throttle = Math.max(0, a.throttle - dt * 0.5);
+    // 목표 방향: 조종사가 있으면 마우스(캐릭터와 같은 감도) + A/D 보정, 없으면 수평 유지·살짝 기수 내림
+    if (ctl) { if (k.KeyA) Player.yaw += 1.2 * dt; if (k.KeyD) Player.yaw -= 1.2 * dt; }
+    const ty = ctl ? Player.yaw : a.yaw;
+    let tp = ctl ? Math.max(-0.8, Math.min(0.8, Player.pitch)) : -0.1;
+    if (a.onGround) tp = sp > this.VR ? Math.max(0, Math.min(0.26, tp)) : 0;   // 땅·물 위: 이륙 속도 전에는 기수를 못 듦
+    const hs0 = Math.hypot(v.x, v.z);
+    const yawMax = a.onGround ? 0.9 * Math.min(1, hs0 / 10) : 2.6, pitchMax = a.onGround ? 0.5 : 2.2;   // 땅에서는 굴러가야 방향이 바뀜(제자리 회전 없음)
+    const dy = Math.atan2(Math.sin(ty - a.yaw), Math.cos(ty - a.yaw));
+    const turn = Math.max(-yawMax * dt, Math.min(yawMax * dt, dy * Math.min(1, 7 * dt)));
+    a.yaw += turn;
+    a.pitch += Math.max(-pitchMax * dt, Math.min(pitchMax * dt, (tp - a.pitch) * Math.min(1, 7 * dt)));
+    if (!a.onGround && L < 1) a.pitch += (Math.min(a.pitch, -0.35) - a.pitch) * (1 - L) * 1.6 * dt;   // 실속: 기수가 떨어짐
+    a.roll += ((a.onGround ? 0 : Math.max(-1.1, Math.min(1.1, (turn / Math.max(dt, 1e-4)) * 0.55))) - a.roll) * Math.min(1, dt * 4);   // 왼쪽으로 돌면 왼쪽 날개가 내려감
+    // 힘: 추력(기수 방향) − 공기 저항 − 땅·물 마찰/브레이크, 중력, 양력(속도를 기수 쪽으로 돌리고 중력을 받침)
+    const f = this.fwd(a, this._f || (this._f = new THREE.Vector3()));
+    const boost = ctl && (k.ShiftLeft || k.ShiftRight) ? 1.6 : 1;
+    v.addScaledVector(f, a.throttle * 26 * boost * dt);
+    let drag = 0.0018 * sp * sp;
+    if (a.onGround) drag += (a.onWater ? 0.1 : 0.03) * sp + (ctl && k.KeyS && a.throttle === 0 ? 9 : 0) + (!ctl && a.throttle === 0 ? 3 : 0);
+    if (sp > 0.01) v.multiplyScalar(Math.max(0, sp - drag * dt) / sp);
+    const s2 = v.length(), lk = Math.min(1, L);
+    if (s2 > 0.01) {
+      const vdir = this._d || (this._d = new THREE.Vector3()); vdir.copy(v).divideScalar(s2);
+      v.addScaledVector(vdir, -g * vdir.y * lk * dt);                         // 오르면 속도가 줄고 내려가면 늘어남
+      const want = this._w || (this._w = new THREE.Vector3()); want.copy(f).multiplyScalar(v.length());
+      v.lerp(want, Math.min(1, dt * (a.onGround ? 6 : 3) * Math.max(lk, a.onGround ? 1 : 0.15)));   // 속도가 기수 방향으로 (땅에서는 선체가 붙잡음)
+    }
+    v.y -= g * (1 - lk) * dt;                                                  // 양력이 모자란 만큼 떨어짐
+    p.addScaledVector(v, dt);
+    // 스토리 진행 중·끝없는 길에서만 장소 경계에서 막음(그 밖에는 경계를 넘어 들판·다른 장소로 이어짐)
+    if (!World.open && ((typeof Story !== 'undefined' && Story.active) || World.mapId === 'paths' || !(typeof Atlas !== 'undefined' && Atlas.PLACES[World.mapId]))) { const r = Math.hypot(p.x, p.z), lim = World.BOUND - 10; if (r > lim) { const nx = p.x / r, nz = p.z / r; p.x = nx * lim; p.z = nz * lim; const vn = v.x * nx + v.z * nz; if (vn > 0) { v.x -= vn * nx; v.z -= vn * nz; } } }
+    // 바닥: 착지 판정
+    a.floor = this.floorAt(p.x, p.z, p.y); a.onWater = this._water;
+    const rest = a.floor + this.REST;
+    if (p.y <= rest) {
+      const sink = -v.y, hs = Math.hypot(v.x, v.z);
+      if (!a.onGround && (sink > 9 || (hs > 20 && a.pitch < -0.3) || Math.abs(a.roll) > 0.75)) { this.crash(a); return; }
+      if (!a.onGround && sink > 4) { Effects.shake(0.6); if (ctl) Game.toast('쿵! 거친 착지', '#ffb347'); }
+      p.y = rest; if (v.y < 0) v.y = 0; a.onGround = true;
+    } else if (p.y > rest + 0.3) a.onGround = false;
+    // 건물·성벽·절벽 충돌(기수·날개 끝·꼬리)
+    a.root.rotation.set(a.pitch, a.yaw, a.roll, 'YXZ');
+    a.root.updateMatrixWorld();
+    const q = this._q || (this._q = new THREE.Vector3());
+    for (const pr of a.probes) { q.copy(pr).applyMatrix4(a.root.matrixWorld); if ((q.y < a.floor - 0.5 && Math.hypot(v.x, v.z) > 15) || this.solidHit(q)) { this.crash(a); return; } }
+    // 멈추면 세워 둠(계산 생략)
+    if (!ctl && a.onGround && v.length() < 0.3 && a.throttle === 0) { a.parked = true; v.set(0, 0, 0); }
+    if (ctl) { Player.pos.copy(p); Player.vel.copy(v); Player.onGround = false; }   // 거인·미니맵·들판·장소 경계가 이 위치를 씀
+  },
+  // 카메라: 캐릭터와 같음 — 마우스 방향 그대로, 비행정 뒤·위에서. 빠를수록 조금 멀어지고 시야가 넓어짐
   updateCamera(camera) {
-    const a = this.cur, p = a.root.position, f = this.fwd(a);
-    const want = this._cam || (this._cam = new THREE.Vector3());
-    want.copy(p).addScaledVector(f, -42).add(new THREE.Vector3(0, 12, 0));
-    camera.position.lerp(want, 0.15);
-    camera.lookAt(p.x + f.x * 30, p.y + f.y * 30 + 2, p.z + f.z * 30);
-    const fov = (Player.baseFov || 75) + Math.min(a.speed, 140) * 0.08;
+    const a = this.cur, p = a.root.position, sp = a.vel.length();
+    const look = Player.lookDir(), D = 30 + Math.min(sp, 150) * 0.07;
+    camera.position.copy(p).addScaledVector(look, -D); camera.position.y += 7;
+    const gy = this.floorAt(camera.position.x, camera.position.z) + 1.5; if (camera.position.y < gy) camera.position.y = gy;
+    camera.rotation.set(Player.pitch, Player.yaw, 0);
+    const fov = (Player.baseFov || 75) + Math.min(sp, 150) * 0.1;
     if (Math.abs(camera.fov - fov) > 0.2) { camera.fov += (fov - camera.fov) * 0.1; camera.updateProjectionMatrix(); }
+    Effects.drawSpeedLines(sp * 0.5);
+    // 기수가 향한 곳 표시(초록 동그라미) — 가운데 조준점과 겹치면 그 방향으로 날고 있음
+    camera.updateMatrixWorld();
+    const n = this._n || (this._n = new THREE.Vector3()); this.fwd(a, n).multiplyScalar(400).add(p).project(camera);
+    const el = this.noseEl(); el.style.display = n.z < 1 ? '' : 'none';
+    el.style.transform = `translate(${((n.x + 1) / 2 * innerWidth).toFixed(0)}px, ${((1 - n.y) / 2 * innerHeight).toFixed(0)}px)`;
+  },
+  noseEl() {
+    if (!this._nose) {
+      const el = this._nose = document.createElement('div'); el.hidden = true;
+      el.style.cssText = 'position:fixed;left:-11px;top:-11px;width:18px;height:18px;border:2px solid #9fe0b0;border-radius:50%;pointer-events:none;z-index:20;box-shadow:0 0 0 1px rgba(0,0,0,.4)';
+      document.body.appendChild(el);
+    }
+    return this._nose;
   },
   hud() {
-    const a = this.cur; if (!a) { const n = this.findNear(); return n && !(typeof Shifter !== 'undefined' && Shifter.active) ? 'F · 비행정 타기' : ''; }
-    return `비행정 · 속도 ${Math.round(a.speed * 3.6)}km/h · 추력 ${Math.round(a.throttle * 100)}% · 고도 ${Math.max(0, Math.round(a.root.position.y - a.ground))}m · F 내리기`;
+    const a = this.cur;
+    if (!a) { const n = this.findNear(); return n && !(typeof Shifter !== 'undefined' && Shifter.active) ? 'F · 비행정 타기' : ''; }
+    const sp = a.vel.length(), stall = !a.onGround && sp < this.VS;
+    return `${stall ? '⚠ 실속 · 기수를 내려 속도를 올리세요 · ' : ''}비행정 · ${Math.round(sp * 3.6)}km/h · 추력 ${Math.round(a.throttle * 100)}% · 고도 ${Math.max(0, Math.round(a.root.position.y - this.REST - a.floor))}m${a.onGround && sp < this.VR && a.throttle > 0 ? ' · 이륙 속도 ' + Math.round(this.VR * 3.6) + 'km/h' : ''} · F 내리기`;
   },
 };
 
