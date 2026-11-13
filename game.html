@@ -7721,10 +7721,19 @@ const Nine = {
 const TitanModels = {
   // 75차: 모델 데이터는 titan-data.json(약 1.3MB)으로 떼어 내 게임이 뜬 뒤 뒤에서 받음. 받기 전 나온 진격·초대형은 기존 도형 모델로 보임
   DATA: {}, loaded: false, VER: '6d3adb702e',
+  // 77차: 모델이 도착한 뒤 진격·초대형을 화면 밖에서 한 번 그려 GPU에 올려 둠(시작 때의 미리 그리기는 모델이 오기 전이라 도형만 올라갔음)
+  warm() {
+    if (typeof TitanRenderer === 'undefined' || !TitanRenderer.scene || typeof renderer === 'undefined' || typeof camera === 'undefined') return;
+    const tmp = ['attack', 'colossal'].map(k => new Titan(TitanRenderer.scene, camera.position.x, camera.position.z, 13, false, k));
+    for (const t of tmp) t.root.position.y = camera.position.y - 3000;   // 땅 아래 멀리(보이지 않음)
+    TitanRenderer.scene.updateMatrixWorld(); TitanRenderer.update(tmp, null, true); renderer.render(TitanRenderer.scene, camera);
+    for (const t of tmp) TitanRenderer.scene.remove(t.root);
+    TitanRenderer.update([], null, true); this.warmed = true;
+  },
   load() {
     if (this.loading || this.loaded) return; this.loading = true;
     fetch('titan-data.json?v=' + this.VER).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d => { this.DATA = d; this.cache = {}; this.loaded = true; })
+      .then(d => { this.DATA = d; this.cache = {}; this.loaded = true; for (const [k, ms] of [['attack', 300], ['colossal', 1200]]) setTimeout(() => this.get(k), ms); setTimeout(() => this.warm(), 2000); })   // 77차: 받은 뒤 미리 풀어 둠(처음 변신할 때 100ms 넘게 멈추던 것)
       .catch(() => { this.loading = false; setTimeout(() => this.load(), 15000); });   // 실패하면 15초 뒤 다시(그동안은 도형 모델)
   },
   cache: {},
@@ -8872,6 +8881,7 @@ const Shifter = {
     p.model.visible = false;
     if (p.viewModel) p.viewModel.visible = false;
     Effects.lightning(t.pos.clone(), t.height);
+    if (Effects.transformBurst) Effects.transformBurst(t.pos, t.height);   // 77차: 2초 동안 노란 전기 구체 + 사방 번개
     // 변신 폭풍: 가까운 거인을 밀어내고 비틀거리게 함 (한 번 맞은 것으로 셈)
     this.hitArc(t.height * 0.9 + 8, -1, { mul: 1, bonus: 0, knock: 14, stun: 1.2 });
     Game.toast(`${d.name} · ${s.trait}`, '#ffb347');
@@ -9522,10 +9532,82 @@ Object.assign(Effects, {
     }
   },
 });
+// ---------- 77차: 거인화 전기 구체 — 변신할 때 2초 동안 노란 빛 구체가 지지직거리며 사방으로 번개를 뻗음 ----------
+// 핵(흰 노랑) + 후광(주황) + 번개 줄기 16갈래(줄기마다 7마디, 0.06초마다 새 모양) + 하늘 번개 3번 + 불꽃.
+// 번개 마디 112개는 InstancedMesh 하나(그리기 1번), 구체 2개 — 미리 만들어 돌려 씀(시작 때 셰이더 준비에 포함됨)
+Object.assign(Effects, {
+  ARCS: 24, SEGS: 8,
+  initCharge(scene) {
+    const add = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.chCore = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), add(0xffa600, 1));      // 진한 노랑(덧칠로 가운데가 하얗게 빛남)
+    this.chHalo = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), add(0xff5a00, 0.55));    // 주황 후광
+    const n = this.ARCS * this.SEGS;
+    this.chArcs = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), add(0xffffff, 0.95), n);
+    this.chArcs.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+    this.chArcs.frustumCulled = false;
+    for (const m of [this.chCore, this.chHalo, this.chArcs]) { m.visible = false; m.renderOrder = 5; scene.add(m); }
+    this.ch = null;
+    this._chQ = new THREE.Quaternion(); this._chM = new THREE.Matrix4(); this._chA = new THREE.Vector3(); this._chB = new THREE.Vector3(); this._chD = new THREE.Vector3(); this._chS = new THREE.Vector3(); this._chUp = new THREE.Vector3(0, 1, 0); this._chC = new THREE.Color();
+  },
+  // at = 변신하는 자리(발), height = 거인 키. 구체는 몸 가운데 높이에 뜸
+  transformBurst(at, height) {
+    if (!this.chCore) return;
+    const H = Math.max(8, height);
+    this.ch = { t: 0, life: 2, at: new THREE.Vector3(at.x, (at.y || 0) + H * 0.45, at.z), ground: new THREE.Vector3(at.x, at.y || 0, at.z), r: H * 0.22, reach: H * 1.8, H, regen: 0, bolt: 0.55 };
+    this.chCore.visible = this.chHalo.visible = this.chArcs.visible = true;
+    this.chCore.position.copy(this.ch.at); this.chHalo.position.copy(this.ch.at);
+    this.screenFlash(0xffd060, 0.55);
+    this.regenArcs(1);
+  },
+  // 번개 줄기 모양을 새로 그림 (k = 밝기 0~1)
+  regenArcs(k) {
+    const c = this.ch, M = this._chM, q = this._chQ, A = this._chA, B = this._chB, D = this._chD, S = this._chS, col = this._chC;
+    const m = this.chArcs, n = this.ARCS, sg = this.SEGS;
+    let idx = 0;
+    for (let a = 0; a < n; a++) {
+      // 방향: 사방으로 고르게(위쪽을 조금 더), 줄기마다 길이가 다름
+      const th = (a / n) * Math.PI * 2 + Math.random() * 0.4, ph = (Math.random() * 1.2 - 0.35);
+      D.set(Math.cos(th) * Math.cos(ph), Math.sin(ph), Math.sin(th) * Math.cos(ph)).normalize();
+      const len = c.reach * (0.55 + Math.random() * 0.6) * (0.6 + 0.4 * k);
+      A.copy(c.at).addScaledVector(D, c.r * 0.8);
+      for (let s = 0; s < sg; s++) {
+        // 마디마다 옆으로 꺾임(지그재그) — 끝으로 갈수록 크게
+        const step = len / sg, jit = step * (0.55 + s * 0.08);
+        B.copy(A).addScaledVector(D, step);
+        B.x += (Math.random() - 0.5) * jit; B.y += (Math.random() - 0.5) * jit; B.z += (Math.random() - 0.5) * jit;
+        S.subVectors(B, A); const L = S.length(); S.multiplyScalar(1 / (L || 1));
+        q.setFromUnitVectors(this._chUp, S);
+        const thick = c.H * 0.03 * (1 - s / sg * 0.75) * (0.7 + 0.6 * Math.random());
+        M.compose(A.clone().add(B).multiplyScalar(0.5), q, new THREE.Vector3(thick, L, thick));
+        m.setMatrixAt(idx, M);
+        // 안쪽은 흰 노랑, 바깥으로 갈수록 주황
+        col.setHSL(0.14 - s * 0.012, 1, 0.62 - s * 0.03).multiplyScalar(k);   // 노랑 → 바깥쪽 주황
+        m.setColorAt(idx, col);
+        idx++; A.copy(B);
+      }
+    }
+    m.count = idx; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
+  },
+  updateCharge(dt) {
+    const c = this.ch; if (!c) return;
+    c.t += dt;
+    if (c.t >= c.life) { this.ch = null; this.chCore.visible = this.chHalo.visible = this.chArcs.visible = false; return; }
+    const u = c.t / c.life, k = u < 0.08 ? u / 0.08 : u > 0.8 ? (1 - u) / 0.2 : 1;   // 켜짐 → 유지 → 마지막 0.4초 사그라짐
+    const jit = 1 + (Math.random() - 0.5) * 0.18;                                       // 지지직 떨림
+    this.chCore.scale.setScalar(c.r * (0.55 + 0.45 * k) * jit);
+    this.chHalo.scale.setScalar(c.r * (1.7 + 0.3 * Math.sin(c.t * 40)) * (0.6 + 0.4 * k));
+    this.chCore.material.opacity = 0.62 * k; this.chHalo.material.opacity = 0.42 * k;
+    if ((c.regen -= dt) <= 0) { c.regen = 0.06; this.regenArcs(k); }
+    if ((c.bolt -= dt) <= 0 && u < 0.8) { c.bolt = 0.55; if (this.baseLightningFn) this.baseLightningFn.call(this, c.ground, c.H); }   // 하늘 번개 다시 내리침
+    if (this.sparks && Math.random() < 0.8) for (let i = 0; i < 6; i++) { const v = this._v.set(this.rand(1), this.rand(1), this.rand(1)).normalize().multiplyScalar(20 + Math.random() * 40); this.sparks.emit(c.at, v, 0.4 + Math.random() * 0.4, 0.6); }
+  },
+});
+
 Effects._p = new THREE.Vector3();
 {
   const baseUpdate = Effects.update, baseLightning = Effects.lightning;
-  Effects.update = function (dt) { baseUpdate.call(this, dt); this.updateGrand(dt); this.runLater(); };
+  Effects.baseLightningFn = baseLightning;   // 77차: 전기 구체가 하늘 번개를 다시 내릴 때(화면 번쩍임 색을 바꾸지 않는 원래 번개)
+  Effects.update = function (dt) { baseUpdate.call(this, dt); this.updateGrand(dt); this.updateCharge(dt); this.runLater(); };
   // 번개는 원래의 따뜻한 흰빛 번쩍임 (다른 색 번쩍임 뒤에도)
   Effects.lightning = function (...a) { const b = document.getElementById('bolt'); if (b) b.style.background = ''; return baseLightning.apply(this, a); };
 }
@@ -10010,7 +10092,7 @@ Object.assign(Shifter, {
 // ---------- shifter.js 연결: 쿨다운·땅울림·소환 갱신, 그리기 목록, 변신 초기화 ----------
 {
   const S = Shifter, baseUpdate = S.update, basePost = S.postUpdate, baseRender = S.renderList, baseTransform = S.transform, baseInit = S.init, baseAttack = S.attack;
-  S.init = function (scene) { baseInit.call(this, scene); Effects.initGrand(scene); };
+  S.init = function (scene) { baseInit.call(this, scene); Effects.initGrand(scene); Effects.initCharge(scene); };   // 77차: 전기 구체
   S.update = function (dt) {
     const tk = typeof Game !== 'undefined' && Game.training ? 4 : 1;   // 59차: 훈련 모드는 스킬 재사용 4배 빠름
     for (let i = 0; i < this.cds.length; i++) this.cds[i] -= dt * tk;
