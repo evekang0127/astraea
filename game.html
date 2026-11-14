@@ -4930,7 +4930,7 @@ const DayNight = {
     else dir.set(-Math.cos(a), Math.max(0.15, -sy), -0.25).normalize();
     const night = Math.min(1, Math.max(0, (-sy + 0.05) / 0.25));
     if (this.dome) { const u = this.dome.material.uniforms; u.top.value.copy(c.top); u.horizon.value.copy(c.hor); u.sunCol.value.copy(c.glow).multiplyScalar(day ? 1 : 0.25); u.discPow.value = day ? 600 : 4000; u.stars.value = 0; }
-    W.scene.fog.color.copy(c.fog); if (W.scene.background && W.scene.background.isColor) W.scene.background.copy(c.fog);
+    if (!(typeof Space !== 'undefined' && Space.in)) { W.scene.fog.color.copy(c.fog); if (W.scene.background && W.scene.background.isColor) W.scene.background.copy(c.fog); }   // 86차: 우주에 있는 동안은 우주 연출이 하늘색을 정함(낮 하늘색이 검은 우주를 덮던 것)
     W.sun.color.copy(c.sun); W.sun.intensity = sunI;
     if (this.hemi) this.hemi.intensity = hemiI;
     if (typeof renderer !== 'undefined') renderer.toneMappingExposure = exp;
@@ -12447,7 +12447,7 @@ const Space = {
   // 15km 위에서는 장소·들판의 땅과 물체를 숨기고 행성으로 보여 줌
   hideGround(h) {
     if (this._hid === h) return; this._hid = h;
-    for (const o of scene.children) { if (o === this.stars || o === this.planet || o === this.atmo || o.isLight || o === World.sky) continue; if (typeof Rocket !== 'undefined' && Rocket.list.some(r => r.root === o)) continue; if (o.isCamera) continue;
+    for (const o of scene.children) { if (o === this.stars || o === this.planet || o === this.atmo || o.isLight || o === World.sky) continue; if (typeof Rocket !== 'undefined' && Rocket.list.some(r => r.root === o)) continue; if (o.isCamera || o.userData.keepInSpace) continue;
       if (h) { if (o.visible) { o.userData._spaceHid = true; o.visible = false; } } else if (o.userData._spaceHid) { o.visible = true; o.userData._spaceHid = false; } }
   },
   reset() {
@@ -12556,6 +12556,112 @@ Object.assign(Rocket, {
     Game.toast('우주에서 돌아옴 · 궤도 120km · F 캡슐로 지구 귀환 · G 다시 우주 게임', '#9fe0b0');
   },
 });
+// ===== 86차: 우주 게임으로 '자연스럽게' — 로딩 화면 없이 우주선 마중 → 전송 빛기둥으로 옮겨 탐 → 워프 =====
+// G(고도 100km+): 우주 게임 파일(약 40MB)을 바로 미리 받기 시작 → ① 2.6초 우주선(원반+목+선체+날개 엔진 2, 파란 엔진빛·빨간 앞머리)이 로켓 옆으로 다가와 멈춤
+// → ② 1.6초 전송: 캡슐에서 우주선까지 반짝이는 빛기둥, 캡슐이 잠깐 빛남 → ③ 1.8초 우주선이 돌아서 워프(앞으로 늘어나며 빛줄기 + 화면 하얗게)
+// → 미리 받기가 끝나면(최대 20초 더 기다리며 '워프 준비 n%') 우주 게임으로 이동. 우주 게임 쪽도 로고 대신 워프 화면이라 끊김 없이 이어짐.
+Object.assign(Rocket, {
+  navigate(url) { try { (top || window).location.href = url; } catch (_) { location.href = url; } },
+  buildStarship() {
+    const g = new THREE.Group();
+    const hull = new THREE.MeshStandardMaterial({ color: 0xd9dde2, roughness: 0.45, metalness: 0.35, emissive: 0x3c4450 }), dark = new THREE.MeshStandardMaterial({ color: 0x5c636c, roughness: 0.5, metalness: 0.5, emissive: 0x1c2026 });   // 해를 등진 쪽도 보이게 은은한 자체 빛
+    const blue = new THREE.MeshBasicMaterial({ color: 0x5fd0ff }), red = new THREE.MeshBasicMaterial({ color: 0xff5040 }), glow = new THREE.MeshBasicMaterial({ color: 0x8fe4ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+    const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); return m; };
+    add(new THREE.CylinderGeometry(42, 44, 6, 48), hull, 0, 22, -30);                 // 원반
+    add(new THREE.SphereGeometry(10, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), hull, 0, 25, -30);   // 함교 돔
+    add(new THREE.CylinderGeometry(44.2, 44.2, 1.2, 48, 1, true), dark, 0, 22, -30);   // 원반 테두리
+    add(new THREE.BoxGeometry(8, 20, 16), hull, 0, 10, 4, -0.45);                     // 목
+    add(new THREE.CylinderGeometry(9, 8, 64, 20), hull, 0, 0, 30, Math.PI / 2);       // 선체
+    add(new THREE.CircleGeometry(6.5, 20), blue, 0, 0, -2.1, 0, Math.PI);            // 앞 디플렉터 접시(빛)
+    for (const s of [-1, 1]) {
+      add(new THREE.BoxGeometry(3, 26, 9), dark, s * 13, 12, 46, 0, 0, s * 0.6);     // 날개 받침
+      add(new THREE.CylinderGeometry(4.2, 4.2, 74, 16), hull, s * 22, 22, 52, Math.PI / 2);   // 엔진(나셀)
+      add(new THREE.SphereGeometry(4.3, 14, 10), red, s * 22, 22, 15);              // 앞머리(빨강)
+      add(new THREE.BoxGeometry(1.2, 2, 60), blue, s * (22 + s * 4.1), 22, 54);       // 옆 파란 빛줄
+      add(new THREE.CylinderGeometry(5.5, 5.5, 74, 16), glow, s * 22, 22, 52, Math.PI / 2);   // 엔진빛
+    }
+    g.traverse(o => { if (o.isMesh) o.frustumCulled = false; }); g.userData.keepInSpace = true;   // 우주 연출이 땅·물체를 숨길 때 빼 둠
+    return g;
+  },
+  prefetchSpace() {
+    if (this._pf) return this._pf;
+    const base = (top || window).location.href, files = ['space/index.wasm', 'space/index.pck', 'space/index.js'], st = this._pfs = { got: 0, total: 39514754 + 391016 + 279815, done: false };
+    this._pf = Promise.all(files.map(f => fetch(new URL(f, base).href).then(async r => { if (!r.ok || !r.body) { const b = await r.arrayBuffer(); st.got += b.byteLength; return; } const rd = r.body.getReader(); for (;;) { const { done, value } = await rd.read(); if (done) break; st.got += value.length; } }).catch(() => {}))).then(() => { st.done = true; });
+    return this._pf;
+  },
+  toSpaceGame() {
+    if (this.warpSeq || !this.cur) return;
+    try { sessionStorage.setItem('astraea-space-trip', JSON.stringify({ map: World.mapId, t: Date.now() })); } catch (_) {}
+    this.prefetchSpace();
+    const r = this.cur, ship = this._ship || this.buildStarship(); this._ship = null; if (!ship.parent) scene.add(ship); ship.scale.set(1, 1, 1); ship.visible = true; ship.userData._spaceHid = false;
+    const side = new THREE.Vector3(r.dir.z, 0, -r.dir.x).normalize(); if (side.lengthSq() < 0.1) side.set(1, 0, 0);
+    const c = r.root.position.clone().addScaledVector(r.dir, 75 * this.S);
+    const dock = c.clone().addScaledVector(side, 150).add(new THREE.Vector3(0, 30, 0)), from = dock.clone().addScaledVector(side, 1600).addScaledVector(r.dir, 600).add(new THREE.Vector3(0, 400, 0));
+    ship.position.copy(from);
+    this.warpSeq = { t: 0, ship, from, dock, cap: c, side, beam: null };
+    if (!this._wfx) {
+      const d = this._wfx = document.createElement('div'); d.id = 'warpFx';
+      d.innerHTML = '<canvas></canvas><div class="wt"></div>';
+      const st = document.createElement('style'); st.textContent = `#warpFx{position:fixed;inset:0;z-index:40;pointer-events:none;display:none}#warpFx canvas{position:absolute;inset:0;width:100%;height:100%}#warpFx .w{position:absolute;inset:0;background:radial-gradient(circle,#fff 0,#e6f7ff 40%,#a8dcff 100%);opacity:0}#warpFx .wt{position:absolute;left:0;right:0;bottom:16%;text-align:center;font:600 15px 'Noto Serif KR',sans-serif;letter-spacing:6px;color:#0d3550}`;
+      document.head.appendChild(st); const w = document.createElement('div'); w.className = 'w'; d.insertBefore(w, d.querySelector('.wt')); document.body.appendChild(d);
+    }
+    this._wfx.style.display = 'block'; this._wfx.querySelector('.w').style.opacity = 0; this._wfx.querySelector('.wt').textContent = '';
+    Game.toast('우주선이 마중 나옵니다…', '#9fe0b0');
+  },
+  warpStep(dt) {
+    const W = this.warpSeq, s = W.ship; W.t += dt;
+    const t = W.t, look = this._wl || (this._wl = new THREE.Vector3());
+    if (t < 2.6) {   // ① 다가옴(감속하며)
+      const u = t / 2.6, e = 1 - Math.pow(1 - u, 3); s.position.copy(W.from).lerp(W.dock, e);
+      look.copy(W.dock).sub(W.from).normalize(); s.lookAt(s.position.clone().sub(look));
+    } else if (t < 4.2) {   // ② 전송 빛기둥
+      if (!W.beam) {
+        const b = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 1, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0x9fdcff, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+        b.frustumCulled = false; scene.add(b); W.beam = b; Effects.shake(0.3); Game.toast('전송 중…', '#9fe0b0');
+      }
+      const a = W.cap, bpos = s.position.clone().add(new THREE.Vector3(0, -2, 0)), mid = a.clone().add(bpos).multiplyScalar(0.5), L = a.distanceTo(bpos);
+      W.beam.position.copy(mid); W.beam.scale.set(1 + Math.sin(t * 30) * 0.3, L, 1 + Math.sin(t * 30) * 0.3); W.beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), bpos.clone().sub(a).normalize());
+      W.beam.material.opacity = 0.15 + 0.3 * Math.sin((t - 2.6) / 1.6 * Math.PI);
+      if (Effects.sparks) for (let i = 0; i < 6; i++) { const q = a.clone().lerp(bpos, Math.random()); Effects.sparks.emit(q, new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6), 0.5, 1.4); }
+    } else {   // ③ 돌아서 워프
+      if (W.beam) { scene.remove(W.beam); W.beam = null; }
+      const u = t - 4.2, fwd = W.side.clone().multiplyScalar(-1).add(new THREE.Vector3(0, 0.25, 0)).normalize();
+      s.lookAt(s.position.clone().sub(fwd));
+      const sp = u < 0.8 ? u * 60 : 48 + Math.pow(u - 0.8, 3) * 40000; s.position.addScaledVector(fwd, sp * dt);
+      s.scale.set(1, 1, 1 + Math.max(0, u - 0.6) * 6);
+      const w = this._wfx.querySelector('.w'); w.style.opacity = Math.min(1, Math.max(0, (u - 0.9) / 0.9)).toFixed(2);
+      if (u > 1.8) {
+        const st = this._pfs, pct = st ? Math.min(100, Math.round(st.got / st.total * 100)) : 100;
+        this._wfx.querySelector('.wt').textContent = st && !st.done ? `워프 준비 ${pct}%` : '워프';
+        if ((st && st.done) || u > 22) { if (!W.go) { W.go = true; this.navigate(new URL('space/index.html', (top || window).location.href).href); } }
+      }
+    }
+    this.drawWarpLines(t);
+  },
+  // 화면 빛줄기(③에서 강해짐)
+  drawWarpLines(t) {
+    const c = this._wfx.querySelector('canvas'), g = c.getContext('2d'), w = c.width = innerWidth, h = c.height = innerHeight;
+    g.clearRect(0, 0, w, h); const k = Math.max(0, Math.min(1, (t - 4.2) / 1.4)); if (k <= 0) return;
+    const cx = w / 2, cy = h / 2, R = Math.hypot(cx, cy); g.lineCap = 'round';
+    const st = this._wst || (this._wst = Array.from({ length: 220 }, () => ({ a: Math.random() * Math.PI * 2, r: Math.random() })));
+    for (const s of st) { s.r += 0.012 + s.r * 0.05 * k; if (s.r > 1) s.r = Math.random() * 0.05; const r0 = s.r * R, r1 = r0 + (8 + s.r * 160) * k; g.strokeStyle = `rgba(200,235,255,${(0.3 + s.r * 0.7) * k})`; g.lineWidth = 0.6 + s.r * 2.2; g.beginPath(); g.moveTo(cx + Math.cos(s.a) * r0, cy + Math.sin(s.a) * r0); g.lineTo(cx + Math.cos(s.a) * r1, cy + Math.sin(s.a) * r1); g.stroke(); }
+  },
+  warpCam(camera) {
+    const W = this.warpSeq, s = W.ship;
+    const want = this._wc || (this._wc = new THREE.Vector3());
+    want.copy(W.cap).addScaledVector(W.side, -120).add(new THREE.Vector3(0, 45, 0));
+    camera.position.lerp(want, 0.08); camera.lookAt(W.t < 4.2 ? s.position.clone().lerp(W.cap, 0.35) : s.position);
+  },
+});
+{
+  const u0 = Rocket.update, c0 = Rocket.updateCamera;
+  Rocket.update = function (dt) {
+    u0.call(this, dt); if (this.warpSeq) this.warpStep(dt);
+    // 우주(100km+)에 오르면 우주선을 미리 만들어 아래 멀리 숨겨 그려 둠 → G를 눌렀을 때 셰이더 준비로 멈칫하지 않게
+    if (this.cur && !this.warpSeq && !this._ship && !this.capsule && this.alt(this.cur) > Space.KARMAN) { const sh = this._ship = this.buildStarship(); sh.position.copy(this.cur.root.position).add(new THREE.Vector3(0, -3000, 0)); scene.add(sh); }
+  };
+  Rocket.updateCamera = function (cam) { c0.call(this, cam); if (this.warpSeq) { this.warpCam(cam); Space.update(cam, this.alt(this.cur)); } };   // 카메라를 옮긴 뒤 행성·별 위치를 다시 맞춤
+}
 
 </script>
 <script>

@@ -11,6 +11,7 @@
 </head>
 <body>
 <div id="boot">ASTRAEA 불러오는 중…</div>
+<script>/* 86차: 우주 게임에서 워프해 돌아오면 하얀 화면에서 서서히 — 끊김 없이 */(function(){var t=0;try{t=+sessionStorage.getItem("astraea-warp-back")||0}catch(e){}if(Date.now()-t<60000){var d=document.createElement("div");d.style.cssText="position:fixed;inset:0;z-index:9;pointer-events:none;background:radial-gradient(circle,#fff 0,#dff4ff 40%,#9fd8ff 100%);transition:opacity 1.6s ease";document.body.appendChild(d);var b=document.getElementById("boot");if(b)b.firstChild.nodeValue="지구로 귀환 중…";requestAnimationFrame(function(){requestAnimationFrame(function(){d.style.opacity="0"})})}})();</script>
 <script>
 // 게임 본체(game.html)를 받아 그대로 띄움 (주소·#장소·로그인 그대로).
 // cache:'no-cache' = 매번 서버에 "바뀌었나?"만 물어봄 → 같은 버전이면 받아 둔 파일을 그대로 쓰고, 새로 배포했으면 바로 새 파일을 받음.
