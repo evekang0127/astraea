@@ -12010,7 +12010,7 @@ html.title #flightHud,html.dying #flightHud{display:none}`;
 // 휠: 비행 중 카메라 거리 0.35~3배 (거인 시점과 같음).
 Object.assign(Aircraft, {
   auto: false, dest: null, warp: 1, WARPS: [1, 2, 4, 8, 16], zoom: 1,
-  hideUi() { if (this._panel) this._panel.hidden = true; if (this._nose) this._nose.style.display = 'none'; },
+  hideUi() { if (this._panel) this._panel.hidden = true; if (this._nose) this._nose.style.display = 'none'; if (typeof Ship !== 'undefined') { Ship.trigger = false; if (Ship.scope) Ship.setScope(false); if (Ship._wb) Ship._wb.hidden = true; } },
   setDest(d) {
     this.dest = d; this.auto = true;
     if (!this.cur) { this.pendingCall = true; Game.toast(`자동 운항 목적지: ${d.name} · 비행정을 부르는 중`, '#9fe0b0'); }
@@ -12660,13 +12660,15 @@ const Ship = {
     if (typeof Shifter !== 'undefined' && (Shifter.active || Shifter.charging)) return true;
     Player.releaseHook && Player.releaseHook();
     this.cur = s; Player.model.visible = false; if (Player.viewModel) Player.viewModel.visible = false;
+    if (!this._warm) { this._warm = true; try { this.mslMesh().visible = false; this.trpMesh().visible = false; this.weaponBar(); this.scopeEl(); this.proj.push({ k: 'trc', p: new THREE.Vector3(0, -999, 0), v: new THREE.Vector3(), t: 0, life: 0.05 }); } catch (e) {} }   // 86차: 처음 쏠 때 멈칫 방지
     Player.yaw = s.yaw; Player.pitch = -0.12;
     Game.toast('전함 탑승 · W/S 엔진 · A/D 방향타 · Shift 전속 · 클릭 주포 · F 내리기', '#9fe0b0');
     return true;
   },
   exit() {
     const s = this.cur; if (!s) return;
-    this.cur = null; if (typeof Aircraft !== 'undefined') Aircraft.hideUi();
+    this.cur = null; this.trigger = false; this.setScope(false); if (this._wb) this._wb.hidden = true; if (typeof Aircraft !== 'undefined') Aircraft.hideUi();
+    { const f0 = Player.baseFov || 75; camera.fov = f0; camera.updateProjectionMatrix(); }
     // 함교 앞 갑판에 내려섬 (배가 움직이면 함께 움직임 — update의 갑판 처리)
     const p = new THREE.Vector3(0, s.deck + 0.3, -28).applyMatrix4(s.root.matrixWorld);
     Player.pos.copy(p); Player.vel.set(0, 0, 0); Player.onGround = true;
@@ -12684,8 +12686,8 @@ const Ship = {
         if (k.KeyW) s.order = Math.min(1, s.order + dt * 0.35); if (k.KeyS) s.order = Math.max(-0.5, s.order - dt * 0.35);
         const want = (k.KeyA ? 1 : 0) - (k.KeyD ? 1 : 0); s.rudder += (want - s.rudder) * Math.min(1, dt * 2);
       } else { s.rudder *= 1 - Math.min(1, dt); }
-      const max = 14 * (ctl && (k.ShiftLeft || k.ShiftRight) && s.order > 0.6 ? 1.45 : 1), target = s.order * max;
-      s.speed += Math.max(-0.9 * dt, Math.min(0.9 * dt, target - s.speed));
+      const max = 18 * (ctl && (k.ShiftLeft || k.ShiftRight) && s.order > 0.6 ? 1.45 : 1), target = s.order * max;
+      s.speed += Math.max(-1.2 * dt, Math.min(1.2 * dt, target - s.speed));
       s.yaw += s.rudder * Math.min(1, Math.abs(s.speed) / 6) * Math.sign(s.speed || 1) * 0.09 * dt;
       const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), nx = p.x + fx * s.speed * dt, nz = p.z + fz * s.speed * dt;
       // 앞(또는 뒤)으로 82m 지점이 물이 아니면 멈춤
@@ -12718,16 +12720,16 @@ const Ship = {
       }
     }
   },
-  // 주포 사격: 바라보는 곳(최대 900m)으로 포물선 포탄 3발
-  fire() {
+  // 주포 사격: 바라보는 곳(최대 900m)으로 포물선 포탄 3발 (86차: 무기 1번)
+  fireMain() {
     const s = this.cur; if (!s || s.cool > 0) return;
     s.cool = 2.2; Effects.shake(0.9);
     const dir = Player.lookDir(), from = this._ff || (this._ff = new THREE.Vector3());
     // 조준: 카메라가 보는 선에서 가장 가까운 거인(옆으로 30m 안) → 없으면 수면·땅과 만나는 곳 → 그것도 없으면 900m
     const cp = camera.position, cd = camera.getWorldDirection(new THREE.Vector3()); let aim = null, best = 1e9;
-    for (const t of Titans.list) { if (t.dead) continue; const v = new THREE.Vector3(t.pos.x, t.pos.y + t.height * 0.5, t.pos.z).sub(cp), along = v.dot(cd); if (along < 20 || along > 1100) continue; const lat = v.clone().addScaledVector(cd, -along).length(); if (lat < 30 + t.height * 0.3 && along < best) { best = along; aim = new THREE.Vector3(t.pos.x, t.pos.y, t.pos.z); } }
-    if (!aim && cd.y < -0.01) { const wl = this.water(cp.x, cp.z) ?? 0, k = (wl - cp.y) / cd.y; if (k > 0 && k < 1100) aim = cp.clone().addScaledVector(cd, k); }
-    let range = 900; if (aim) range = Math.min(1000, Math.max(60, Math.hypot(aim.x - Player.pos.x, aim.z - Player.pos.z)));
+    for (const t of Titans.list) { if (t.dead) continue; const v = new THREE.Vector3(t.pos.x, t.pos.y + t.height * 0.5, t.pos.z).sub(cp), along = v.dot(cd); if (along < 20 || along > 1700) continue; const lat = v.clone().addScaledVector(cd, -along).length(); if (lat < 30 + t.height * 0.3 && along < best) { best = along; aim = new THREE.Vector3(t.pos.x, t.pos.y, t.pos.z); } }
+    if (!aim && cd.y < -0.01) { const wl = this.water(cp.x, cp.z) ?? 0, k = (wl - cp.y) / cd.y; if (k > 0 && k < 1700) aim = cp.clone().addScaledVector(cd, k); }
+    let range = 1500; if (aim) range = Math.min(1600, Math.max(60, Math.hypot(aim.x - Player.pos.x, aim.z - Player.pos.z)));
     let fired = 0;
     for (const t of s.turrets) {
       const ang = t.g.rotation.y + s.yaw, tf = new THREE.Vector3(-Math.sin(ang), 0, -Math.cos(ang));
@@ -12760,6 +12762,13 @@ const Ship = {
   updateCamera(camera) {
     const s = this.cur, p = s.root.position;
     const look = Player.lookDir(), D = 150 * this.zoom;
+    if (this.scope) {   // 86차: 조준경 — 함교 꼭대기에서 확대
+      camera.position.set(0, 31, -24).applyMatrix4(s.root.matrixWorld); camera.rotation.set(Player.pitch, Player.yaw, 0);
+      if (Math.abs(camera.fov - 14) > 0.2) { camera.fov += (14 - camera.fov) * 0.3; camera.updateProjectionMatrix(); }
+      const a = this.aimPoint(); if (this._scopeInfo) this._scopeInfo.textContent = `${this.W[this.wsel].name} · 거리 ${Math.round(a.aim.distanceTo(camera.position))}m${a.tgt ? ' · 거인 조준' : ''}`;
+      this.panel(); return;
+    }
+    { const f0 = Player.baseFov || 75; if (Math.abs(camera.fov - f0) > 0.2) { camera.fov += (f0 - camera.fov) * 0.3; camera.updateProjectionMatrix(); } }
     camera.position.set(p.x, p.y + 30, p.z).addScaledVector(look, -D); camera.position.y += 25 * Math.min(1.6, this.zoom);
     const wl = this.water(camera.position.x, camera.position.z); const gy = Math.max(wl ?? 0, 0) + 3; if (camera.position.y < gy) camera.position.y = gy;
     camera.rotation.set(Player.pitch, Player.yaw, 0);
@@ -12767,6 +12776,7 @@ const Ship = {
   },
   panel() {
     const A = Aircraft, el = A.panelEl(), s = this.cur;
+    this.updateBar();   // 86차: 무기 막대
     if (!s || !Game.running || Game.dying) { el.hidden = true; return; }
     el.hidden = false;
     const now = performance.now(); if (now - (this._pt || 0) < 60) return; this._pt = now;
@@ -12779,7 +12789,7 @@ const Ship = {
     E.th.textContent = Math.round(s.order * 100); E.tb.style.width = Math.abs(s.order * 100).toFixed(0) + '%';
     E.boost.classList.toggle('on', !!(Player.keys.ShiftLeft || Player.keys.ShiftRight) && s.order > 0.6);
     E.sts.className = 'sts';
-    E.sts.textContent = `전함 · ${s.order > 0.02 ? '전진' : s.order < -0.02 ? '후진' : '정지'} · 주포 ${s.cool > 0 ? '장전 중' : '발사 준비'} · W/S 엔진 · A/D 방향타 · 클릭 주포 · F 내리기`;
+    E.sts.textContent = `전함 · ${s.order > 0.02 ? '전진' : s.order < -0.02 ? '후진' : '정지'} · 무기 ${this.wsel + 1} ${this.W[this.wsel].name} · 1~5 무기 · 클릭 발사 · 우클릭 조준경 · F 내리기`;
   },
 };
 // 바다가 있는 장소에 전함 배치
@@ -12787,6 +12797,172 @@ for (const id in Ship.PLACES) if (typeof Maps !== 'undefined' && Maps[id]) {
   const base = Maps[id].build, [x, z, yaw] = Ship.PLACES[id];
   Maps[id].build = function (W) { base.call(this, W); try { Ship.spawn(W, x, z, yaw); } catch (e) { console.warn('ship', e); } };
 }
+// ===== 86차: 전함 무기 체계(숫자 키 1~5) · 우클릭 조준경 =====
+// 1 주포 406mm 3연장(포탑 3기, 포물선) · 2 수직발사 순항미사일(VLS 32발, 솟았다 꺾여 조준점으로 내리꽂힘, 큰 폭발)
+// 3 근접방어 기관포 CIWS(누르고 있으면 초당 30발 예광탄, 짧은 사거리·작은 피해 여러 번) · 4 5인치 함포(빠른 단발) · 5 어뢰(수면 아래 직진, 큰 피해)
+// 탄·재장전·쿨다운은 화면 아래 무기 막대에. 조준경: 우클릭 누르는 동안 함교 꼭대기에서 확대(시야 14°) + 눈금·거리.
+// 최적화: 예광탄은 InstancedMesh 하나(64발), 미사일·어뢰는 미리 만든 메시를 돌려 씀, 피해 판정은 맞은 순간 한 번
+Object.assign(Ship, {
+  W: [
+    { id: 'main', name: '주포 406mm', ammo: Infinity, cd: 2.2 },
+    { id: 'vls', name: '순항미사일 VLS', ammo: 32, max: 32, cd: 0.9 },
+    { id: 'ciws', name: 'CIWS 기관포', ammo: 1550, max: 1550, cd: 0.033, auto: true },
+    { id: 'gun5', name: '5인치 함포', ammo: 600, max: 600, cd: 0.55 },
+    { id: 'torp', name: '어뢰', ammo: 12, max: 12, cd: 3.5 },
+  ],
+  wsel: 0, trigger: false, scope: false, proj: [],
+  select(n) {
+    const i = n - 1; if (!this.W[i]) return;
+    this.wsel = i; Game.toast(`무기 ${n} · ${this.W[i].name}${this.W[i].ammo === Infinity ? '' : ' · ' + this.W[i].ammo + '발'}`, '#9fe0b0');
+  },
+  // 조준점: 카메라 선 위의 가장 가까운 거인(옆 30m 안) → 수면·땅 → 없으면 maxR
+  aimPoint(maxR = 1100) {
+    const cp = camera.position, cd = camera.getWorldDirection(this._acd || (this._acd = new THREE.Vector3()));
+    let aim = null, best = 1e9, tgt = null;
+    for (const t of Titans.list) { if (t.dead) continue; const v = this._av || (this._av = new THREE.Vector3()); v.set(t.pos.x, t.pos.y + t.height * 0.5, t.pos.z).sub(cp); const along = v.dot(cd); if (along < 15 || along > maxR) continue; const lat = v.addScaledVector(cd, -along).length(); if (lat < 25 + t.height * 0.3 && along < best) { best = along; tgt = t; } }
+    if (tgt) aim = new THREE.Vector3(tgt.pos.x, tgt.pos.y + tgt.height * 0.45, tgt.pos.z);
+    else if (cd.y < -0.005) { const wl = this.water(cp.x, cp.z) ?? 0, k = (wl - cp.y) / cd.y; if (k > 0 && k < maxR) aim = cp.clone().addScaledVector(cd, k); }
+    if (!aim) aim = cp.clone().addScaledVector(cd, maxR);
+    return { aim, tgt };
+  },
+  fire() {
+    const s = this.cur; if (!s) return;
+    const w = this.W[this.wsel];
+    if (w.id === 'main') return this.fireMain();
+    if ((s['cd_' + w.id] || 0) > 0) return;
+    if (w.ammo <= 0) { Game.toast(`${w.name} 탄약 없음 · 다른 무기(숫자 키)`, '#ffb347'); return; }
+    s['cd_' + w.id] = w.cd; w.ammo--;
+    const { aim, tgt } = this.aimPoint(w.id === 'ciws' ? 700 : w.id === 'torp' ? 1500 : 1600);
+    s.root.updateMatrixWorld();
+    if (w.id === 'vls') {
+      const from = new THREE.Vector3((w.ammo % 2 ? 1 : -1) * 4, 7, -64 + (w.ammo % 4) * 2).applyMatrix4(s.root.matrixWorld);
+      Effects.impact(from.clone(), false, 1.5); if (Effects.gasBurst) Effects.gasBurst(from, new THREE.Vector3(0, -1, 0));
+      this.proj.push({ k: 'msl', p: from, v: new THREE.Vector3(0, 70, 0), tgt, aim, t: 0, mesh: this.mslMesh() });
+    } else if (w.id === 'ciws') {
+      const side = this._cs = -(this._cs || 1);
+      const from = new THREE.Vector3(side * 8.5, 12, -6).applyMatrix4(s.root.matrixWorld);
+      const dir = aim.clone().sub(from).normalize(); dir.x += (Math.random() - 0.5) * 0.012; dir.y += (Math.random() - 0.5) * 0.012; dir.z += (Math.random() - 0.5) * 0.012;
+      this.proj.push({ k: 'trc', p: from, v: dir.multiplyScalar(900), t: 0, life: 0.9 });
+      if (Effects.sparks && Math.random() < 0.5) Effects.sparks.emit(from, dir.clone().multiplyScalar(0.05), 0.08, 1.4);
+    } else if (w.id === 'gun5') {
+      const from = new THREE.Vector3(0, 9, -70).applyMatrix4(s.root.matrixWorld), d = Math.hypot(aim.x - from.x, aim.z - from.z);
+      Effects.impact(from.clone(), false, 0.8); Effects.shake(0.25);
+      this.proj.push({ k: 'shl', a: from, b: aim, t: 0, T: 0.4 + d / 900, h: d * 0.06, r: 12, mul: 1.3, big: 1.2 });
+    } else if (w.id === 'torp') {
+      const wl = this.water(s.root.position.x, s.root.position.z) ?? 2.4, from = new THREE.Vector3((w.ammo % 2 ? 1 : -1) * 10, 0, -30).applyMatrix4(s.root.matrixWorld); from.y = wl - 0.6;
+      const dir = new THREE.Vector3(aim.x - from.x, 0, aim.z - from.z).normalize();
+      if (Effects.corpseSteam) Effects.corpseSteam(from.clone().setY(wl + 1), 0.8);
+      this.proj.push({ k: 'trp', p: from, v: dir.multiplyScalar(45), t: 0, life: 55, mesh: this.trpMesh(), wl });
+    }
+  },
+  mslMesh() {
+    const pool = this._mp || (this._mp = []); let m = pool.find(x => !x.visible);
+    if (!m) { m = new THREE.Group(); const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 5, 8), new THREE.MeshLambertMaterial({ color: 0xd8d8d0 })); body.rotation.x = Math.PI / 2; m.add(body); const fl = new THREE.Mesh(new THREE.ConeGeometry(0.4, 3, 8), new THREE.MeshBasicMaterial({ color: 0xffb040, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })); fl.rotation.x = -Math.PI / 2; fl.position.z = 3.8; m.add(fl); scene.add(m); pool.push(m); }
+    m.visible = true; return m;
+  },
+  trpMesh() {
+    const pool = this._tp || (this._tp = []); let m = pool.find(x => !x.visible);
+    if (!m) { m = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 6, 8), new THREE.MeshLambertMaterial({ color: 0x2a2e33 })); m.geometry.rotateX(Math.PI / 2); scene.add(m); pool.push(m); }
+    m.visible = true; return m;
+  },
+  boom(at, r, mul, big) {
+    Effects.impact(at.clone(), true, big); Effects.shockwave(at.clone(), r * 1.2, 0xffb060, 0.5);
+    if (big > 2 && Effects.debris) Effects.debris(at.clone(), big * 0.6, 24);
+    if (this.water(at.x, at.z) !== null && at.y < (this.water(at.x, at.z) + 3) && Effects.corpseSteam) Effects.corpseSteam(at.clone().setY(this.water(at.x, at.z) + 2), big);
+    if (typeof Shifter !== 'undefined' && Shifter.areaHit) { const q0 = Shifter._quiet; Shifter._quiet = true; Shifter.areaHit(at, r, { mul, bonus: mul * 0.15, knock: r * 0.2, stun: 0.8 + mul * 0.2, quiet: true }); Shifter._quiet = q0; }
+  },
+  updateProj(dt) {
+    const s = this.cur;
+    if (s) for (const w of this.W) { const k = 'cd_' + w.id; if (s[k] > 0) s[k] -= dt; }
+    if (s && this.trigger && this.W[this.wsel].auto) this.fire();
+    if (!this.proj.length) { if (this._trc) this._trc.count = 0; return; }
+    const trc = this._trc || (this._trc = (() => { const m = new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 6), new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }), 96); m.frustumCulled = false; m.count = 0; scene.add(m); return m; })());
+    const M = this._tm || (this._tm = new THREE.Matrix4()), Q = this._tq || (this._tq = new THREE.Quaternion()), Z = this._tz || (this._tz = new THREE.Vector3(0, 0, 1)), ONE = this._t1 || (this._t1 = new THREE.Vector3(1, 1, 1));
+    let n = 0;
+    for (const pr of this.proj) {
+      pr.t += dt;
+      if (pr.k === 'trc') {
+        const steps = Math.max(1, Math.ceil(pr.v.length() * dt / 5)); let hit = false;
+        for (let si = 0; si < steps && !hit; si++) { pr.p.addScaledVector(pr.v, dt / steps);
+          for (const t of Titans.list) { if (t.dead) continue; const dx = t.pos.x - pr.p.x, dz = t.pos.z - pr.p.z; if (dx * dx + dz * dz < (3 + t.scale * 1.3) ** 2 && pr.p.y < t.pos.y + t.height && pr.p.y > t.pos.y - 1) { hit = true; break; } } }
+        const fl = Math.max(this.water(pr.p.x, pr.p.z) ?? -1e9, World.open && typeof Field !== 'undefined' ? Field.height(pr.p.x, pr.p.z) : 0);
+        if (pr.p.y <= fl) hit = true;
+        if (hit || pr.t > pr.life) { pr.done = true; if (hit) { if (Effects.sparks) Effects.sparks.emit(pr.p, new THREE.Vector3(0, 8, 0), 0.25, 1.2); this.boom(pr.p, 4, 0.35, 0.3); } continue; }
+        if (n < 96) { Q.setFromUnitVectors(Z, this._vd || (this._vd = new THREE.Vector3()).copy(pr.v).normalize()); M.compose(pr.p, Q, ONE); trc.setMatrixAt(n++, M); }
+      } else if (pr.k === 'msl') {
+        // 0.8초 수직 상승 → 목표(거인이면 계속 따라감) 쪽으로 꺾여 초속 320m로
+        const goal = pr.tgt && !pr.tgt.dead ? new THREE.Vector3(pr.tgt.pos.x, pr.tgt.pos.y + pr.tgt.height * 0.45, pr.tgt.pos.z) : pr.aim;
+        { const sw = this.water(goal.x, goal.z); if (sw !== null && goal.y < sw + 3) goal.y = sw + 3; }   // 물속을 걷는 거인: 수면 위를 노림
+        if (pr.t > 0.8) { const hd = Math.hypot(goal.x - pr.p.x, goal.z - pr.p.z), aimP = hd > 320 ? this._mg || (this._mg = new THREE.Vector3()) : goal; if (hd > 320) aimP.set(goal.x, Math.max(pr.p.y, 70), goal.z);   // 멀면 70m 높이로 날다가 160m 안에서 내리꽂힘
+          const want = aimP.clone().sub(pr.p).normalize().multiplyScalar(320); pr.v.lerp(want, Math.min(1, dt * 7)); }
+        pr.p.addScaledVector(pr.v, dt);
+        pr.mesh.position.copy(pr.p); pr.mesh.lookAt(pr.p.clone().sub(pr.v));
+        if (Effects.gasPuff && Math.random() < 0.9) Effects.gasPuff(pr.p, pr.v.clone().normalize().multiplyScalar(-1), 1.2);
+        const passed = pr.t > 1.2 && Math.hypot(goal.x - pr.p.x, goal.z - pr.p.z) < 60 && ((goal.x - pr.p.x) * pr.v.x + (goal.z - pr.p.z) * pr.v.z) < 0;   // 수평으로 지나쳤을 때만(위로 솟는 동안 오작동하던 것)
+        if (pr.p.distanceTo(goal) < 22 || passed || pr.t > 12 || pr.p.y < Math.max(this.water(pr.p.x, pr.p.z) ?? -1e9, World.open && typeof Field !== 'undefined' ? Field.height(pr.p.x, pr.p.z) : 0.3)) { pr.done = true; pr.mesh.visible = false; this.boom(pr.p, 40, 3, 4); Effects.shake(0.9); }
+      } else if (pr.k === 'shl') {
+        const u = Math.min(1, pr.t / pr.T), q = this._sq2 || (this._sq2 = new THREE.Vector3()); q.copy(pr.a).lerp(pr.b, u); q.y += Math.sin(u * Math.PI) * pr.h;
+        if (Effects.sparks && Math.random() < 0.6) Effects.sparks.emit(q, new THREE.Vector3(), 0.2, 1);
+        if (u >= 1) { pr.done = true; this.boom(pr.b, pr.r, pr.mul, pr.big); }
+      } else if (pr.k === 'trp') {
+        pr.p.addScaledVector(pr.v, dt); pr.mesh.position.copy(pr.p); pr.mesh.lookAt(pr.p.clone().add(pr.v));
+        if (Effects.gasPuff && Math.random() < 0.5) Effects.gasPuff(pr.p.clone().setY(pr.wl + 0.2), new THREE.Vector3(0, 0.5, 0), 0.6);   // 물 위 자국
+        let hit = null; for (const t of Titans.list) { if (t.dead) continue; if (Math.hypot(t.pos.x - pr.p.x, t.pos.z - pr.p.z) < 6 + t.scale * 1.5) { hit = t; break; } }
+        if (hit || pr.t > pr.life || this.water(pr.p.x, pr.p.z) === null) { pr.done = true; pr.mesh.visible = false; this.boom(pr.p.clone().setY(pr.wl), 18, hit ? 3.2 : 1.5, 3); }
+      }
+    }
+    trc.count = n; trc.instanceMatrix.needsUpdate = true;
+    this.proj = this.proj.filter(p => !p.done);
+  },
+  // ---------- 조준경 ----------
+  setScope(on) {
+    if (!this.cur) on = false;
+    this.scope = on;
+    const el = this.scopeEl(); el.hidden = !on;
+  },
+  scopeEl() {
+    if (this._scope) return this._scope;
+    const st = document.createElement('style');
+    st.textContent = `#shipScope{position:fixed;inset:0;z-index:14;pointer-events:none;background:radial-gradient(circle at 50% 50%, transparent 0 34vmin, rgba(0,0,0,.92) 34.4vmin)}
+#shipScope[hidden]{display:none}#shipScope .ring{position:absolute;left:50%;top:50%;width:68vmin;height:68vmin;margin:-34vmin 0 0 -34vmin;border:2px solid rgba(160,230,255,.6);border-radius:50%}
+#shipScope .h,#shipScope .v{position:absolute;background:rgba(160,230,255,.8)}#shipScope .h{left:calc(50% - 30vmin);width:60vmin;top:50%;height:1px}#shipScope .v{top:calc(50% - 30vmin);height:60vmin;left:50%;width:1px}
+#shipScope .tk{position:absolute;left:50%;width:14px;margin-left:-7px;height:1px;background:rgba(160,230,255,.8)}
+#shipScope .info{position:absolute;left:50%;top:calc(50% + 36vmin);transform:translateX(-50%);font:700 14px 'Noto Serif KR',sans-serif;color:#bfe9ff;text-shadow:0 1px 3px #000;white-space:nowrap}`;
+    document.head.appendChild(st);
+    const el = this._scope = document.createElement('div'); el.id = 'shipScope'; el.hidden = true;
+    let tk = ''; for (let i = 1; i <= 6; i++) tk += `<span class="tk" style="top:calc(50% + ${i * 4}vmin)"></span>`;
+    el.innerHTML = `<div class="ring"></div><div class="h"></div><div class="v"></div>${tk}<div class="info"></div>`;
+    document.body.appendChild(el); this._scopeInfo = el.querySelector('.info');
+    return el;
+  },
+  // ---------- 무기 막대 ----------
+  weaponBar() {
+    let el = this._wb;
+    if (!el) {
+      const st = document.createElement('style');
+      st.textContent = `#shipWeapons{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);z-index:15;display:flex;gap:6px;pointer-events:none;font:600 11px 'Noto Serif KR',sans-serif}
+#shipWeapons[hidden]{display:none}#shipWeapons .w{min-width:104px;padding:5px 8px 6px;background:rgba(8,14,24,.82);border:1px solid rgba(56,216,255,.3);border-radius:8px;color:#bfe9ff}
+#shipWeapons .w.on{border-color:#ffb347;box-shadow:0 0 0 1px #ffb347 inset;color:#fff}#shipWeapons b{color:#ffb347;margin-right:4px}#shipWeapons i{display:block;font-style:normal;font-size:10px;color:#9fc7d8;margin-top:2px}
+#shipWeapons .cd{height:3px;background:rgba(255,255,255,.12);border-radius:2px;margin-top:4px;overflow:hidden}#shipWeapons .cd span{display:block;height:100%;background:#38d8ff}
+html.title #shipWeapons,html.dying #shipWeapons{display:none}`;
+      document.head.appendChild(st);
+      el = this._wb = document.createElement('div'); el.id = 'shipWeapons';
+      el.innerHTML = this.W.map((w, i) => `<div class="w"><b>${i + 1}</b>${w.name}<i></i><div class="cd"><span></span></div></div>`).join('');
+      document.body.appendChild(el); this._wbi = [...el.querySelectorAll('.w')];
+    }
+    return el;
+  },
+  updateBar() {
+    const el = this.weaponBar(), s = this.cur;
+    if (!s || !Game.running) { el.hidden = true; return; }
+    el.hidden = false;
+    this.W.forEach((w, i) => {
+      const d = this._wbi[i]; d.classList.toggle('on', i === this.wsel);
+      d.children[1].textContent = w.ammo === Infinity ? '무제한' : `${w.ammo} / ${w.max}`;
+      const c = w.id === 'main' ? s.cool : (s['cd_' + w.id] || 0); d.children[2].firstChild.style.width = Math.max(0, 100 - c / w.cd * 100).toFixed(0) + '%';
+    });
+  },
+});
 
 </script>
 <script>
@@ -13203,7 +13379,8 @@ document.addEventListener('keydown', e => {
     if (code === 'KeyG' && typeof Rocket !== 'undefined' && Rocket.cur && !Rocket.capsule && Rocket.alt(Rocket.cur) > Space.KARMAN) Rocket.toSpaceGame();   // 85차: 우주 게임
     else if (code === 'KeyG' && typeof Field !== 'undefined') Field.enter();        // 22차: 가까운 장소로 들어가기
     const num = /^(Digit|Numpad)([1-9])$/.exec(e.code);
-    if (num) { if (Shifter.active) Shifter.useSkill(+num[2]); else Shifter.pickHeir(+num[2]); }   // 거인: 스킬 · 사람: 변신할 거인 고르기
+    if (num && typeof Ship !== 'undefined' && Ship.cur) Ship.select(+num[2]);   // 86차: 전함 무기 선택
+    else if (num) { if (Shifter.active) Shifter.useSkill(+num[2]); else Shifter.pickHeir(+num[2]); }   // 거인: 스킬 · 사람: 변신할 거인 고르기
     if (code === 'KeyE' && Shifter.active) Shifter.exit();       // 해제
   }
   if (e.code === 'Escape' && Game.running) setPaused(true);
@@ -13213,12 +13390,12 @@ document.addEventListener('keyup', e => { Player.keys[typeof Keymap !== 'undefin
 // 마우스 우클릭 누르고 있기 = 와이어 발사, 떼면 해제
 document.addEventListener('mousedown', e => {
   if (!Game.running) return;
-  if (typeof Ship !== 'undefined' && Ship.cur) { if (e.button === 0) Ship.fire(); return; }   // 85차: 전함 주포
+  if (typeof Ship !== 'undefined' && Ship.cur) { if (e.button === 0) { Ship.trigger = true; Ship.fire(); } if (e.button === 2) Ship.setScope(true); return; }   // 85차: 전함 사격 (86차: 우클릭 조준경)
   if (Shifter.active) { if (e.button === 0) Shifter.attack(); if (e.button === 2) Shifter.heavy(); return; }   // 좌클릭 연타 · 우클릭 강타
   if (e.button === 2) Player.fireHook(camera);
   if (e.button === 0) Player.attack();
 });
-document.addEventListener('mouseup', e => { if (e.button === 2) Player.releaseHook(); });
+document.addEventListener('mouseup', e => { if (typeof Ship !== 'undefined') { if (e.button === 0) Ship.trigger = false; if (e.button === 2 && Ship.scope) Ship.setScope(false); } if (e.button === 2) Player.releaseHook(); });
 addEventListener('blur', () => { Player.keys = {}; if (Game.running) { Player.releaseHook(); setPaused(true); } });
 document.addEventListener('visibilitychange', () => { if (document.hidden && Game.running) { document.exitPointerLock(); setPaused(true); } });
 document.addEventListener('contextmenu', e => e.preventDefault());
@@ -13278,7 +13455,7 @@ function loop(now = performance.now()) {
     if (Shifter.active) Shifter.update(dt); else if (!(typeof Aircraft !== 'undefined' && (Aircraft.cur || Aircraft.grab)) && !(typeof Rocket !== 'undefined' && Rocket.cur) && !(typeof Ship !== 'undefined' && Ship.cur)) Player.update(dt);
     if (typeof Aircraft !== 'undefined') Aircraft.update(dt);
     if (typeof Rocket !== 'undefined') Rocket.update(dt);   // 82차: 로켓
-    if (typeof Ship !== 'undefined') { Ship.update(dt); Ship.updateShells(dt); }   // 85차: 전함   // 78차: 비행정 조종(타고 있으면 플레이어 대신 움직임)·프로펠러
+    if (typeof Ship !== 'undefined') { Ship.update(dt); Ship.updateShells(dt); Ship.updateProj(dt); }   // 85차: 전함 (86차: 미사일·기관포·함포·어뢰)   // 78차: 비행정 조종(타고 있으면 플레이어 대신 움직임)·프로펠러
     Titans.update(dt, Player);
     Shifter.postUpdate(dt);
     Allies.update(dt, Player);
