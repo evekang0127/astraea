@@ -5051,7 +5051,7 @@ const Citizens = {
       this.list.push({ x, z, tx: x, tz: z, sp: 0.9 + Math.random() * 0.6, ph: Math.random() * 6, col: cloth[Math.floor(Math.random() * cloth.length)], wait: Math.random() * 3, run: 0, s: 0.92 + Math.random() * 0.14 });
     }
     const L = c => new THREE.MeshLambertMaterial({ color: c });
-    const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, this.list.length)); m.frustumCulled = false; m.castShadow = true; W.scene.add(m); return m; };
+    const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, this.list.length)); m.frustumCulled = false; m.castShadow = false; W.scene.add(m); return m; };   // 84차: 주민(최대 500명 × 3부위) 그림자 끔 — 그림자 그리기에서 삼각형 약 5만 개 절약, 작아서 그림자 차이는 거의 안 보임
     this.body = mk(new THREE.CylinderGeometry(0.22, 0.3, 0.95, 7), L(0xffffff));
     this.head = mk(new THREE.SphereGeometry(0.15, 8, 6), L(0xe0b896));
     this.legs = mk(new THREE.BoxGeometry(0.3, 0.75, 0.18), L(0x3a3028));
@@ -6182,8 +6182,14 @@ const Field = {
     const I = this.I, p = Player.pos, n = {};
     this.peaks = [];
     for (const k in this.CAP) n[k] = 0;
+    // 84차: 카메라 뒤쪽 칸은 그리지 않음 — 들판 물체는 하나로 묶인 InstancedMesh라 화면 밖 칸도 전부 그렸음(삼각형 절반 이상이 뒤쪽).
+    // 가로 시야각 + 여유 25° + 칸 반지름만큼 넓게, 700m 안·내려다볼 때(기울기 52° 넘게)는 모두 그림. 카메라가 12° 넘게 돌거나 150m 넘게 움직이면 다시 채움(update)
+    const cam = camera, cd = cam.getWorldDirection(this._cd || (this._cd = new THREE.Vector3())), cy = Math.atan2(cd.x, cd.z), down = Math.abs(cd.y) > 0.79;
+    const half = Math.atan(Math.tan(cam.fov * Math.PI / 360) * cam.aspect) + 0.44;
+    this._vy = cy; this._vx = cam.position.x; this._vz = cam.position.z; this._vd = down;
     for (const ch of this.chunks.values()) {
       for (const pk of ch.peaks) this.peaks.push(pk);
+      { const dx = ch.cx - cam.position.x, dz = ch.cz - cam.position.z, dd = Math.hypot(dx, dz); if (!down && dd > 700) { const a = Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - cy), Math.cos(Math.atan2(dx, dz) - cy))); if (a > half + Math.asin(Math.min(1, 300 / dd))) continue; } }
       const far = Math.hypot(ch.cx - p.x, ch.cz - p.z) > this.LEAF_NEAR;
       for (const k in this.CAP) {
         if (k === 'trunk' && far) continue;   // 83차: 먼 나무 줄기 생략
@@ -6272,6 +6278,9 @@ const Field = {
       if (this.chunks.size === 0) for (const [a, b] of this.queue.splice(0, 9)) this.chunks.set(a + ',' + b, this.load(a, b));
       if (removed || this.chunks.size) this.fill();
     }
+    // 84차: 시야가 바뀌면 보이는 칸만 다시 채움(최대 0.1초마다)
+    if (this.chunks.size && (this._fillT = (this._fillT || 0) - dt) <= 0) { const cd = camera.getWorldDirection(this._cd2 || (this._cd2 = new THREE.Vector3())), cy = Math.atan2(cd.x, cd.z), down = Math.abs(cd.y) > 0.79;
+      if (down !== this._vd || Math.abs(Math.atan2(Math.sin(cy - (this._vy || 0)), Math.cos(cy - (this._vy || 0)))) > 0.21 || Math.hypot(camera.position.x - (this._vx || 0), camera.position.z - (this._vz || 0)) > 150) { this.fill(); this._fillT = 0.1; } }
     // 최적화(26차): 새 칸은 한 프레임에 하나씩 (칸 경계에서 멈칫하지 않게)
     if (this.queue && this.queue.length) { const [a, b] = this.queue.shift(); this.chunks.set(a + ',' + b, this.load(a, b)); this.fill(); }
     this.updateWalls(X, Y);
@@ -11849,11 +11858,12 @@ Object.assign(Aircraft, {
     for (const a of this.list) if (a.called && a !== this.cur) { a.gone = true; a.root.visible = false; if (a.root.parent) a.root.parent.remove(a.root); }
     this.list = this.list.filter(a => !(a.called && a.gone));
     const P = Player.pos, f = Player.forward(), dir = new THREE.Vector3(f.x, 0, f.z).normalize();
-    const alt = Math.max(P.y, this.floorAt(P.x, P.z)) + 28;
+    let alt = Math.max(P.y, this.floorAt(P.x, P.z)) + 28;
+    { let top = 0; for (const b of World.near(P.x - 160, P.z - 160, P.x + 160, P.z + 160)) top = Math.max(top, b.max.y); for (const w of World.walls || []) if (Math.hypot(P.x - w.cx, P.z - w.cz) < w.half + 200) top = Math.max(top, w.h); alt = Math.max(alt, top + 25); }   // 84차: 주변 건물·성벽보다 25m 위로 날아옴(마을 위 28m로 와서 탑승 직후 건물에 부딪히던 것)
     const from = P.clone().addScaledVector(dir, -520); from.y = alt + 60;
     const a = this.spawn(World.scene, from.x, from.y, from.z, Math.atan2(-dir.x, -dir.z)); if (!a) return;
     a.called = true; a.temp = true; a.parked = false; a.onGround = false; a.throttle = 0.8;
-    a.auto = { t: 0, from, dir, alt, speed: 75 };
+    a.auto = { t: 0, from, dir, alt, speed: 75, grabR: Math.max(70, alt - P.y + 35) };   // 84차: 높이 날아오면 와이어 거리도 그만큼
     Game.toast('비행정 호출 · 하늘에서 날아옵니다 — 가까이 오면 와이어로 올라탐', '#9fe0b0');
   },
   // 불러온 비행정의 정해진 비행(내려오며 플레이어 머리 위로) + 올라타기
@@ -11868,7 +11878,7 @@ Object.assign(Aircraft, {
       a.pitch = along < 420 ? -0.14 : 0; a.roll = 0;
       a.vel.copy(au.dir).multiplyScalar(au.speed); a.vel.y = along < 420 ? -au.speed * 60 / 420 : 0;
       a.root.rotation.set(a.pitch, a.yaw, 0, 'YXZ');
-      if (!this.grab && !this.cur && along < 560 && p.distanceTo(Player.pos) < 70 && !(typeof Shifter !== 'undefined' && (Shifter.active || Shifter.charging))) this.startGrab(a);
+      if (!this.grab && !this.cur && along < 560 && p.distanceTo(Player.pos) < au.grabR && !(typeof Shifter !== 'undefined' && (Shifter.active || Shifter.charging))) this.startGrab(a);
       if (along > 1150 && this.grab?.a !== a) { a.gone = true; a.root.visible = false; if (a.root.parent) a.root.parent.remove(a.root); Game.toast('비행정이 지나갔다 · P로 다시 부르기', '#cfd8e6'); }
     }
     this.list = this.list.filter(a => !(a.called && a.gone));
@@ -12018,8 +12028,10 @@ Object.assign(Aircraft, {
       this.auto = false; this.warp = 1; Player.yaw = a.yaw; Player.pitch = 0;
       Game.toast(`목적지 도착 · ${this.dest.name} · 자동 운항 끔`, '#9fe0b0'); this.dest = null; return null;
     }
-    this.warpEff = Math.min(this.warp, Math.max(1, di.km / 2));   // 82차: 가까워지면 배속을 줄여 장소 위를 지나치지 않게
-    const yaw = Math.atan2(-di.dxm, -di.dzm), p = a.root.position, sp = Math.max(30, a.vel.length()) * this.warpEff;
+    { const agl = a.root.position.y - this.REST - a.floor; this.warpEff = Math.min(this.warp, Math.max(1, di.km), Math.max(1, (agl - 40) / 10)); }   // 82·84차: 목적지 근처·낮은 고도(막 탑승해 아직 220m까지 못 오름)에서는 배속을 줄여 언덕에 부딪히지 않게   // 82차: 가까워지면 배속을 줄여 장소 위를 지나치지 않게
+    const yaw0 = Math.atan2(-di.dxm, -di.dzm), p = a.root.position, sp = Math.max(30, a.vel.length()) * this.warpEff;
+    if (p.y - this.REST - a.floor < 120) return { yaw: a.yaw, pitch: 0.3 };   // 84차: 120m까지는 돌지 않고 먼저 올라감
+    const yaw = yaw0;
     let fl = this.floorAt(p.x, p.z);
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
     for (const t of [1, 2, 4, 8]) fl = Math.max(fl, this.floorAt(p.x + fx * sp * t, p.z + fz * sp * t));
@@ -12198,6 +12210,7 @@ const Rocket = {
     this.cur = r; r.throttle = 0;
     Player.model.visible = false; if (Player.viewModel) Player.viewModel.visible = false;
     Player.yaw = 0; Player.pitch = 0.55;
+    Space.init(); Space._warm = 3;   // 84차: 카운트다운 동안 행성 무늬·셰이더를 미리 GPU에 올림(우주 15km에서 0.16초 멈칫하던 것)
     r.count = 5; r.orbit = false; r.az = Math.atan2(r.home.z, r.home.x) + Math.PI;   // 83차: 자동 운행 — 5초 카운트다운, 비스듬히 기우는 방향(맵 가운데 쪽)
     Game.toast('로켓 탑승 · 자동 발사 5초 전 · 마우스로 둘러보기 · 휠 확대 · [ ] 시간 배속 · F 내리기', '#9fe0b0');
     return true;
@@ -12310,6 +12323,10 @@ const Rocket = {
     camera.rotation.set(Player.pitch, Player.yaw, 0);
     const fov = (Player.baseFov || 75) + Math.min(sp, 1500) * 0.006;
     if (Math.abs(camera.fov - fov) > 0.2) { camera.fov += (fov - camera.fov) * 0.1; camera.updateProjectionMatrix(); }
+    if (Space._warm > 0) {   // 84차: 행성과 같은 재질의 아주 작은 구를 카메라 바로 앞에 2~3프레임 그려 무늬를 올려 둠
+      const w = Space._wm || (Space._wm = (() => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.004, 8, 6), Space.planet.material); m.frustumCulled = false; scene.add(m); const a = new THREE.Mesh(m.geometry, Space.atmo.material); a.frustumCulled = false; m.add(a); return m; })());
+      Space._warm--; w.visible = Space._warm > 0; camera.getWorldDirection(w.position); w.position.multiplyScalar(0.6).add(camera.position);
+    }
     Space.update(camera, this.alt(r));
     this.panel();
   },
