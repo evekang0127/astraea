@@ -14475,7 +14475,7 @@ Arms.ballistic = function (from, to, speed, g) {
         if (goal) {
           const hd = Math.hypot(goal.x - pr.p.x, goal.z - pr.p.z), wl = this.water(pr.p.x, pr.p.z) ?? this.floor(pr.p.x, pr.p.z), sp = Math.min(pr.vmax || 300, pr.v.length() + 200 * dt);
           const ty = hd > 1800 ? wl + 7 : hd > 500 ? wl + 7 + (1800 - hd) * 0.06 : goal.y;
-          const want = this._sk || (this._sk = new THREE.Vector3()); want.set(goal.x - pr.p.x, (ty - pr.p.y) * 3, goal.z - pr.p.z).setLength(sp); pr.v.lerp(want, Math.min(1, dt * 4)).setLength(sp);
+          const want = this._skv || (this._skv = new THREE.Vector3()); want.set(goal.x - pr.p.x, (ty - pr.p.y) * 3, goal.z - pr.p.z).setLength(sp); pr.v.lerp(want, Math.min(1, dt * 4)).setLength(sp);
           if (hd < 120) pr.v.copy(goal).sub(pr.p).setLength(sp);
           pr.acc = 0;
         }
@@ -14964,7 +14964,7 @@ Arms.panel = function (list, sel, foot, title) {
   };
   const p0 = Aircraft.panel;
   Aircraft.panel = function () {
-    p0.call(this);
+    { const ap = Arms.panel; Arms.panel = () => {}; try { p0.call(this); } finally { Arms.panel = ap; } }   // 옛 계기판이 먼저 그려 'undefined'로 보이던 것
     const a = this.cur; if (!a || !Game.running || Game.dying) return;
     const X = { gun: '누르고 있기 · 연사', rkt: '누르고 있기 · 직진 로켓', bomb: '초록 원 = 떨어질 곳', cbu: '150m에서 자탄 30개로 퍼짐' };
     Arms.panel(this.W.map(w => ({ name: w.name, short: w.short, ammo: w.ammo, max: w.max, reload: w.reload, rlT: w.rlT, rl: w.rl, cd: 1 - Math.max(0, a['cd_' + w.id] || 0) / Math.max(0.3, w.cd), tip: tipOf(w, X[w.id]) })), this.wsel, '클릭 발사 · 우클릭 조준경 · 휠 배율', '비행정 무장');
@@ -15390,7 +15390,7 @@ Marley.mg = function (u) {
   Arms.aim = function (maxR = 2500, near = 3) {
     const r = a0.call(this, maxR, near);
     if (!Marley.list.length) return r;
-    const cp = camera.position, cd = camera.getWorldDirection(this._mcd || (this._mcd = new THREE.Vector3())), o = this._mo || (this._mo = new THREE.Vector3()), dl = this._md || (this._md = new THREE.Vector3());
+    const cp = camera.position, cd = camera.getWorldDirection(this._m8cd || (this._m8cd = new THREE.Vector3())), o = this._m8o || (this._m8o = new THREE.Vector3()), dl = this._m8d || (this._m8d = new THREE.Vector3());   // (88차-2: 이름이 무기 재질 _mo·_md와 겹쳐 재질을 덮어써서 조준·발사가 매 프레임 오류 → 대포 타면 멈추던 것)
     let best = r.dist, hit = null;
     for (const u of Marley.list) {
       if (u.dead) continue;
@@ -15424,6 +15424,41 @@ Marley.mg = function (u) {
     }
     ctx.restore();
   };
+}
+
+// ---------- 캐릭터·거인으로도 싸우기 ----------
+// 캐릭터: 칼 베기가 6m(회전 베기 8m) 안 병기에 피해 + 입체기동 와이어를 병기 몸통에 걸 수 있음(장소 '걸 수 있는 것' 목록에 넣음)
+// 거인: 주먹·발차기(hitArc)·범위 기술(areaHit)이 병기에도 맞음 + 거인 발밑의 전차·열차는 밟혀 부서짐
+Marley.melee = function (c, r, dmg, src) {
+  let n = 0;
+  for (const u of this.list) { if (u.dead) continue; const d = this.distTo(u, c); if (d > r) continue; u.hp -= dmg; n++; for (let i = 0; i < 8; i++) Effects.sparks && Effects.sparks.emit(c, this.V().set(Effects.rand(8), Math.random() * 7, Effects.rand(8)), 0.5, 0.35); if (u.hp <= 0) this.kill(u); }
+  if (n && typeof Arms !== 'undefined' && Arms.hitMark) Arms.hitMark(c, this.list.some(u => u.dead && u.deadT === 0), 1);
+  return n;
+};
+{
+  const ds0 = Player.doSlash;
+  Player.doSlash = function () { const r = ds0.apply(this, arguments); if (Marley.list.length) { const c = this.hipPos ? this.hipPos() : this.pos; Marley.melee(c, this.spinT > 0 ? 8 : 6, this.spinT > 0 ? 6 : 4); } return r; };
+  const ha0 = Shifter.hitArc;
+  Shifter.hitArc = function (range, minDot, o = {}, once = null, center = null) {
+    const n = ha0.apply(this, arguments);
+    if (Marley.list.length && this.titan) { const c = center || this.titan.pos, f = this.titan.forward(), q = new THREE.Vector3(c.x + f.x * range * 0.5, (this.titan.pos.y || 0) + (this.titan.height || 15) * 0.4, c.z + f.z * range * 0.5); const key = once || this; if (!key._mh || performance.now() - key._mh > 250) { key._mh = performance.now(); Marley.melee(q, range * 0.75, 10 * (o.mul || 1), 'shifter'); } }
+    return n;
+  };
+  const ah0 = Shifter.areaHit;
+  if (ah0) Shifter.areaHit = function (center, radius, o = {}, once = null) { const n = ah0.apply(this, arguments); if (Marley.list.length) { const key = once || {}; if (!key._mh || performance.now() - key._mh > 250) { key._mh = performance.now(); Marley.melee(center, radius, 10 * (o.mul || 1.5), 'shifter'); } } return n; };
+  // 거인 발밑: 땅 위 병기를 밟으면 초당 25 피해
+  const mu0 = Marley.update;
+  Marley.update = function (dt) {
+    mu0.call(this, dt);
+    if (!this.on || typeof Shifter === 'undefined' || !Shifter.active || !Shifter.titan) return;
+    const t = Shifter.titan, R = 1.3 * (t.scale || 5);
+    for (const u of this.list) if (!u.dead && !u.air && u.kind !== 'warship' && Math.hypot(u.pos.x - t.pos.x, u.pos.z - t.pos.z) < R + u.rad) { u.hp -= 25 * dt; if (Math.random() < dt * 8) Arms.dust.emit(u.pos, this.V().set(Effects.rand(4), 3, Effects.rand(4)), 1, 2, 5); if (u.hp <= 0) this.kill(u); }
+  };
+  // 와이어로 걸 수 있게: 만들 때 몸통 메시를 장소 걸이 목록에 넣고, 부서져 없어지면 뺌
+  const ad0 = Marley.add;
+  Marley.add = function (u) { const r = ad0.call(this, u); u.root.traverse(o => { if (o.isMesh && o.geometry.attributes.position.count > 30) { World.hookables.push(o); (u.hooks || (u.hooks = [])).push(o); } }); return r; };
+  const wr0 = Marley.wreck;
+  Marley.wreck = function (u, dt) { wr0.call(this, u, dt); if (u.gone && u.hooks) { World.hookables = World.hookables.filter(h => !u.hooks.includes(h)); u.hooks = null; } };
 }
 
 </script>
