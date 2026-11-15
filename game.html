@@ -15077,6 +15077,52 @@ Arms.lockTone = function (on) {
 // 열상(FLIR) 조준경: 밝은 하늘·사막에서 하얗게 날아가던 것 → 대비를 낮추고 약간 어둡게
 { const sc0 = Arms.scope; Arms.scope = function (kind) { const el = sc0.call(this, kind); const cv = typeof renderer !== 'undefined' ? renderer.domElement : null; if (cv && kind === 'flir') cv.style.filter = 'grayscale(1) contrast(1.18) brightness(.82)'; return el; }; }
 
+// ---------- 88차-3: 조작 방법 · 사용법 (일시정지 메뉴 + 시작 화면 조작법) ----------
+// 기능이 많아져 무슨 키를 눌러야 할지 모르던 것 → 상황별 카드(기본·공격·거인·이동·말·비행정·전함·무기·락온·대포·ICBM·로켓)로 한눈에.
+{
+  const K = s => s.split(' ').map(k => `<kbd>${k.replace(/_/g, ' ')}</kbd>`).join('');
+  const card = (icon, title, rows) => `<section class="g88c"><h4><i>${icon}</i>${title}</h4>${rows.map(([k, t]) => `<div class="g88r"><span class="g88k">${K(k)}</span><span>${t}</span></div>`).join('')}</section>`;
+  const html = `<div class="g88">
+<div class="g88grid">
+${card('🧭', '기본 · 입체기동', [['W A S D', '이동 (공중에서 W = 방향 전환)'], ['우클릭', '누르고 있기 = 양손 와이어 · 떼면 해제'], ['Space', '점프 · 와이어 빨리 감기'], ['Shift', '달리기 · 공중 가스 분사'], ['Q', '회피'], ['V 휠', '1인칭 · 3인칭']])}
+${card('⚔️', '공격', [['좌클릭', '베기 (목덜미 근처면 돌진 베기)'], ['좌클릭', '마레 전차·열차·기구도 칼로 벨 수 있음'], ['R', '동료 명령 바꾸기']])}
+${card('🦾', '거인화', [['1~9', '(사람일 때) 변신할 거인 고르기'], ['T', '게이지가 차면 변신'], ['1 2 3', '거인 스킬'], ['좌클릭 우클릭', '연타 · 강타 (마레 병기도 맞음, 밟으면 부서짐)'], ['Q', '대시'], ['E', '해제']])}
+${card('🗺️', '지도 · 이동', [['M', '미니맵 160m → 800m → 4km → 20km → 세계 지도'], ['Esc', '일시정지 · 세계 지도 · 빠른 이동'], ['G', '들판에서 가까운 장소로 들어가기'], ['O', '자동 운항 (지도에서 목적지 고른 뒤)'], ['[ ]', '배속 내리기 · 올리기']])}
+${card('🐎', '말', [['H', '부르기 · 타기 · 내리기'], ['Shift', '질주']])}
+${card('✈️', '비행정', [['P', '부르기 (하늘에서 날아와 자동 탑승)'], ['F', '가까이서 타기 · 내리기'], ['W S', '추력 · 감속(브레이크)'], ['마우스', '방향'], ['Shift', '부스트'], ['휠', '카메라 거리']])}
+${card('🚢', '전함', [['P', '물에 있을 때 = 전함 부르기 (달려와 자동 탑승)'], ['F', '가까이서 타기 · 내리기'], ['W S', '엔진 전진 · 후진'], ['A D', '방향타 (멈춰 있어도 제자리 회전)'], ['Shift', '전속'], ['O [ ]', '자동 항해 · 배속(최대 ×500)']])}
+${card('🎯', '무기 공통', [['1~7', '무기 고르기 (오른쪽 계기판)'], ['좌클릭', '발사 · 누르고 있기 = 연사'], ['우클릭', '조준경 (내 배·비행정은 숨겨짐)'], ['휠', '조준경 배율'], ['자동', '탄약을 다 쓰면 자동 재장전']])}
+${card('🚀', '전함 무기', [['1', '주포 406mm · 조준점에 포탄'], ['2', 'VLS 순항미사일 · 락온 4'], ['3', 'CIWS · 누르고 있기'], ['4', '5인치 함포'], ['5', 'Mk48 어뢰 · 락온 2'], ['6', '하푼 대함미사일 · 락온 2'], ['7', '다연장 로켓 12발']])}
+${card('💥', '비행정 무기', [['1', '20mm 기관포 · 누르고 있기'], ['2', '공대지 미사일 · 락온 4'], ['3', '70mm 로켓 · 누르고 있기'], ['4', '폭탄 · 초록 원 = 떨어질 곳'], ['5', '집속탄 · 자탄 30개'], ['6', '공대공 미사일 · 락온 2 (비행선·기구)']])}
+${card('🔒', '락온', [['겨누기', '표적을 화면 가운데에 두면 띠 띠 띠…'], ['LOCKED', '빨간 꺾쇠 + 띠—— 소리 = 잠김'], ['좌클릭', '잠긴 표적 모두에 발사'], ['미니맵', '내 발사체 · 목적지 X · 잠긴 표적 ◆']])}
+${card('🏰', '대포 · ICBM · 로켓', [['F', '대포 옆에서 조종 (회전 포대 360°)'], ['휠', '대포 시점 확대·축소'], ['F', 'ICBM: 낙원행의 벽 사막 서쪽 방공호 콘솔 → 지도 클릭 → 단계 → 발사'], ['F', '로켓 발사대에서 탑승 · 우주에서 G = 우주 게임'], ['F3', '성능 표시']])}
+</div>
+<p class="g88n">빨간 표시 = 마레 병기(전차·열기구·장갑 열차·비행선·군함). 모든 무기·칼·거인 공격으로 부술 수 있습니다.</p>
+</div>`;
+  const st = document.createElement('style');
+  st.textContent = `.pause-card{width:min(860px,100%)!important}
+.g88{margin-top:10px;text-align:left}
+.g88grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.g88c{padding:10px 12px 8px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1)}
+.g88c h4{margin:0 0 7px;font:800 13px/1.2 'Noto Sans KR','Inter',sans-serif;color:#ffd27a;display:flex;align-items:center;gap:7px;letter-spacing:.5px}
+.g88c h4 i{font-style:normal;font-size:15px}
+.g88r{display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:center;padding:3px 0;font:500 12px/1.35 'Noto Sans KR','Inter',sans-serif;color:#dfe8ef;border-top:1px solid rgba(255,255,255,.05)}
+.g88r:first-of-type{border-top:0}
+.g88k{display:flex;gap:3px;flex-wrap:nowrap;min-width:64px}
+.g88 kbd{display:inline-block;min-width:16px;padding:2px 6px;border-radius:5px;background:linear-gradient(180deg,#f4f1ea,#cfcac0);color:#1b1d22;font:800 11px/1.25 'Inter','Noto Sans KR',sans-serif;text-align:center;box-shadow:0 2px 0 #7b766c;white-space:nowrap}
+.g88n{margin:10px 2px 0;font:500 11.5px/1.5 'Noto Sans KR',sans-serif;color:#ff9a8a}
+details.g88d>summary{font-weight:800;color:#ffd27a;cursor:pointer}
+#panel-controls .g88{margin-top:18px}`;
+  document.head.appendChild(st);
+  const put = () => {
+    const pd = [...document.querySelectorAll('#pause details')].find(d => /조작 안내/.test(d.querySelector('summary')?.textContent || ''));
+    if (pd && !pd.classList.contains('g88d')) { pd.classList.add('g88d'); pd.open = true; pd.querySelector('summary').textContent = '조작 방법 · 사용법 (모든 키)'; const k = pd.querySelector('.keys'); if (k) k.outerHTML = html; else pd.insertAdjacentHTML('beforeend', html); }
+    const pc = document.querySelector('#panel-controls .gold-panel');
+    if (pc && !pc.querySelector('.g88')) { const kb = pc.querySelector('#keybinds'); if (kb) kb.insertAdjacentHTML('beforebegin', html); else pc.insertAdjacentHTML('beforeend', html); }
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', put); else put();
+}
+
 </script>
 <script>
 // ===== 88차-2: 마레 병기 — 전차·관측 열기구·장갑 열차·비행선·군함과 싸우기 =====
