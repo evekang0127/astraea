@@ -15129,6 +15129,68 @@ details.g88d>summary{font-weight:800;color:#ffd27a;cursor:pointer}
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', put); else put();
 }
 
+// ---------- 88차-5: 설정을 모두 버튼식으로 + 시간 정하기 ----------
+// 시작 화면 설정·일시정지 설정의 고르기 칸(select)을 예쁜 버튼 줄로 보여 줌. 원래 select는 숨겨 두고 그대로 씀(값·저장·적용 코드는 그대로)
+//   → 버튼을 누르면 select 값을 바꾸고 change를 보냄. 코드가 select 값을 바꾸거나 선택지를 새로 채워도 0.4초마다 맞춤.
+// 시간: 흐름(20분에 하루) · 새벽 · 아침 · 낮 · 오후 · 저녁 · 밤 — 고르면 그 시각에 멈춤(동굴·'길'의 세계 등 시간 고정 장소는 그대로)
+{
+  const KEY = 'astraea-set-time';
+  const TIMES = [['flow', '흐름'], ['5.5', '새벽'], ['8', '아침'], ['12', '낮'], ['16', '오후'], ['18.6', '저녁'], ['22', '밤']];
+  let tv = 'flow'; try { const v = localStorage.getItem(KEY); if (v && TIMES.some(t => t[0] === v)) tv = v; } catch (_) {}
+  const applyTime = v => {
+    tv = v; try { localStorage.setItem(KEY, v); } catch (_) {}
+    if (typeof DayNight === 'undefined') return;
+    DayNight.frozen = v !== 'flow';
+    if (DayNight.frozen && DayNight.on) { DayNight.h = +v; try { DayNight.apply(0); } catch (e) {} }
+    for (const id of ['timeOfDay', 'pTimeOfDay']) { const el = document.getElementById(id); if (el) el.value = v; }
+  };
+  if (typeof DayNight !== 'undefined') {
+    const ap0 = DayNight.apply, in0 = DayNight.init;
+    DayNight.apply = function (dt) { return ap0.call(this, this.frozen ? 0 : dt); };
+    DayNight.init = function (W) { const r = in0.call(this, W); if (tv !== 'flow') { this.frozen = true; if (this.on) { this.h = +tv; try { this.apply(0); } catch (e) {} } } return r; };
+  }
+  const opts = TIMES.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  const addTime = () => {
+    const f = document.querySelector('#panel-setup .fields'); const g = document.querySelector('#pause .pause-grid');
+    if (f && !document.getElementById('timeOfDay')) f.insertAdjacentHTML('afterbegin', `<label>시간 (하늘·빛)<select id="timeOfDay">${opts}</select></label>`);
+    if (g && !document.getElementById('pTimeOfDay')) g.insertAdjacentHTML('afterbegin', `<label>시간 (바로 적용)<select id="pTimeOfDay">${opts}</select></label>`);
+    for (const id of ['timeOfDay', 'pTimeOfDay']) { const el = document.getElementById(id); if (el && !el._t88) { el._t88 = true; el.value = tv; el.addEventListener('change', e => applyTime(e.target.value)); } }
+    if (typeof DayNight !== 'undefined' && tv !== 'flow') DayNight.frozen = true;
+  };
+  // 버튼 줄
+  const st = document.createElement('style');
+  st.textContent = `select.sel88{position:absolute!important;opacity:0!important;pointer-events:none!important;width:1px!important;height:1px!important;overflow:hidden}
+.seg88{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.seg88 button{all:unset;box-sizing:border-box;cursor:pointer;padding:6px 11px;border-radius:999px;font:700 12px/1.2 'Noto Sans KR','Inter',sans-serif;letter-spacing:.2px;color:#d9e3ea;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);transition:background .15s,border-color .15s,color .15s,transform .08s;white-space:nowrap}
+.seg88 button:hover{background:rgba(255,255,255,.12);border-color:rgba(255,210,122,.55);color:#fff}
+.seg88 button:active{transform:scale(.96)}
+.seg88 button.on{color:#1a1206;background:linear-gradient(180deg,#ffe3a0,#e8b04a);border-color:#ffd27a;box-shadow:0 0 0 1px rgba(255,210,122,.35),0 4px 12px rgba(232,176,74,.28)}
+.seg88 button:focus-visible{outline:2px solid #38d8ff;outline-offset:2px}
+.seg88.many button{padding:5px 9px;font-size:11.5px}
+.pause-grid label,.fields label{position:relative}
+.pause-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:14px 18px!important}
+.pause-grid label,#panel-setup .fields label{font-weight:700;color:#ffd27a!important;letter-spacing:.3px}`;
+  document.head.appendChild(st);
+  const short = t => { t = t.trim(); const a = t.split(/ [·(]/)[0].trim(); return a.length >= 1 ? a : t; };
+  const build = sel => {
+    const opts = [...sel.options]; const sig = opts.map(o => o.value + '=' + o.textContent).join('|');
+    let seg = sel._seg88;
+    if (!seg) { seg = document.createElement('div'); seg.className = 'seg88'; seg.setAttribute('role', 'radiogroup'); sel.insertAdjacentElement('afterend', seg); sel._seg88 = seg; sel.classList.add('sel88'); seg.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); e.stopPropagation(); if (sel.value !== b.dataset.v) { sel.value = b.dataset.v; sel.dispatchEvent(new Event('change', { bubbles: true })); } sync(sel); }); }
+    if (sel._sig88 !== sig) {
+      sel._sig88 = sig; seg.classList.toggle('many', opts.length > 5);
+      seg.innerHTML = opts.map(o => `<button type="button" role="radio" data-v="${o.value.replace(/"/g, '&quot;')}" title="${o.textContent.replace(/"/g, '&quot;')}">${short(o.textContent)}</button>`).join('');
+    }
+    sync(sel);
+  };
+  const sync = sel => { const seg = sel._seg88; if (!seg) return; for (const b of seg.children) { const on = b.dataset.v === sel.value; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); } };
+  const scan = () => { addTime(); for (const sel of document.querySelectorAll('#panel-setup .fields select, #pause .pause-grid select')) build(sel); };
+  const start = () => { scan(); setInterval(() => { const vis = !document.getElementById('pause')?.hidden || !document.getElementById('panel-setup')?.hidden; if (vis) scan(); }, 400); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(start, 300)); else setTimeout(start, 300);
+}
+
+// 일시정지 화면 위에 마레 병기 이름표·포격 경고가 남던 것 → 일시정지 중엔 숨김
+{ const st = document.createElement('style'); st.textContent = 'body:has(#pause:not([hidden])) #mt88,body:has(#pause:not([hidden])) #mw88{display:none!important}'; document.head.appendChild(st); }
+
 </script>
 <script>
 // ===== 88차-2: 마레 병기 — 전차·관측 열기구·장갑 열차·비행선·군함과 싸우기 =====
