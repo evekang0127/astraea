@@ -17243,7 +17243,7 @@ const Weather = {
   tint() {
     const k = this.k; if (k <= 0.005 || typeof World === 'undefined' || !World.scene || !World.scene.fog) return;
     const W = World, D = typeof DayNight !== 'undefined' ? DayNight : null, g = this.gray || new THREE.Color(0x5c6670);
-    const night = D && D.on ? Math.max(0, -Math.sin((D.h - 6) / 12 * Math.PI)) : 0, tc = this.tc || (this.tc = new THREE.Color()); tc.copy(g).multiplyScalar(1 - night * 0.8);
+    const night = D && D.on ? Math.max(0, -Math.sin((D.h - 6) / 12 * Math.PI)) : 0, tc = this.tc || (this.tc = new THREE.Color()), stm = this.want && this.want() === 'storm' ? 1 : 0; tc.copy(g).multiplyScalar((1 - night * 0.8) * (1 - 0.32 * stm));   /* 92차: 폭풍우는 더 어둡게 */
     W.scene.fog.color.lerp(tc, k * 0.7); if (W.scene.background && W.scene.background.isColor) W.scene.background.copy(W.scene.fog.color);
     if (W.sun) W.sun.intensity *= 1 - 0.72 * k; if (D && D.hemi) D.hemi.intensity *= 1 + 0.12 * k;   /* 흐린 날: 그림자는 옅게, 하늘빛은 고르게 */
     if (D && D.dome) { const u = D.dome.material.uniforms; if (u.top) u.top.value.lerp(tc, k * 0.8); if (u.horizon) u.horizon.value.lerp(tc, k * 0.75); if (u.sunCol) u.sunCol.value.multiplyScalar(1 - 0.85 * k); }
@@ -19450,6 +19450,90 @@ body:has(#go92[style*="grid"]) #tutor{display:none!important}`;
   };
   const start = () => { build(); setInterval(() => { const p = document.getElementById('panel-setup'); if (p && !p.hidden) build(); }, 500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(start, 900)); else setTimeout(start, 900);
+}
+
+// ===== 92차-4: 폭풍우를 극적으로 (강병현 지시: 구름이 많고 바람이 세게, 더 극적으로) =====
+// ① 먹구름 천장: 카메라 위 250~520m에 넓고 어두운 구름판 70장(묶음 1개 = 그리기 1번), 바람 따라 흘러감
+// ② 시야: 폭풍일수록 안개가 가까워져 먼 곳이 회색으로 묻힘
+// ③ 강풍: 빗줄기가 크게 기울고, 돌풍이 불 때마다 흙먼지·물보라가 옆으로 날림, 바다 물결이 거칠고 전함이 크게 흔들림
+// ④ 번개 줄기: 하늘에서 땅까지 지그재그로 갈라지며 내리꽂힘(0.25초), 그 자리 땅이 번쩍
+{
+  const St = Weather.St = { clouds: null, bolt: null, gust: 0, wind: new THREE.Vector3(1, 0, 0.35).normalize() };
+  const cloudTex = () => {
+    const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+    for (let i = 0; i < 26; i++) { const x = 40 + Math.random() * 176, y = 40 + Math.random() * 176, r = 30 + Math.random() * 60, gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+    const t = new THREE.CanvasTexture(c); return t;
+  };
+  const build = scene => {
+    if (!St.clouds) {
+      const N = 110, m = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ map: cloudTex(), color: 0x3c434c, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }), N);
+      m.frustumCulled = false; m.renderOrder = 2; m.count = N; St.clouds = m; St.cp = [];
+      for (let i = 0; i < N; i++) St.cp.push({ x: (Math.random() - 0.5) * 3000, z: (Math.random() - 0.5) * 3000, y: 250 + Math.random() * 270, s: 380 + Math.random() * 520, r: Math.random() * 6 });
+      // 번개 줄기: 선 묶음(최대 3갈래)
+      const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(400 * 3), 3)); bg.setDrawRange(0, 0);
+      St.bolt = new THREE.LineSegments(bg, new THREE.LineBasicMaterial({ color: 0xeef4ff, transparent: true, opacity: 0, depthWrite: false, fog: false })); St.bolt.frustumCulled = false; St.bolt.renderOrder = 9;
+    }
+    if (St.clouds.parent !== scene) scene.add(St.clouds); if (St.bolt.parent !== scene) scene.add(St.bolt);
+    St.fog0 = scene.fog ? { near: scene.fog.near, far: scene.fog.far } : null;
+  };
+  // 번개 줄기 모양: 위에서 아래로 지그재그 + 갈래
+  St.strike = function (at, top) {
+    const P = St.bolt.geometry.attributes.position.array; let n = 0;
+    const seg = (x, y, z, x2, y2, z2) => { if (n > 396) return; P[n * 3] = x; P[n * 3 + 1] = y; P[n * 3 + 2] = z; P[n * 3 + 3] = x2; P[n * 3 + 4] = y2; P[n * 3 + 5] = z2; n += 2; };
+    const walk = (x, y, z, toY, jit, depth) => { let px = x, py = y, pz = z; const steps = Math.max(6, Math.round((y - toY) / 18)); for (let i = 1; i <= steps; i++) { const ny = y - (y - toY) * i / steps, nx = px + (Math.random() - 0.5) * jit, nz = pz + (Math.random() - 0.5) * jit; seg(px, py, pz, nx, ny, nz); if (depth < 2 && Math.random() < 0.12) walk(nx, ny, nz, ny - (ny - toY) * (0.3 + Math.random() * 0.4), jit * 0.8, depth + 1); px = nx; py = ny; pz = nz; } };
+    walk(at.x, top, at.z, at.y, 26, 0);
+    if (typeof Arms !== 'undefined' && Arms.ready) for (let i = 0; i < n; i += Math.max(2, Math.floor(n / 50)) * 2) Arms.core.emit(new THREE.Vector3(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]), new THREE.Vector3(), 0.22, 9, 4);   // 줄기를 따라 빛 번짐
+    St.bolt.geometry.setDrawRange(0, n); St.bolt.geometry.attributes.position.needsUpdate = true; St.bolt.material.opacity = 1; St.boltT = 0.28;
+    if (typeof Arms !== 'undefined' && Arms.ready) { for (let i = 0; i < 18; i++) Arms.spray.emit(at, new THREE.Vector3(Effects.rand(14), 6 + Math.random() * 10, Effects.rand(14)), 0.5, 0.6, 1.4); Arms.core.emit(at, new THREE.Vector3(), 0.18, 40, 60); }
+    if (typeof Up91 !== 'undefined') Up91.flash(at.clone().setY(at.y + 30), 9, 600, 0xe6eeff, 0.3);
+  };
+  const wi0 = World.init;
+  World.init = function (...a) { const r = wi0.apply(this, a); try { build(this.scene); } catch (e) { console.warn('storm92', e); } return r; };
+  // 번개: 폭풍우일 때 원래 화면 번쩍임에 '줄기'를 더함(가까울수록 자주 보이게 시야 안쪽에)
+  const wu0 = Weather.update;
+  Weather.update = function (dt) {
+    const bolt0 = this.bolt;
+    const r = wu0.call(this, dt);
+    if (!St.clouds || typeof camera === 'undefined') return r;
+    const c = camera.position, k = this.k, storm = !this.dry() && this.want() === 'storm' ? k : 0, rainy = this.dry() ? 0 : k;
+    // 돌풍 세기(0.3~1): 천천히 흔들리는 두 사인파
+    const tt = performance.now() / 1000; St.gust = storm * (0.55 + 0.45 * Math.sin(tt * 0.41) * Math.sin(tt * 0.17 + 1.3));
+    // 구름판
+    St.clouds.visible = rainy > 0.03; St.clouds.material.opacity = Math.min(0.97, rainy * 0.8 + storm * 0.35);
+    if (St.clouds.visible) {
+      const M = this._m4 || (this._m4 = new THREE.Matrix4()), Q = this._q || (this._q = new THREE.Quaternion()), V = this._v || (this._v = new THREE.Vector3()), Sc = this._s || (this._s = new THREE.Vector3()), up = this._up || (this._up = new THREE.Vector3(0, 1, 0));
+      const drift = (4 + 26 * storm) * dt;
+      St.cp.forEach((p, i) => {
+        p.x += St.wind.x * drift; p.z += St.wind.z * drift;
+        let dx = p.x - c.x, dz = p.z - c.z; if (dx > 1500) p.x -= 3000; else if (dx < -1500) p.x += 3000; if (dz > 1500) p.z -= 3000; else if (dz < -1500) p.z += 3000;
+        Q.setFromAxisAngle(up, p.r); V.set(p.x, Math.max(c.y + 140, (World.scene ? 0 : 0) + p.y) , p.z); Sc.set(p.s, 1, p.s * 0.7); M.compose(V, Q, Sc); St.clouds.setMatrixAt(i, M);
+      });
+      St.clouds.instanceMatrix.needsUpdate = true;
+      const night = typeof DayNight !== 'undefined' && DayNight.on ? Math.max(0, -Math.sin((DayNight.h - 6) / 12 * Math.PI)) : 0;
+      St.clouds.material.color.setRGB(0.24 - night * 0.17 - storm * 0.06, 0.26 - night * 0.18 - storm * 0.06, 0.29 - night * 0.19 - storm * 0.06);
+    }
+    // 시야(안개 거리)
+    const F = World.scene && World.scene.fog, cine = typeof ICBM !== 'undefined' && (ICBM.seq || ICBM.imp) || (typeof Nuke !== 'undefined' && Nuke.dd);
+    if (F && St.fog0 && F.isFog && !cine) { if (rainy > 0.01) { F.far = St.fog0.far * (1 - 0.55 * storm - 0.2 * Math.max(0, rainy - storm)); F.near = St.fog0.near * (1 - 0.6 * storm); St.fogOn = true; } else if (St.fogOn) { F.far = St.fog0.far; F.near = St.fog0.near; St.fogOn = false; } }   // 비가 그치면 원래대로(핵 연출 중엔 손대지 않음)
+    // 강풍: 빗줄기 기울기(바람 방향), 돌풍 때 흙먼지·물보라가 옆으로
+    if (this.mesh && this.mesh.visible && storm > 0.05) {
+      const P = this.mesh.geometry.attributes.position.array, n = this.mesh.geometry.drawRange.count, wx = St.wind.x * (8 + 22 * St.gust), wz = St.wind.z * (8 + 22 * St.gust);
+      for (let i = 0; i < n; i += 2) { P[i * 3 + 3] = P[i * 3] - wx * 0.07; P[i * 3 + 5] = P[i * 3 + 2] - wz * 0.07; }
+      this.mesh.geometry.attributes.position.needsUpdate = true;
+      if (typeof Arms !== 'undefined' && Arms.ready && (this._gs = (this._gs || 0) + dt * 40 * St.gust) >= 1) {
+        for (; this._gs >= 1; this._gs--) { const x = c.x + (Math.random() - 0.5) * 80, z = c.z + (Math.random() - 0.5) * 80, wl = World.waterLevel(x, z), gy = wl !== null ? wl : Arms.floor(x, z); if (Math.abs(gy - c.y) > 50) continue; (wl !== null ? Arms.spray : Arms.dust).emit(new THREE.Vector3(x, gy + 0.6, z), new THREE.Vector3(St.wind.x * (14 + 20 * St.gust), 1.5 + Math.random() * 2, St.wind.z * (14 + 20 * St.gust)), 1.2, wl !== null ? 0.8 : 1.4, 2.5); }
+      }
+    }
+    // 번개가 쳤으면(원래 타이머가 다시 채워짐) 줄기도
+    if (storm > 0.6 && this.bolt > bolt0 + 1) { const a = Math.random() * Math.PI * 2, rr = 180 + Math.random() * 700, x = c.x + Math.cos(a) * rr, z = c.z + Math.sin(a) * rr, wl = World.waterLevel(x, z), gy = wl !== null ? wl : (typeof Arms !== 'undefined' ? Arms.floor(x, z) : 0); St.strike(new THREE.Vector3(x, gy, z), c.y + 420); }
+    if (St.boltT > 0) { St.boltT -= dt; St.bolt.material.opacity = Math.max(0, St.boltT / 0.28) * (0.6 + 0.4 * Math.random()); if (St.boltT <= 0) St.bolt.geometry.setDrawRange(0, 0); }
+    // 바다: 폭풍일수록 물결이 크고 빠르게
+    if (typeof Up91 !== 'undefined' && Up91.wave && World.waterMat) { const ns = 0.4 + storm * 0.65; World.waterMat.normalScale.set(ns, ns); Up91.wave.offset.x += dt * 0.03 * storm; }
+    return r;
+  };
+  // 전함이 폭풍에 크게 흔들림
+  const su0 = Ship.update;
+  Ship.update = function (dt) { const r = su0.call(this, dt); const g = Weather.St ? Weather.St.gust : 0; if (g > 0.02) for (const s of this.list) { if (s.sinking) continue; s.root.rotation.z += Math.sin(s.t * 0.9) * 0.05 * g; s.root.rotation.x += Math.sin(s.t * 0.63 + 1) * 0.025 * g; s.root.position.y += Math.sin(s.t * 0.8) * 1.4 * g; s.root.updateMatrixWorld(); } return r; };
 }
 
 </script>
