@@ -14507,7 +14507,7 @@ Arms.ballistic = function (from, to, speed, g) {
   };
 }
 // 표적 목록(락온·조준): 거인 + (88차-2) 마레 병기
-Arms.targets = function () { return typeof Marley !== 'undefined' && Marley.list.length ? Titans.list.concat(Marley.list) : Titans.list; };
+Arms.targets = function () { const T = typeof Titans !== 'undefined' ? Titans.list : []; return typeof Marley !== 'undefined' && Marley.list.length ? T.concat(Marley.list) : T; };   // 91차: 거인 스크립트가 늦게/못 불러와져도 무기가 멈추지 않게
 // 탄피(기관포·CIWS): 노란 금속 알갱이가 옆으로 튀어 떨어짐
 Arms.brassOut = function (from, M, side) {
   if (!this.brass) { this.brass = new Particles(scene, 500, 0xd8b048, { gravity: 9.8, drag: 0.4 }); this.brass.points.renderOrder = 6; this.sys.push(this.brass); }
@@ -16941,6 +16941,226 @@ Nuke.ddCamera = function (cam) {
     Game.damagePlayer = function () { if (Nuke.inBunker || Nuke.riding) return; return dp0.apply(this, arguments); };
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+}
+
+</script>
+<script>
+// ===== 91차: 전반 업그레이드(강병현 지시: "모든 부분 2배로, 완전 멋있게, 하지만 잘 돌아가게") =====
+// ① 폭발: 순간 빛(주변을 실제로 밝힘) + 날아가 튀는 파편(연기 꼬리) — 파편은 한 번에 그리는 묶음(그리기 호출 1개)
+// ② 전함: 뱃머리 물보라 + 뒤로 길게 남는 흰 항적
+// ③ 비행정: 빠르게 날거나 급선회하면 날개 끝 수증기 꼬리, 엔진 뒤 아지랑이 연기
+// ④ 화면: 영화 같은 가장자리 어둡게(비네트) + 해를 바라보면 빛번짐
+// 성능: 모든 효과는 정해진 개수 안에서 돌려 씀(새로 만들지 않음), 카메라에서 먼 것은 건너뜀, 화질 자동 조절이 해상도를 낮춘 상태면 양을 줄임
+const Up91 = {
+  ready: false,
+  init() {
+    if (this.ready || typeof scene === 'undefined' || typeof Arms === 'undefined' || !Arms.ready) return;
+    this.ready = true;
+    // ① 파편 묶음 240개
+    const N = 240, g = new THREE.BoxGeometry(1, 1, 1);
+    this.deb = new THREE.InstancedMesh(g, new THREE.MeshLambertMaterial({ color: 0x4a4038 }), N);
+    this.deb.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.deb.frustumCulled = false; this.deb.castShadow = false; this.deb.count = 0;
+    scene.add(this.deb);
+    this.D = []; for (let i = 0; i < N; i++) this.D.push({ on: false, p: new THREE.Vector3(), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3(), s: 1, t: 0, life: 0, smoke: false, sm: 0 });
+    this.nextD = 0; this.m4 = new THREE.Matrix4(); this.q = new THREE.Quaternion(); this.sv = new THREE.Vector3(); this.tv = new THREE.Vector3();
+    // ② 항적 거품(물 위에 오래 남음)·③ 수증기
+    this.foam = new Particles(scene, 1600, 0xf4fbff, { gravity: 0, drag: 0.35 }); this.foam.points.renderOrder = 6;
+    this.vap = new Particles(scene, 1800, 0xffffff, { gravity: 0, drag: 1.4 }); this.vap.points.renderOrder = 6;
+  },
+  // 화질 자동 조절이 많이 낮춘 상태면 효과 양을 줄임
+  budget() { return typeof Quality !== 'undefined' && Quality.ratio < 0.8 ? 0.5 : 1; },
+  // ---------- ① 폭발 ----------
+  boom(at, S, onWater) {
+    if (!this.ready) return;
+    const cam = camera.position, far = at.distanceTo(cam);
+    // 순간 빛
+    const L = this.light; if (L && far < 2500) { const k = Math.min(1, S / 4); if (!L.userData.t || L.intensity < 4 * k + 1) { L.position.copy(at).setY(at.y + 4 + S); L.distance = 40 + S * 45; L.intensity = 3 + 5 * k; L.color.setHex(onWater ? 0xffd9a0 : 0xffa54a); L.userData.t = 0.001; L.userData.d = 0.18 + S * 0.05; } }
+    // 파편
+    if (onWater || S < 0.9 || far > 1400) return;
+    const n = Math.round(Math.min(26, 4 + S * 5) * this.budget()), sq = Math.sqrt(S);
+    for (let i = 0; i < n; i++) {
+      const d = this.D[this.nextD]; this.nextD = (this.nextD + 1) % this.D.length;
+      d.on = true; d.t = 0; d.life = 3 + Math.random() * 2.5; d.s = (0.25 + Math.random() * 0.7) * Math.min(3, 0.6 + S * 0.45);
+      d.p.copy(at).setY(at.y + 0.5);
+      const a = Math.random() * Math.PI * 2, up = 0.45 + Math.random() * 0.9, sp = (9 + Math.random() * 22) * sq;
+      d.v.set(Math.cos(a) * sp, up * sp * 1.1, Math.sin(a) * sp);
+      d.r.set(Math.random() * 6, Math.random() * 6, Math.random() * 6); d.w.set(Effects.rand(14), Effects.rand(14), Effects.rand(14));
+      d.smoke = i % 3 === 0 && S >= 1.5; d.sm = 0; d.bounced = false;
+    }
+  },
+  updDebris(dt) {
+    let c = 0; const M = this.m4, Q = this.q, sv = this.sv;
+    for (const d of this.D) {
+      if (!d.on) continue;
+      d.t += dt; if (d.t > d.life) { d.on = false; continue; }
+      d.v.y -= 26 * dt; d.p.addScaledVector(d.v, dt);
+      d.r.x += d.w.x * dt; d.r.y += d.w.y * dt; d.r.z += d.w.z * dt;
+      const gy = Arms.floor(d.p.x, d.p.z);
+      if (d.p.y < gy + d.s * 0.4) { d.p.y = gy + d.s * 0.4; if (!d.bounced && d.v.y < -6) { d.v.y *= -0.32; d.v.x *= 0.5; d.v.z *= 0.5; d.w.multiplyScalar(0.4); d.bounced = true; if (d.s > 0.8) Arms.dust.emit(d.p, this.tv.set(0, 2, 0), 0.8, 1.2 * d.s, 3 * d.s); } else { d.v.set(0, 0, 0); d.w.set(0, 0, 0); } }
+      if (d.smoke && d.t < 1.6 && (d.sm -= dt) <= 0) { d.sm = 0.05; Arms.smoke.emit(d.p, this.tv.set(0, 1, 0), 0.9 + Math.random() * 0.6, 0.9 * d.s + 0.6, 3 * d.s + 2); if (d.t < 0.5) Arms.fire.emit(d.p, this.tv.set(0, 0, 0), 0.25, 0.8 * d.s + 0.4, 0.3); }
+      const k = d.t > d.life - 0.6 ? (d.life - d.t) / 0.6 : 1;
+      Q.setFromEuler(d.r); sv.setScalar(d.s * k); M.compose(d.p, Q, sv); this.deb.setMatrixAt(c++, M);
+    }
+    this.deb.count = c; if (c) this.deb.instanceMatrix.needsUpdate = true;
+  },
+  updLight(dt) {
+    const L = this.light; if (!L || !L.userData.t) return;
+    L.userData.t += dt; const u = L.userData.t / L.userData.d;
+    if (u >= 1) { L.intensity = 0; L.userData.t = 0; return; }
+    L.intensity *= Math.pow(0.02, dt / L.userData.d);
+  },
+  // ---------- ② 전함 항적 ----------
+  updShips(dt) {
+    if (typeof Ship === 'undefined') return;
+    const cam = camera.position, b = this.budget(), v = this.tv;
+    for (const s of Ship.list) {
+      const sp = Math.abs(s.speed || 0); if (sp < 1.5 || s.sinking || !s.root.visible) continue;
+      const p = s.root.position; if (Math.hypot(p.x - cam.x, p.z - cam.z) > 1800) continue;
+      const wl = World.waterLevel(p.x, p.z); if (wl === null) continue;
+      const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), rx = -fz, rz = fx, half = (s.len || 160) / 2, k = Math.min(1, sp / 14), dir = Math.sign(s.speed || 1);
+      s._u91f = (s._u91f || 0) + dt * (14 + 46 * k) * b;
+      while (s._u91f >= 1) {
+        s._u91f -= 1;
+        // 뒤 항적: 배 폭만큼 퍼지며 넓어지는 흰 거품
+        const side = (Math.random() - 0.5) * (s.beam || 22) * 0.9, back = -dir * half;
+        const q = this.sv.set(p.x + fx * back + rx * side, wl + 0.25, p.z + fz * back + rz * side);
+        this.foam.emit(q, v.set(rx * side * 0.06 - fx * dir * sp * 0.2, 0, rz * side * 0.06 - fz * dir * sp * 0.2), 5 + Math.random() * 3 * k + 2, 4 + 4 * k, 9 + 8 * k);
+        // 뱃머리 물보라(양옆으로 튐)
+        if (Math.random() < 0.55) { const sd = Math.random() < 0.5 ? -1 : 1, front = dir * half * 0.92, q2 = this.sv.set(p.x + fx * front + rx * sd * 6, wl + 1.2, p.z + fz * front + rz * sd * 6);
+          Arms.spray.emit(q2, v.set(rx * sd * (3 + sp * 0.5) + fx * dir * sp * 0.3, 3 + sp * 0.55 * Math.random(), rz * sd * (3 + sp * 0.5) + fz * dir * sp * 0.3), 0.8 + Math.random() * 0.5, 1.4 + k * 1.4, 3 + k * 3);
+          this.foam.emit(q2.setY(wl + 0.25), v.set(rx * sd * 4, 0, rz * sd * 4), 3.5, 3, 7); }
+      }
+    }
+  },
+  // ---------- ③ 비행정 수증기 ----------
+  updAir(dt) {
+    if (typeof Aircraft === 'undefined') return;
+    const cam = camera.position, b = this.budget(), v = this.tv;
+    for (const a of Aircraft.list) {
+      if (a.parked || a.onGround || a.crashT > 0 || !a.root.visible) continue;
+      const p = a.root.position; if (p.distanceTo(cam) > 1500) continue;
+      const sp = a.vel.length(), turn = Math.abs(a.roll || 0), on = sp > 62 || (turn > 0.45 && sp > 35);
+      a.root.updateMatrixWorld();
+      if (!a._u91t) a._u91t = [new THREE.Vector3(), new THREE.Vector3()];
+      if (on) {
+        // 날개 끝 두 곳: 지난 장면 위치에서 지금 위치까지 1m 간격으로 이어 뿌려 끊김 없는 줄로 보이게
+        const life = (0.9 + turn * 0.9) * (b < 1 ? 0.6 : 1);
+        [-25.6, 25.6].forEach((sx, i) => {
+          const cur = this.sv.set(sx, 4.2, -2.6).applyMatrix4(a.root.matrixWorld), prev = a._u91t[i];
+          if (a._u91on) { const d = cur.distanceTo(prev), n = Math.min(24, Math.ceil(d / 0.55)); for (let k = 1; k <= n; k++) { const q = this.q2 || (this.q2 = new THREE.Vector3()); q.lerpVectors(prev, cur, k / n); this.vap.emit(q, v.set(0, 0, 0), life, 0.7, 1.5 + turn); } }
+          prev.copy(cur);
+        });
+      }
+      a._u91on = on;
+      // 엔진 뒤 아지랑이: 작고 옅게
+      if (a.throttle > 0.7 && (a._u91e = (a._u91e || 0) + dt) > 0.12) { a._u91e = 0; for (const ex of [-9, 9]) { const q = this.sv.set(ex, 4.2, 4).applyMatrix4(a.root.matrixWorld); Arms.trail.emit(q, v.set(0, 0.2, 0), 0.45, 0.35, 1.2); } }
+    }
+  },
+  update(dt) {
+    this.updLight(dt);   // 빛은 효과 준비 전에도 꺼지게
+    if (!this.ready) { this.init(); if (!this.ready) return; }
+    this.updDebris(dt); this.updShips(dt); this.updAir(dt);
+    const sc = Effects.steam.mat.uniforms.scale.value; this.foam.mat.uniforms.scale.value = sc; this.vap.mat.uniforms.scale.value = sc;
+    this.foam.update(dt); this.vap.update(dt);
+  },
+};
+
+// 빛은 장소를 만들 때 미리 넣어 둠(게임 도중에 빛을 더하면 모든 재질 셰이더를 다시 만들어 화면이 멈춤)
+{
+  const wi0 = World.init;
+  World.init = function (...a) {
+    const r = wi0.apply(this, a);
+    try { if (!Up91.light) { Up91.light = new THREE.PointLight(0xffa54a, 0, 60, 2); Up91.light.userData = { t: 0, d: 0.3 }; } if (this.scene && Up91.light.parent !== this.scene) this.scene.add(Up91.light); } catch (e) { console.warn('up91 light', e); }
+    return r;
+  };
+  const bm0 = Arms.boom;
+  Arms.boom = function (at, S, o = {}) {
+    const r = bm0.apply(this, arguments);
+    try { Up91.init(); const wl = this.water(at.x, at.z); Up91.boom(at, S, wl !== null && at.y < wl + 3); } catch (e) { console.warn('up91 boom', e); }
+    return r;
+  };
+  const au0 = Arms.update;
+  Arms.update = function (dt) { const r = au0.apply(this, arguments); try { Up91.update(dt); } catch (e) { if (!Up91._warned) { Up91._warned = true; console.warn('up91', e); } } return r; };
+}
+
+// ---------- ④ 화면: 비네트 + 해 빛번짐 ----------
+{
+  const css = document.createElement('style');
+  css.textContent = `#vig91{position:fixed;inset:0;pointer-events:none;z-index:3;background:radial-gradient(ellipse 78% 72% at 50% 48%,rgba(0,0,0,0) 58%,rgba(4,8,16,.28) 86%,rgba(2,4,10,.5) 100%)}
+#sun91{position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:3;opacity:0;transition:opacity .25s}
+#sun91 i{position:absolute;border-radius:50%;transform:translate(-50%,-50%);mix-blend-mode:screen}
+#sun91 .c{width:520px;height:520px;background:radial-gradient(circle,rgba(255,250,230,.55) 0,rgba(255,226,170,.22) 18%,rgba(255,200,120,.07) 42%,rgba(255,190,110,0) 70%)}
+#sun91 .s{width:900px;height:6px;border-radius:3px;background:linear-gradient(90deg,rgba(255,220,160,0),rgba(255,236,200,.35),rgba(255,220,160,0))}
+#sun91 .g{width:60px;height:60px;background:radial-gradient(circle,rgba(150,220,255,.0) 40%,rgba(150,220,255,.16) 62%,rgba(150,220,255,0) 72%)}
+#sun91 .g2{width:110px;height:110px;background:radial-gradient(circle,rgba(255,180,120,.12) 0,rgba(255,180,120,0) 70%)}`;
+  document.head.appendChild(css);
+  const go = () => {
+    const vig = document.createElement('div'); vig.id = 'vig91'; document.body.appendChild(vig);
+    const sun = document.createElement('div'); sun.id = 'sun91'; sun.innerHTML = '<i class="c"></i><i class="s"></i><i class="g"></i><i class="g2"></i><i class="g"></i>'; document.body.appendChild(sun);
+    const parts = [...sun.children], tmp = new THREE.Vector3(), fw = new THREE.Vector3();
+    const tick = () => {
+      requestAnimationFrame(tick);
+      try {
+        if (typeof camera === 'undefined' || typeof World === 'undefined' || !World.SUN_DIR) return;
+        const under = (typeof Nuke !== 'undefined' && (Nuke.inBunker || Nuke.riding)) || /under|crypt/.test(World.mapId || '') || (typeof Space !== 'undefined' && Space.in);
+        const h = typeof DayNight !== 'undefined' && DayNight.on ? Math.sin((DayNight.h - 6) / 12 * Math.PI) : 1;
+        camera.getWorldDirection(fw); const dot = fw.dot(World.SUN_DIR);
+        let o = under || h < 0.05 || World.SUN_DIR.y < 0.05 ? 0 : Math.max(0, (dot - 0.55) / 0.45) * Math.min(1, h * 3);
+        if (typeof Game !== 'undefined' && !Game.running) o = 0;
+        if (o <= 0.01) { if (sun.style.opacity !== '0') sun.style.opacity = '0'; return; }
+        tmp.copy(camera.position).addScaledVector(World.SUN_DIR, 1000).project(camera);
+        const x = (tmp.x * 0.5 + 0.5) * innerWidth, y = (-tmp.y * 0.5 + 0.5) * innerHeight, cx = innerWidth / 2, cy = innerHeight / 2;
+        const K = [0, 0, 0.55, 1.25, 1.6];   // 빛번짐 고리가 해 → 화면 가운데 → 반대쪽으로 늘어섬
+        parts.forEach((e, i) => { const k = K[i]; e.style.left = (x + (cx - x) * k) + 'px'; e.style.top = (y + (cy - y) * k) + 'px'; });
+        sun.style.opacity = o.toFixed(2);
+      } catch (e) {}
+    };
+    requestAnimationFrame(tick);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+}
+
+// ---------- ⑤ 물: 움직이는 잔물결(법선 지도) → 햇빛이 물결마다 반짝임. 물 재질 1개에 그림 1장을 더할 뿐이라 거의 부담 없음 ----------
+{
+  const waveTex = () => {
+    const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+    const g = c.getContext('2d'), im = g.createImageData(S, S), D = im.data;
+    const W = [[3, 1, 0.5, 0], [1, 4, 0.42, 1.3], [5, 3, 0.26, 2.1], [7, -2, 0.18, 0.7], [2, 7, 0.16, 3], [11, 5, 0.09, 1.1], [-9, 13, 0.06, 2.4]];   // 정수 진동수 → 이음매 없이 반복
+    const H = (x, y) => { let h = 0; for (const [a, b, amp, ph] of W) h += amp * Math.sin(2 * Math.PI * (a * x + b * y) / S + ph); return h; };
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const dx = (H(x + 1, y) - H(x - 1, y)) * 9, dy = (H(x, y + 1) - H(x, y - 1)) * 9, l = Math.hypot(dx, dy, 1), i = (y * S + x) * 4;
+      D[i] = (-dx / l * 0.5 + 0.5) * 255; D[i + 1] = (-dy / l * 0.5 + 0.5) * 255; D[i + 2] = (1 / l * 0.5 + 0.5) * 255; D[i + 3] = 255;
+    }
+    g.putImageData(im, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  };
+  const aw0 = World.addWater;
+  World.addWater = function (x, z, w, d) {
+    const r = aw0.apply(this, arguments);
+    try { const ch = this.scene.children, m = ch[ch.length - 2]; if (m && m.material === this.waterMat && !m.geometry.userData.u91) { const uv = m.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * w / 95, uv.getY(i) * d / 95); uv.needsUpdate = true; m.geometry.userData.u91 = true; } } catch (e) {}
+    return r;
+  };
+  const wi0 = World.init;
+  World.init = function (...a) {
+    const r = wi0.apply(this, a);
+    try { const M = this.waterMat; if (M && !M.normalMap) { Up91.wave = Up91.wave || waveTex(); M.normalMap = Up91.wave; M.normalScale = new THREE.Vector2(0.4, 0.4); M.specular = new THREE.Color(0x9fb8c8); M.shininess = 160; M.needsUpdate = true; } } catch (e) { console.warn('up91 water', e); }
+    return r;
+  };
+  const u0 = Up91.update;
+  Up91.update = function (dt) { if (this.wave) { this.wave.offset.x += dt * 0.018; this.wave.offset.y += dt * 0.011; } return u0.call(this, dt); };
+}
+
+// ---------- ⑥ 같은 순간 빛을 포구 섬광·거인화 번개에도(빛 1개를 돌려 써서 추가 부담 없음, 더 센 빛이 우선) ----------
+Up91.flash = function (at, power, radius, color, dur) {
+  const L = this.light; if (!L || !at || at.distanceTo(camera.position) > 2200) return;
+  if (L.userData.t && L.intensity > power) return;
+  L.position.copy(at); L.distance = radius; L.intensity = power; L.color.setHex(color); L.userData.t = 0.001; L.userData.d = dur;
+};
+{
+  const mz0 = Arms.muzzle;
+  Arms.muzzle = function (at, dir, S = 1) { const r = mz0.apply(this, arguments); try { if (S >= 0.7) Up91.flash(at, 2 + S * 2.2, 18 + S * 22, 0xffc070, 0.07 + S * 0.03); } catch (e) {} return r; };
+  const lt0 = Effects.lightning;
+  Effects.lightning = function (at, h) { const r = lt0.apply(this, arguments); try { Up91.flash(at.clone().setY(at.y + h * 0.6), 9, 120 + h * 4, 0xfff0a0, 0.45); } catch (e) {} return r; };
 }
 
 </script>
