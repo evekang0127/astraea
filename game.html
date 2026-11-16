@@ -16925,6 +16925,15 @@ Nuke.ddCamera = function (cam) {
   Aircraft.panel = function () { const r = p0.apply(this, arguments); const ft = Arms._w8 && Arms._w8.ft; if (this.cur && ft) ft.textContent = (this.hold ? `✈ 고도 고정 ${Math.round(this.hold.alt - (this.cur.floor || 0))}m · PgUp/PgDn 조절 · L 끄기 · ` : 'L 고도 고정 · ') + '클릭 발사 · 우클릭 조준경 · 휠 배율'; return r; };
 }
 
+// ===== 90차-7: 지하 방공호(엘리베이터 포함) 안에서는 어떤 공격·폭발·거인에게도 피해를 받지 않음 =====
+{
+  const go = () => {
+    const dp0 = Game.damagePlayer;
+    Game.damagePlayer = function () { if (Nuke.inBunker || Nuke.riding) return; return dp0.apply(this, arguments); };
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+}
+
 </script>
 <script>
 // ===== 게임 메인: 렌더러, 입력, HUD, 메인 루프 =====
