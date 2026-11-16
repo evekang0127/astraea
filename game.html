@@ -14829,7 +14829,7 @@ for (const V of [Ship, Aircraft]) {
 
 // ---------- 물에서 P = 전함 부르기 (비행정처럼: 먼 바다에서 달려와 옆에 서면 바로 탑승) ----------
 {
-  const inWater = () => { const p = Player.pos, wl = World.waterLevel(p.x, p.z); return wl !== null && p.y < wl + 3; };
+  const inWater = () => { const p = Player.pos, wl = World.waterLevel(p.x, p.z); return wl !== null && p.y < wl + 0.3; };   // 90차: 실제로 물에 잠겼을 때만(부두·물가에서는 비행정)
   Ship.call = function () {
     if (this.cur || !Game.running || Game.over || Game.dying || (typeof Aircraft !== 'undefined' && Aircraft.cur)) return false;
     if (typeof Shifter !== 'undefined' && (Shifter.active || Shifter.charging)) { Game.toast('거인화 중에는 전함을 부를 수 없다', '#cfd8e6'); return true; }
@@ -15095,7 +15095,7 @@ ${card('⚔️', '공격', [['좌클릭', '베기 (목덜미 근처면 돌진 �
 ${card('🦾', '거인화', [['1~9', '(사람일 때) 변신할 거인 고르기'], ['T', '게이지가 차면 변신'], ['1 2 3', '거인 스킬'], ['좌클릭 우클릭', '연타 · 강타 (마레 병기도 맞음, 밟으면 부서짐)'], ['Q', '대시'], ['E', '해제']])}
 ${card('🗺️', '지도 · 이동', [['M', '미니맵 160m → 800m → 4km → 20km → 세계 지도'], ['Esc', '일시정지 · 세계 지도 · 빠른 이동'], ['G', '들판에서 가까운 장소로 들어가기'], ['O', '자동 운항 (지도에서 목적지 고른 뒤)'], ['[ ]', '배속 내리기 · 올리기']])}
 ${card('🐎', '말', [['H', '부르기 · 타기 · 내리기'], ['Shift', '질주']])}
-${card('✈️', '비행정', [['P', '부르기 (하늘에서 날아와 자동 탑승)'], ['F', '가까이서 타기 · 내리기'], ['W S', '추력 · 감속(브레이크)'], ['마우스', '방향'], ['Shift', '부스트'], ['휠', '카메라 거리']])}
+${card('✈️', '비행정', [['P', '부르기 (하늘에서 날아와 자동 탑승)'], ['F', '가까이서 타기 · 내리기'], ['W S', '추력 · 감속(브레이크)'], ['마우스', '방향'], ['Shift', '부스트'], ['L', '고도 고정 (무기 겨눠도 일정 고도) · PgUp/PgDn 높이'], ['휠', '카메라 거리']])}
 ${card('🚢', '전함', [['P', '물에 있을 때 = 전함 부르기 (달려와 자동 탑승)'], ['F', '가까이서 타기 · 내리기'], ['W S', '엔진 전진 · 후진'], ['A D', '방향타 (멈춰 있어도 제자리 회전)'], ['Shift', '전속'], ['O [ ]', '자동 항해 · 배속(최대 ×500)']])}
 ${card('🎯', '무기 공통', [['1~7', '무기 고르기 (오른쪽 계기판)'], ['좌클릭', '발사 · 누르고 있기 = 연사'], ['우클릭', '조준경 (내 배·비행정은 숨겨짐)'], ['휠', '조준경 배율'], ['자동', '탄약을 다 쓰면 자동 재장전']])}
 ${card('🚀', '전함 무기', [['1', '주포 406mm · 조준점에 포탄'], ['2', 'VLS 순항미사일 · 락온 4'], ['3', 'CIWS · 누르고 있기'], ['4', '5인치 함포'], ['5', 'Mk48 어뢰 · 락온 2'], ['6', '하푼 대함미사일 · 락온 2'], ['7', '다연장 로켓 12발']])}
@@ -16842,6 +16842,87 @@ Nuke.ddCamera = function (cam) {
   // 종말 연출이 끝나면 4개국 사일로 치우기
   const dd0 = Nuke.ddUpdate;
   Nuke.ddUpdate = function (dt) { const D = this.dd; const r = dd0.call(this, dt); if (D && !this.dd && D.fx) { for (const f of D.fx) { if (f.g.parent) f.g.parent.remove(f.g); if (f.m.parent) f.m.parent.remove(f.m); } D.fx = null; clearInterval(this._siren); } return r; };
+}
+
+// ===== 90차-5 최적화: 안 보이는 기지 부분은 그리지 않음(트로스트 그리기 호출 275 → 약 170) =====
+// 지하 지휘소는 지하에 있거나 통제실 장면일 때만, 사일로 속 미사일은 발사·종말 연출 때만, 지상 기지는 3km 안에서만
+{
+  const u0 = Nuke.update;
+  Nuke.update = function (dt) {
+    u0.call(this, dt);
+    const S = this.site; if (!S || !S.U) return;
+    const seq = ICBM.seq, dd = this.dd, cam = camera.position;
+    S.U.visible = this.inBunker || !!(seq && seq.t < 4.6) || !!(dd && dd.t < 3.2) || !!this.riding;
+    for (const sl of S.silos) { const flying = (seq && ICBM.missile === sl.missile) || (dd && dd.sil && dd.sil.some(q => q.sl === sl)); sl.missile.visible = !!flying && sl.state !== 'reload'; }
+    const near = Math.hypot(cam.x - S.X - 95, cam.z - S.Z) < 3000 || !!seq || !!dd; S.groups[0].visible = near; for (const sl of S.silos) sl.g.visible = near;
+  };
+}
+
+// 비행정에 와이어로 끌려 올라가는 중에 맞으면 피해 처리가 와이어를 풀어 탑승이 끊기던 것 → 그동안은 체력만 깎음
+{
+  const go = () => {
+    const dp0 = Game.damagePlayer;
+    Game.damagePlayer = function (dmg, knock) {
+      if (typeof Aircraft !== 'undefined' && Aircraft.grab && !this.over && !this.training) { Player.hp = Math.max(0, Player.hp - dmg); this.lastHit = this.time; this.toast(`-${dmg}`, '#ff5a4a'); Effects.playerHit(); if (Player.hp <= 0) this.gameOver(); return; }
+      return dp0.apply(this, arguments);
+    };
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+}
+
+// 비행정 호출이 너무 오래(520m·초속 75m → 약 8초) 걸리고 무거운 장소에선 더 늦던 것 → 380m에서 초속 95m(약 4초)
+{
+  const c0 = Aircraft.call;
+  Aircraft.call = function () {
+    const n0 = this.list.length; const r = c0.apply(this, arguments);
+    const a = this.list.length > n0 ? this.list[this.list.length - 1] : null;
+    if (a && a.auto && a.called) { const au = a.auto, y = au.from.y; au.from.copy(Player.pos).addScaledVector(au.dir, -380); au.from.y = y; au.speed = 95; }
+    return r;
+  };
+}
+
+// 경사진 장소(스라토아 요새 등)에서 기지 바닥판이 가장 높은 땅에 맞춰 공중에 뜨던 것 → 땅까지 콘크리트 기초(받침)를 채움(와이어로 걸 수 있고 위에 설 수 있음)
+{
+  const b0 = Nuke.build;
+  Nuke.build = function () {
+    const r = b0.call(this); const S = this.site; if (!S) return r;
+    let lo = 1e9; for (let dx = -50; dx <= 240; dx += 10) for (let dz = -50; dz <= 50; dz += 10) lo = Math.min(lo, this.ground(S.X + dx, S.Z + dz));
+    const h = S.y - lo; if (h < 0.8) return r;
+    const M = this.mats(), mat = new THREE.MeshStandardMaterial({ color: 0x6f6b64, roughness: 0.95, emissive: 0x1c1a17 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(300, h + 1, 104), mat); base.position.set(95, -(h + 1) / 2 + 0.05, 0); base.castShadow = base.receiveShadow = true; S.groups[0].add(base);
+    for (let i = 0; i < 12; i++) { const p = new THREE.Mesh(new THREE.BoxGeometry(3, h + 1, 3), M.conD); p.position.set(-50 + (i % 6) * 58, -(h + 1) / 2, i < 6 ? -52.5 : 52.5); S.groups[0].add(p); }
+    const bx = World.solid(S.X - 55, lo - 1, S.Z - 52, S.X + 245, S.y, S.Z + 52); bx.nuke = true; const GR = World.GRID; if (World.grid) for (let ix = Math.floor(bx.min.x / GR); ix <= Math.floor(bx.max.x / GR); ix++) for (let iz = Math.floor(bx.min.z / GR); iz <= Math.floor(bx.max.z / GR); iz++) { const k = ix * 4096 + iz; let c = World.grid.get(k); if (!c) World.grid.set(k, c = []); c.push(bx); }
+    World.hookables.push(base);
+    return r;
+  };
+}
+
+// ===== 90차-6: 비행정 고도 고정(L) — 무기를 겨누느라 마우스를 내려도 기체는 정한 고도로 수평 비행(좌우 선회는 그대로) =====
+{
+  Aircraft.hold = null;
+  const s0 = Aircraft.step;
+  Aircraft.step = function (a, dt, ctl) {
+    const H = this.hold;
+    if (!ctl || !H || a !== this.cur || a.onGround || (this.auto && this.dest)) return s0.call(this, a, dt, ctl);
+    const p = a.root.position, v = a.vel, err = H.alt - p.y;
+    const tp = Math.max(-0.35, Math.min(0.35, err * 0.012 - v.y * 0.045));   // 고도 차이·오르내림 속도로 기수 각
+    const sp = v.length(); if (sp < this.VS * 1.25) a.throttle = Math.min(1, a.throttle + dt * 1.2);   // 실속 방지
+    const real = Player.pitch; Player.pitch = tp;
+    try { return s0.call(this, a, dt, ctl); } finally { Player.pitch = real; }
+  };
+  const toggle = () => {
+    const a = Aircraft.cur; if (!a) return;
+    if (Aircraft.hold) { Aircraft.hold = null; Game.toast('고도 고정 끔', '#cfd8e6'); return; }
+    if (a.onGround) { Game.toast('이륙한 뒤에 고도 고정(L)', '#cfd8e6'); return; }
+    Aircraft.hold = { alt: a.root.position.y }; Game.toast(`고도 고정 · ${Math.round(a.root.position.y - (a.floor || 0))}m · 마우스는 조준만 · L 끄기`, '#9fe0b0');
+  };
+  addEventListener('keydown', e => { if (e.code === 'KeyL' && !e.repeat && typeof Game !== 'undefined' && Game.running && Aircraft.cur) { toggle(); } });
+  const ex0 = Aircraft.exit; Aircraft.exit = function () { this.hold = null; return ex0.apply(this, arguments); };
+  // 고도 고정 중에는 [ ]·휠로 고정 고도를 ±20m
+  addEventListener('keydown', e => { if (!Aircraft.cur || !Aircraft.hold || (Aircraft.auto && Aircraft.dest)) return; if (e.code === 'PageUp' || e.code === 'PageDown') { Aircraft.hold.alt += e.code === 'PageUp' ? 20 : -20; Game.toast(`고정 고도 ${Math.round(Aircraft.hold.alt - (Aircraft.cur.floor || 0))}m`, '#9fe0b0'); } });
+  // 무기 계기판 아래 안내에 상태
+  const p0 = Aircraft.panel;
+  Aircraft.panel = function () { const r = p0.apply(this, arguments); const ft = Arms._w8 && Arms._w8.ft; if (this.cur && ft) ft.textContent = (this.hold ? `✈ 고도 고정 ${Math.round(this.hold.alt - (this.cur.floor || 0))}m · PgUp/PgDn 조절 · L 끄기 · ` : 'L 고도 고정 · ') + '클릭 발사 · 우클릭 조준경 · 휠 배율'; return r; };
 }
 
 </script>
