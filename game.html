@@ -13380,7 +13380,7 @@ Object.assign(Ship, {
       const a = this.aimNow(6000), from = new THREE.Vector3(0, 9.5, -72).applyMatrix4(M), d = Math.hypot(a.p.x - from.x, a.p.z - from.z);
       w.ammo--; const dir = a.p.clone().sub(from).normalize(); Arms.muzzle(from, dir, 1.3); Effects.shake(0.3);
       Arms.shoot({ k: 'shell', p: from, to: a.p.clone(), T: 0.3 + d / 850, S: 2.8, r: 16, hits: 2, mul: 2.5 });
-      if (typeof Sound !== 'undefined') Sound.play('boom', from, 0.7, 90);
+      if (typeof Sound !== 'undefined') Sound.play('cannon', from, 0.7, 90);
     } else if (w.id === 'torp') {
       const wl = this.water(s.root.position.x, s.root.position.z) ?? 2.4, tgt = Arms.nextLock(), a = tgt ? null : this.aimNow(5000);
       const from = new THREE.Vector3((w.ammo % 2 ? 1 : -1) * 10.5, 0, -28).applyMatrix4(M); from.y = wl - 0.8;
@@ -13413,7 +13413,7 @@ Object.assign(Ship, {
     const side = new THREE.Vector3(-look.z, 0, look.x), wl = this.water(s.root.position.x, s.root.position.z) ?? 2.4;
     Effects.shockwave(s.root.position.clone().addScaledVector(look, 20).setY(wl), 60, 0xe6f6ff, 0.6);
     for (let i = 0; i < 40; i++) { const q = s.root.position.clone().addScaledVector(look, 14 + Math.random() * 30).addScaledVector(side, Effects.rand(30)); q.y = wl + 0.2; Arms.spray.emit(q, new THREE.Vector3(look.x * 8, 2 + Math.random() * 3, look.z * 8), 1, 1.4, 4); }
-    if (typeof Sound !== 'undefined') Sound.play('boom', s.root.position, 2.2, 400);
+    if (typeof Sound !== 'undefined') Sound.play('cannon', s.root.position, 2.2, 400);
   },
   ciwsTrack() {
     const cp = camera.position, cd = camera.getWorldDirection(this._ccd || (this._ccd = new THREE.Vector3())); let best = null, ba = 0.32;
@@ -13439,7 +13439,7 @@ Object.assign(Ship, {
         w.ammo--; const cell = 32 - w.ammo, from = new THREE.Vector3(((cell % 4) - 1.5) * 1.6, 7.5, -58 + Math.floor(cell / 4) % 4 * 1.8).applyMatrix4(s.root.matrixWorld);
         Arms.muzzle(from, new THREE.Vector3(0, 1, 0), 2.2); for (let i = 0; i < 30; i++) Arms.smoke.emit(from, new THREE.Vector3(Effects.rand(6), Math.random() * 4, Effects.rand(6)), 2.5 + Math.random() * 2, 2, 9);
         Arms.shoot({ k: 'msl', prof: 'vls', p: from, v: new THREE.Vector3(0, 45, 0), tgt: q.tgt, aim: q.aim, ms: 1.8, vmax: 380, acc: 260, turn: 4, life: 30, S: 6.5, r: 42, hits: 4, mul: 3 });
-        Effects.shake(0.4); if (typeof Sound !== 'undefined') Sound.play('boom', from, 1.1, 200);
+        Effects.shake(0.4); if (typeof Sound !== 'undefined') Sound.play('launch', from, 1.1, 200);
       }
     }
     if (!s) this.salvo.length = 0;
@@ -13697,7 +13697,7 @@ Object.assign(Aircraft, {
       const dir = aim.p.clone().sub(from).normalize(); dir.x += Effects.rand(0.006); dir.y += Effects.rand(0.006); dir.z += Effects.rand(0.006); dir.normalize();
       w.ammo--; Arms.muzzle(from, dir, 0.7);
       Arms.shoot({ k: 'rkt', p: from, v: dir.clone().multiplyScalar(260).add(a.vel), life: 9, S: 2.2, r: 12, hits: 2, mul: 2, ms: 1.1 });
-      if (typeof Sound !== 'undefined') Sound.play('gas', from, 1, 80);
+      if (typeof Sound !== 'undefined') Sound.play('launch', from, 1, 80);
     } else if (w.id === 'bomb') {
       const from = new THREE.Vector3(0, -3.9, -1 + (w.ammo % 2) * 2).applyMatrix4(M);
       w.ammo--; Arms.shoot({ k: 'bomb', p: from, v: a.vel.clone().add(new THREE.Vector3(0, -2, 0)), life: 40, S: 6, r: 34, hits: 4, mul: 3, ms: 1.4 });
@@ -13724,7 +13724,7 @@ Object.assign(Aircraft, {
         const q = this.salvoA.shift(), w = this.W[1]; if (w.ammo <= 0) { this.salvoA.length = 0; break; }
         w.ammo--; a.root.updateMatrixWorld(); const side = w.ammo % 2 ? 1 : -1, from = new THREE.Vector3(side * 9, -1.6, -2).applyMatrix4(a.root.matrixWorld);
         Arms.shoot({ k: 'msl', prof: 'drop', p: from, v: a.vel.clone().add(new THREE.Vector3(0, -6, 0)), tgt: q.tgt, aim: q.aim, ms: 1.0, vmax: 520, acc: 300, turn: 5, life: 22, S: 5.5, r: 32, hits: 4, mul: 3, drop: 0.35 });
-        if (typeof Sound !== 'undefined') Sound.play('gas', from, 1.2, 120);
+        if (typeof Sound !== 'undefined') Sound.play('launch', from, 1.2, 120);
       }
     }
     if (this.W[this.wsel].id === 'bomb') { const p = this.ccip(); Arms.pip(p, p ? `낙하 ${Math.round(p.distanceTo(a.root.position))}m` : ''); } else Arms.pip(null);
@@ -13858,7 +13858,7 @@ const Cannons = {
     Arms.muzzle(from, dir, 2.2); Effects.shake(0.6); s.kick = 0.35; s.cool = this.W[0].cd;
     for (let i = 0; i < 26; i++) Arms.smoke.emit(from, new THREE.Vector3(dir.x * (4 + Math.random() * 8) + Effects.rand(2), dir.y * 6 + Math.random() * 2, dir.z * (4 + Math.random() * 8) + Effects.rand(2)), 2.5 + Math.random() * 2, 1.6, 7);
     Arms.shoot({ k: 'shell', p: from, to: a.p.clone(), T, S: 3.2, r: 20, hits: 3, mul: 2.6 });
-    if (typeof Sound !== 'undefined') Sound.play('boom', from, 1.6, 200);
+    if (typeof Sound !== 'undefined') Sound.play('cannon', from, 1.6, 200);
   },
   select() {},
   setScope(on) { if (!this.cur) on = false; this.scope = on; Arms.scope(on ? 'arty' : null); },
@@ -14139,12 +14139,12 @@ const ICBM = {
     // 냉발사(8.5~9.4초): 가스로 밀어 올림 → 9.4초 1단 점화
     let alt = 0, hor = 0;
     if (t >= 6 && t < 8.5) { this.txt(`T-${Math.max(0, Math.ceil(8.5 - t))}`, '냉발사 준비'); }
-    if (t >= 8.5 && !S.pop) { S.pop = true; this.txt('LAUNCH', '냉발사 — 가스 압력으로 사일로 밖으로'); for (let i = 0; i < 90; i++) sm.emit(Q.set(sp.x + Effects.rand(5), sp.y + 2, sp.z + Effects.rand(5)), V.set(Effects.rand(28), 3 + Math.random() * 18, Effects.rand(28)), 4 + Math.random() * 3, 8, 30); Effects.shake(0.8); if (typeof Sound !== 'undefined') Sound.play('boom', sp, 2.5, 600); }
+    if (t >= 8.5 && !S.pop) { S.pop = true; this.txt('LAUNCH', '냉발사 — 가스 압력으로 사일로 밖으로'); for (let i = 0; i < 90; i++) sm.emit(Q.set(sp.x + Effects.rand(5), sp.y + 2, sp.z + Effects.rand(5)), V.set(Effects.rand(28), 3 + Math.random() * 18, Effects.rand(28)), 4 + Math.random() * 3, 8, 30); Effects.shake(0.8); if (typeof Sound !== 'undefined') Sound.play('launch', sp, 2.5, 600); }
     if (t >= 8.5) {
       const u = t - 8.5;
       const MS = this.MS; if (u < 0.9) alt = (-26 + u / 0.9 * 56) * MS;   // 땅 아래 → 땅 위 (88차: 미사일 크기만큼)
       else { const w = u - 0.9; alt = 30 * MS + 18 * w * w * 1.6 + 2.2 * w ** 3.6 * 6; hor = 0.4 * w ** 3.4 * 6; }
-      if (u >= 0.9 && !S.ign) { S.ign = true; this.txt('IGNITION', '1단 고체 로켓 점화'); for (const s of ud.stages) s.userData.f1.visible = s.userData.f2.visible = false; ud.stages[0].userData.f1.visible = ud.stages[0].userData.f2.visible = true; Effects.shake(1.4); Arms.flash(0.35); if (typeof Sound !== 'undefined') Sound.play('boom', sp, 3, 900); }
+      if (u >= 0.9 && !S.ign) { S.ign = true; this.txt('IGNITION', '1단 고체 로켓 점화'); for (const s of ud.stages) s.userData.f1.visible = s.userData.f2.visible = false; ud.stages[0].userData.f1.visible = ud.stages[0].userData.f2.visible = true; Effects.shake(1.4); Arms.flash(0.35); if (typeof Sound !== 'undefined') Sound.play('rocket', sp, 3, 900); }
     }
     // 위치·기울기(올라가며 표적 쪽으로 눕힘)
     const tilt = Math.min(1.05, Math.max(0, (alt - 600) / 40000) * 1.6);
@@ -14555,7 +14555,7 @@ Aircraft.W[4].short = '집속탄'; Aircraft.W[5].short = '공대공 미사일';
       const dir = aim.p.clone().sub(from).normalize();
       w.ammo--; Arms.muzzle(from, dir, 0.7);
       Arms.shoot({ k: 'rkt', p: from, v: dir.clone().multiplyScalar(260 + Math.max(0, a.vel.dot(dir))), straight: true, life: 9, S: 2.4, r: 13, hits: 2, mul: 2, ms: 1.1, dest: aim.sky ? null : aim.p });
-      if (typeof Sound !== 'undefined') Sound.play('gas', from, 1, 80);
+      if (typeof Sound !== 'undefined') Sound.play('launch', from, 1, 80);
       return;
     }
     if (w.id === 'cbu') {
@@ -14581,7 +14581,7 @@ Aircraft.W[4].short = '집속탄'; Aircraft.W[5].short = '공대공 미사일';
       if (w.ammo > 0) {
         w.ammo--; a.root.updateMatrixWorld(); const side = w.ammo % 2 ? 1 : -1, from = new THREE.Vector3(side * 13, -0.4, -1).applyMatrix4(a.root.matrixWorld), fw = Arms.V().set(0, 0, -1).transformDirection(a.root.matrixWorld);
         Arms.shoot({ k: 'msl', prof: 'direct', p: from, v: a.vel.clone().addScaledVector(fw, 40), tgt: q.tgt, aim: q.aim, ms: 0.8, vmax: 700, acc: 420, turn: 9, life: 18, S: 4.2, r: 22, hits: 3, mul: 3, dest: q.tgt ? null : q.aim });
-        Arms.muzzle(from, fw.clone().negate(), 0.8); if (typeof Sound !== 'undefined') Sound.play('gas', from, 1.3, 140);
+        Arms.muzzle(from, fw.clone().negate(), 0.8); if (typeof Sound !== 'undefined') Sound.play('launch', from, 1.3, 140);
       }
     }
     for (const q of this.salvoA) if (q.aam) q.t -= dt;
@@ -14608,7 +14608,7 @@ Object.assign(Ship.W[0], { short: '주포 406mm' }); Object.assign(Ship.W[1], { 
       const from = new THREE.Vector3(side * 7, 10, 30).applyMatrix4(s.root.matrixWorld), dir = new THREE.Vector3(side * 0.5, 0.6, -0.4).normalize().transformDirection(s.root.matrixWorld);
       w.ammo--; Arms.muzzle(from, dir, 1.6); for (let i = 0; i < 24; i++) Arms.smoke.emit(from, new THREE.Vector3(Effects.rand(5), Math.random() * 3, Effects.rand(5)), 2 + Math.random() * 2, 2, 8);
       Arms.shoot({ k: 'msl', prof: 'skim', p: from, v: dir.multiplyScalar(60), tgt, aim: a.p.clone(), ms: 1.5, vmax: 300, acc: 200, turn: 4, life: 60, S: 7, r: 40, hits: 5, mul: 3.2, dest: tgt ? null : a.p.clone() });
-      Effects.shake(0.4); if (typeof Sound !== 'undefined') Sound.play('boom', from, 1.1, 200);
+      Effects.shake(0.4); if (typeof Sound !== 'undefined') Sound.play('launch', from, 1.1, 200);
       Game.toast(tgt ? '하푼 발사 · 표적 추적' : '하푼 발사', '#9fe0b0'); return;
     }
     if (w.id === 'mlrs') {
@@ -14630,7 +14630,7 @@ Object.assign(Ship.W[0], { short: '주포 406mm' }); Object.assign(Ship.W[1], { 
         w.ammo--; const i = 47 - w.ammo; s.root.updateMatrixWorld(); const from = new THREE.Vector3(((i % 4) - 1.5) * 1.1, 16, 44 + Math.floor(i / 4) % 3 * 1.1).applyMatrix4(s.root.matrixWorld);
         Arms.muzzle(from, new THREE.Vector3(0, 1, 0), 1.2);
         Arms.shoot({ k: 'msl', prof: 'vls', p: from, v: new THREE.Vector3(Effects.rand(4), 70, Effects.rand(4)), aim: q.aim, ms: 0.8, vmax: 380, acc: 320, turn: 7, life: 30, S: 4.4, r: 22, hits: 3, mul: 2.8, dest: q.aim });
-        if (typeof Sound !== 'undefined') Sound.play('gas', from, 1.2, 160);
+        if (typeof Sound !== 'undefined') Sound.play('launch', from, 1.2, 160);
       }
     }
     return up0.call(this, dt);
@@ -14755,7 +14755,7 @@ Arms.tickReload = function (list, dt) {
     Arms.muzzle(from, dir, 2.4); Effects.shake(0.6); s.kick = 0.35; s.cool = this.W[0].cd;
     for (let i = 0; i < 26; i++) Arms.smoke.emit(from, new THREE.Vector3(dir.x * (4 + Math.random() * 8) + Effects.rand(2), dir.y * 6 + Math.random() * 2, dir.z * (4 + Math.random() * 8) + Effects.rand(2)), 2.5 + Math.random() * 2, 1.6, 7);
     Arms.shoot({ k: 'shell', p: from, to: a.p.clone(), T, S: 3.4, r: 20, hits: 3, mul: 2.6, dest: a.p.clone() });
-    if (typeof Sound !== 'undefined') Sound.play('boom', from, 1.6, 200);
+    if (typeof Sound !== 'undefined') Sound.play('cannon', from, 1.6, 200);
   };
   Cannons.updateCamera = function (camera) {
     const s = this.cur;
@@ -15437,7 +15437,7 @@ const Marley = {
     const to = Player.pos.clone(); const err = 5 + d * 0.016; to.x += Effects.rand(err); to.z += Effects.rand(err); to.y = Math.max(Arms.floor(to.x, to.z), Player.pos.y - 1);
     const dir = this.V().set(0, 0, -1).transformDirection(gun.matrixWorld); Arms.muzzle(from, dir, 1.4);
     const pr = Arms.shoot({ k: 'shell', p: from, to, T: 0.8 + d / 380, S, r: 0, hits: 0, enemy: true, dest: null }); this.enemyShot(pr, dmg, r);
-    if (typeof Sound !== 'undefined') Sound.play('boom', from, 1, 260);
+    if (typeof Sound !== 'undefined') Sound.play('cannon', from, 1, 260);
   },
   artillery(u, d) {
     Game.toast('관측 열기구가 위치를 알림 · 포격이 온다!', '#ff8a6a');
@@ -16699,7 +16699,7 @@ Nuke.ddUpdate = function (dt) {
     const op = Math.max(0, Math.min(1, (t - 0.5) / 1.5)); for (const d of sl.doors) d.position.x = d.userData.s * (2.3 + op * 5.2);
     if (t > 0.5 && t < 3 && Math.random() < 0.6) Arms.trail.emit(Q.set(sl.pos.x + Effects.rand(7), sl.pos.y + 6, sl.pos.z + Effects.rand(7)), V.set(Effects.rand(2), 6 + Math.random() * 5, Effects.rand(2)), 3, 8, 24);
     if (u < 0) continue;
-    if (u < 0.9) { q.y = sl.pos.y - 26 * MS + u / 0.9 * 56 * MS; if (!q.pop) { q.pop = true; Effects.shake(1); for (let i = 0; i < 70; i++) Arms.trail.emit(Q.set(sl.pos.x + Effects.rand(4), sl.pos.y + 3, sl.pos.z + Effects.rand(4)), V.set(Effects.rand(26), 3 + Math.random() * 16, Effects.rand(26)), 4, 10, 34); if (typeof Sound !== 'undefined') Sound.play('boom', sl.pos, 2, 700); } }
+    if (u < 0.9) { q.y = sl.pos.y - 26 * MS + u / 0.9 * 56 * MS; if (!q.pop) { q.pop = true; Effects.shake(1); for (let i = 0; i < 70; i++) Arms.trail.emit(Q.set(sl.pos.x + Effects.rand(4), sl.pos.y + 3, sl.pos.z + Effects.rand(4)), V.set(Effects.rand(26), 3 + Math.random() * 16, Effects.rand(26)), 4, 10, 34); if (typeof Sound !== 'undefined') Sound.play('rocket', sl.pos, 2, 700); } }
     else { if (!q.ign) { q.ign = true; m.userData.stages[0].userData.f1.visible = m.userData.stages[0].userData.f2.visible = true; Effects.shake(1.8); Arms.flash(0.3); for (let i = 0; i < 120; i++) { const a = Math.random() * 7, s = 40 + Math.random() * 60; Arms.smoke.emit(Q.set(sl.pos.x + Math.cos(a) * 10, sl.pos.y + 2, sl.pos.z + Math.sin(a) * 10), V.set(Math.cos(a) * s, 2 + Math.random() * 8, Math.sin(a) * s), 5, 14, 44); } if (typeof Sound !== 'undefined') Sound.play('thunder', sl.pos, 1, 3000); } const w = u - 0.9; q.y = sl.pos.y + 30 * MS + 22 * w * w + 9 * w ** 3; }
     m.position.set(sl.pos.x + (u > 3 ? (u - 3) ** 2 * 6 : 0), q.y, sl.pos.z); if (u > 3) m.quaternion.setFromAxisAngle(V.set(0, 0, 1), -Math.min(0.9, (u - 3) * 0.07));
     if (q.ign) { const e = m.userData.stages[0].localToWorld(Q.set(0, -1.5, 0)); if (!q.last) q.last = e.clone(); const n = Math.min(18, Math.ceil(q.last.distanceTo(e) / 4)); for (let i = 0; i < n; i++) Arms.trail.emit(this._lq3 = (this._lq3 || new THREE.Vector3()).copy(q.last).lerp(e, i / n), V.set(Effects.rand(2), Effects.rand(2), Effects.rand(2)), 12, 6, 30); q.last.copy(e); for (let i = 0; i < 4; i++) Arms.fire.emit(e, V.set(Effects.rand(8), -40 - Math.random() * 30, Effects.rand(8)), 0.35, 6, 9); if (u < 4) Effects.shake(0.25); }
@@ -19450,6 +19450,167 @@ body:has(#go92[style*="grid"]) #tutor{display:none!important}`;
   };
   const start = () => { build(); setInterval(() => { const p = document.getElementById('panel-setup'); if (p && !p.hidden) build(); }, 500); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(start, 900)); else setTimeout(start, 900);
+}
+
+</script>
+<script>
+// ===== 92차-3: 소리 전면 개편 (강병현 지시: 부스터·입체기동 소리 구분, 품질↑, 강약·겹침 정리, 너무 크지 않게, 고증) =====
+// 구조: 효과음 버스(압축기) + 주변음 버스 + 공간 울림(합성 잔향) → 마스터 → 리미터(찢어짐 방지)
+// 거리: 멀수록 작고(완만한 감쇠) 고음이 깎이며(공기 흡수) 울림이 커짐. 큰 폭발·천둥은 소리 속도(343m/s)만큼 늦게 도착.
+// 같은 소리도 매번 높낮이·길이를 조금씩 달리해 기계적으로 반복되지 않게. 큰 폭발이 나면 주변음을 잠깐 낮춤(덕킹).
+{
+  const R = (a = 0.92, b = 1.08) => a + Math.random() * (b - a);
+  const S = Sound;
+  S.GAP = Object.assign(S.GAP, { gun: 30, cannon: 90, launch: 70, rocket: 400, boom: 55, reel: 0 });
+  S.CAT = { boom: 'big', thunder: 'big', cannon: 'big', rocket: 'big', launch: 'mid', gun: 'small', hit: 'mid', kill: 'mid', punch: 'mid', step: 'small', slash: 'small', hook: 'small', attach: 'small', gas: 'small', land: 'small' };
+  S.init = function () {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+    const ctx = this.ctx = new C(), sr = ctx.sampleRate;
+    // 마스터 → 리미터 → 출력 (전체 크기를 예전보다 낮게: 강병현 '너무 크지 않게')
+    this.lim = ctx.createDynamicsCompressor(); Object.assign(this.lim, {}); this.lim.threshold.value = -6; this.lim.knee.value = 4; this.lim.ratio.value = 18; this.lim.attack.value = 0.002; this.lim.release.value = 0.12;
+    this.master = ctx.createGain(); this.master.gain.value = this.vol * 0.62; this.master.connect(this.lim); this.lim.connect(ctx.destination);
+    // 효과음 버스: 완만한 압축으로 큰 소리·작은 소리 차이를 듣기 좋게
+    this.sfx = ctx.createGain(); this.sfxComp = ctx.createDynamicsCompressor(); this.sfxComp.threshold.value = -20; this.sfxComp.knee.value = 12; this.sfxComp.ratio.value = 3.5; this.sfxComp.attack.value = 0.004; this.sfxComp.release.value = 0.25;
+    this.sfx.connect(this.sfxComp); this.sfxComp.connect(this.master);
+    this.amb = ctx.createGain(); this.amb.gain.value = 1; this.amb.connect(this.master);
+    // 노이즈 재료: 흰(날카로움) · 분홍(자연스러움: 바람·가스·비) · 갈색(묵직함: 폭발·땅울림)
+    const mk = f => { const n = sr * 3, b = ctx.createBuffer(1, n, sr), d = b.getChannelData(0); f(d, n); return b; };
+    this.noiseBuf = mk((d, n) => { for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; });
+    this.pinkBuf = mk((d, n) => { let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0; for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852; b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898; d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926; } });
+    this.brownBuf = mk((d, n) => { let l = 0; for (let i = 0; i < n; i++) { l = (l + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = l * 3.5; } });
+    // 공간 울림: 2.2초 감쇠 잡음으로 만든 잔향(좌우 다르게)
+    const ir = ctx.createBuffer(2, Math.floor(sr * 2.2), sr);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) { const t = i / d.length; d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.2) * (i < sr * 0.012 ? 0 : 1); } }
+    this.verb = ctx.createConvolver(); this.verb.buffer = ir; this.verbIn = ctx.createGain(); this.verbIn.gain.value = 1; const vOut = ctx.createGain(); vOut.gain.value = 0.42;
+    const vLp = ctx.createBiquadFilter(); vLp.type = 'lowpass'; vLp.frequency.value = 5200;
+    this.verbIn.connect(vLp); vLp.connect(this.verb); this.verb.connect(vOut); vOut.connect(this.master);
+    // ---- 이어지는 소리(매 프레임 크기 조절) ----
+    const loop = (buf, chain, gainTo = this.amb) => { const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; let n = src; for (const x of chain) { n.connect(x); n = x; } const g = ctx.createGain(); g.gain.value = 0; n.connect(g); g.connect(gainTo); src.start(0, Math.random() * 2); return { g, src, chain }; };
+    const bq = (type, f, q = 0.7) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; };
+    this.loops = {};
+    // 바람: 빠를수록 크고 높아짐 + 아주 빠르면 휘파람
+    this.loops.wind = loop(this.pinkBuf, [bq('bandpass', 400, 0.5)]); this.loops.wind.fl = this.loops.wind.chain[0];
+    this.loops.whistle = loop(this.pinkBuf, [bq('bandpass', 1800, 9)]); this.loops.whistle.fl = this.loops.whistle.chain[0];
+    // 입체기동 와이어 감기(가스 '치이익' + 릴 진동) — 높은 쉬익, 22Hz로 떨림
+    { const hp = bq('highpass', 2300, 0.8), pk = bq('peaking', 5200, 1.2); pk.gain.value = 5; const trem = ctx.createGain(); trem.gain.value = 0.75; const lfo = ctx.createOscillator(); lfo.frequency.value = 22; const lg = ctx.createGain(); lg.gain.value = 0.25; lfo.connect(lg); lg.connect(trem.gain); lfo.start();
+      this.loops.reel = loop(this.pinkBuf, [hp, pk, trem], this.sfx); this.loops.gas = this.loops.reel; }
+    // 부스터(공중 Shift 가스 분사) — 낮고 굵은 '후우우웅' + 압력 소음, 감기 소리와 확실히 다름
+    { const bp = bq('bandpass', 750, 0.6), lo = bq('lowshelf', 300); lo.gain.value = 8; this.loops.boost = loop(this.brownBuf, [bp, lo], this.sfx); this.loops.boostHi = loop(this.pinkBuf, [bq('bandpass', 2600, 1.4)], this.sfx); }
+    this.loops.rumble = loop(this.brownBuf, [bq('lowpass', 85, 1.1)]);
+    // 비·폭풍 바람
+    this.loops.rain = loop(this.pinkBuf, [bq('highpass', 1100, 0.5), bq('lowpass', 7000, 0.5)]);
+    { const bp = bq('bandpass', 260, 0.8); this.loops.storm = loop(this.brownBuf, [bp]); this.loops.storm.fl = bp; }
+    // 전함 엔진(디젤 저음 + 물 가르는 소리)·비행정 엔진(프로펠러 웅웅)
+    { const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), lp = bq('lowpass', 240, 0.9), g = ctx.createGain(); g.gain.value = 0; o1.type = 'sawtooth'; o2.type = 'sawtooth'; o1.frequency.value = 38; o2.frequency.value = 57.3; o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this.amb); o1.start(); o2.start(); this.loops.shipEng = { g, o1, o2, lp }; }
+    this.loops.water = loop(this.pinkBuf, [bq('bandpass', 650, 0.5)]); this.loops.water.fl = this.loops.water.chain[0];
+    { const o = ctx.createOscillator(), lp = bq('lowpass', 900, 0.8), am = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain(), g = ctx.createGain(); o.type = 'sawtooth'; o.frequency.value = 95; lfo.frequency.value = 28; lg.gain.value = 0.35; am.gain.value = 0.65; lfo.connect(lg); lg.connect(am.gain); o.connect(lp); lp.connect(am); am.connect(g); g.gain.value = 0; g.connect(this.amb); o.start(); lfo.start(); this.loops.plane = { g, o, lfo, lp }; }
+    setInterval(() => { if (performance.now() - this.lastUpdate > 250) for (const l of Object.values(this.loops)) l.g.gain.setTargetAtTime(0, ctx.currentTime, 0.06); }, 200);
+  };
+  S.setVolume = function (v) { this.vol = v; try { localStorage.setItem('astraea-volume', String(v)); } catch (_) {} if (this.master) this.master.gain.setTargetAtTime(v * 0.62, this.ctx.currentTime, 0.05); };
+  // ---- 재료 ----
+  S.env = function (g, t0, dur, peak, att = 0.006) { g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t0 + Math.min(att, dur * 0.3)); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); };
+  S.noise = function (dest, t0, dur, type, f0, f1, q, peak, kind = 'white', att) {
+    const c = this.ctx, s = c.createBufferSource(); s.buffer = kind === 'pink' ? this.pinkBuf : kind === 'brown' ? this.brownBuf : this.noiseBuf; s.playbackRate.value = R(0.94, 1.06);
+    const fl = c.createBiquadFilter(); fl.type = type; fl.Q.value = q; fl.frequency.setValueAtTime(f0, t0); fl.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    const g = c.createGain(); this.env(g, t0, dur, peak, att); s.connect(fl); fl.connect(g); g.connect(dest); s.start(t0, Math.random() * 2); s.stop(t0 + dur + 0.05);
+  };
+  S.tone = function (dest, t0, dur, type, f0, f1, peak, att) {
+    const c = this.ctx, o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    const g = c.createGain(); this.env(g, t0, dur, peak, att); o.connect(g); g.connect(dest); o.start(t0); o.stop(t0 + dur + 0.05);
+  };
+  // 금속 울림(칼날·와이어 고정 장치): 비정수배 배음 여러 개가 각자 다른 속도로 사라짐
+  S.ring = function (dest, t0, dur, fs, peak) { for (let i = 0; i < fs.length; i++) this.tone(dest, t0, dur * (1 - i * 0.18), 'sine', fs[i] * R(0.99, 1.01), fs[i] * 0.995, peak / (1 + i * 0.6), 0.002); };
+  // 파편·불꽃 튀는 소리: 짧은 딸깍 여러 개
+  S.crackle = function (dest, t0, dur, n, peak) { for (let i = 0; i < n; i++) { const t = t0 + Math.random() * dur; this.noise(dest, t, 0.015 + Math.random() * 0.03, 'bandpass', 1500 + Math.random() * 3500, 900, 2, peak * (1 - (t - t0) / dur * 0.7)); } };
+  // 듣는 자리(카메라) 기준: 크기·좌우·고음 감쇠·울림 보내기·(큰 소리) 늦게 도착
+  S.out = function (pos, k, range, name) {
+    let gain = k, pan = 0, d = 0;
+    if (pos && typeof camera !== 'undefined') {
+      const dx = pos.x - camera.position.x, dy = (pos.y || 0) - camera.position.y, dz = pos.z - camera.position.z; d = Math.hypot(dx, dy, dz);
+      gain *= 1 / (1 + Math.pow(d / range, 1.25));
+      if (d > 0.5) { const yaw = camera.rotation.y; pan = (dx * Math.cos(yaw) - dz * Math.sin(yaw)) / d; }
+    }
+    if (gain < 0.012) return null;
+    const c = this.ctx, g = c.createGain(); g.gain.value = Math.min(1.3, gain);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.max(500, 18000 * Math.exp(-d / (range * 5))); lp.Q.value = 0.5;
+    g.connect(lp); let tail = lp;
+    if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = Math.max(-0.85, Math.min(0.85, pan)); tail.connect(p); tail = p; }
+    tail.connect(this.sfx || this.master);
+    const send = c.createGain(); send.gain.value = Math.min(0.9, 0.12 + d / (range * 3)) * (this.CAT[name] === 'big' ? 1.3 : 1); tail.connect(send); send.connect(this.verbIn || this.master);
+    g._delay = (this.CAT[name] === 'big' && d > 120) ? Math.min(6, d / 343) : 0;
+    return g;
+  };
+  S.play = function (name, pos = null, k = 1, range = 40) {
+    if (!this.ctx || this.vol <= 0 || this.ctx.state !== 'running' || !this.SFX[name]) return;
+    const now = performance.now();
+    if (now - (this.last[name] || 0) < (this.GAP[name] ?? 40)) return;
+    const vq = this._vq || (this._vq = []); while (vq.length && now - vq[0] > 100) vq.shift();
+    if (vq.length >= 14 && this.CAT[name] !== 'big') return;   // 큰 전투에서 작은 소리부터 건너뜀
+    vq.push(now); this.last[name] = now;
+    const o = this.out(pos, Math.min(1.2, k), range, name); if (!o) return;
+    const t = this.ctx.currentTime + (o._delay || 0);
+    // 큰 소리: 주변음 잠깐 낮춤
+    if (this.CAT[name] === 'big' && o.gain.value > 0.35 && this.amb) { const a = this.amb.gain; a.cancelScheduledValues(t); a.setTargetAtTime(0.45, t, 0.03); a.setTargetAtTime(1, t + 0.5, 0.5); }
+    this.SFX[name].call(this, o, t, k);
+  };
+  Object.assign(S.SFX, {
+    // 와이어 발사: 가스 '퓻' + 앵커 금속음 + 케이블 풀리는 '지이잉'
+    hook(o, t) { this.noise(o, t, 0.1, 'bandpass', 3200 * R(), 7600, 1.6, 0.5, 'white', 0.002); this.ring(o, t, 0.22, [2950, 4430, 6120], 0.05); this.tone(o, t + 0.02, 0.2, 'sawtooth', 1100 * R(), 420, 0.035); this.noise(o, t + 0.02, 0.22, 'highpass', 6000, 3500, 0.7, 0.08, 'pink'); },
+    // 앵커가 박힘: 둔탁한 '퉁' + 짧은 쇳소리
+    attach(o, t) { this.tone(o, t, 0.08, 'sine', 380 * R(), 150, 0.38, 0.002); this.noise(o, t, 0.045, 'bandpass', 2400, 1400, 1.2, 0.3, 'white', 0.001); this.ring(o, t, 0.12, [1820, 2730], 0.04); },
+    // 칼날: 공기 가르는 '휙' + 강철 울림 '칭'
+    slash(o, t) { this.noise(o, t, 0.2, 'bandpass', 900 * R(), 5200, 1.1, 0.75, 'pink', 0.012); this.noise(o, t, 0.08, 'highpass', 5200, 8000, 0.7, 0.18, 'white', 0.004); this.ring(o, t + 0.03, 0.34, [3380, 5120, 7290], 0.06); },
+    // 목덜미 베기: 묵직한 살 베는 소리 + 김 빠지는 증기
+    hit(o, t) { this.noise(o, t, 0.16, 'lowpass', 1900, 280, 0.8, 0.55, 'brown', 0.003); this.tone(o, t, 0.16, 'sine', 125 * R(), 55, 0.5, 0.003); this.noise(o, t + 0.05, 0.9, 'highpass', 2600, 1400, 0.6, 0.16, 'pink', 0.05); },
+    kill(o, t) { this.tone(o, t, 0.55, 'sine', 92 * R(), 32, 0.75, 0.004); this.noise(o, t, 0.5, 'lowpass', 650, 80, 0.8, 0.6, 'brown', 0.004); this.noise(o, t + 0.08, 1.7, 'highpass', 2200, 1100, 0.5, 0.3, 'pink', 0.1); },
+    punch(o, t) { this.tone(o, t, 0.36, 'sine', 82 * R(), 36, 0.85, 0.003); this.noise(o, t, 0.32, 'lowpass', 950, 120, 0.8, 0.65, 'brown', 0.003); this.noise(o, t, 0.05, 'highpass', 1900, 1200, 0.6, 0.22, 'white', 0.001); },
+    steam(o, t) { this.noise(o, t, 2.8, 'highpass', 2500, 1100, 0.5, 0.55, 'pink', 0.15); this.noise(o, t, 2.4, 'lowpass', 520, 150, 0.7, 0.45, 'brown', 0.2); },
+    // 가스 분출(짧은 '푸슉'): 분홍 잡음 대역 + 낮은 숨
+    gas(o, t) { this.noise(o, t, 0.34, 'bandpass', 2300 * R(), 1200, 0.8, 0.45, 'pink', 0.008); this.noise(o, t, 0.26, 'lowpass', 520, 220, 0.7, 0.13, 'brown', 0.01); },
+    land(o, t, k) { this.tone(o, t, 0.15, 'sine', 120, 52, 0.35 * k, 0.003); this.noise(o, t, 0.2, 'lowpass', 750, 140, 0.8, 0.32 * k, 'brown', 0.003); this.noise(o, t, 0.06, 'bandpass', 1400, 900, 1, 0.12 * k, 'white', 0.002); },
+    // 거인 발소리: 땅이 울리는 저음 + 흙 부서지는 소리
+    step(o, t, k) { const f = 62 / Math.sqrt(Math.max(1, k)); this.tone(o, t, 0.5, 'sine', f * R(), 24, 0.85, 0.01); this.noise(o, t, 0.36, 'lowpass', 320, 50, 0.8, 0.5, 'brown', 0.01); this.noise(o, t + 0.02, 0.1, 'bandpass', 900, 500, 1, 0.1, 'white', 0.004); },
+    // 천둥: 찢어지는 '콰직' → 굴러가는 우르릉(몇 번 이어짐)
+    thunder(o, t) { this.noise(o, t, 0.18, 'highpass', 3000, 1200, 0.5, 0.75, 'white', 0.002); const n = 3 + Math.floor(Math.random() * 2); for (let i = 0; i < n; i++) { const tt = t + 0.05 + i * R(0.25, 0.6); this.noise(o, tt, R(1.4, 2.6), 'lowpass', 900 * R(), 50, 0.7, 0.85 / (1 + i * 0.4), 'brown', 0.06); } this.tone(o, t, 1.6, 'sine', 58, 26, 0.5, 0.05); },
+    // 폭발: 터짐 '쾅'(고음) + 몸통(갈색 저음) + 초저음 + 파편 튀는 소리
+    boom(o, t, k) { const L = 1 + Math.min(2, k) * 0.45; this.noise(o, t, 0.1, 'highpass', 2600, 900, 0.5, 0.55, 'white', 0.001); this.noise(o, t, 1.1 * L, 'lowpass', 1700 * R(), 42, 0.6, 0.95, 'brown', 0.004); this.tone(o, t, 0.9 * L, 'sine', 54 * R(), 23, 0.9, 0.006); this.crackle(o, t + 0.12, 0.7 * L, Math.round(8 + k * 6), 0.12); },
+    // 포 발사(전함 주포·대포·5인치·마레 포): 날카로운 발사음 + 압력파 + 긴 울림
+    cannon(o, t, k) { this.noise(o, t, 0.06, 'highpass', 3200, 1600, 0.6, 0.7, 'white', 0.001); this.noise(o, t, 0.7 + k * 0.25, 'lowpass', 1300 * R(), 70, 0.7, 0.9, 'brown', 0.002); this.tone(o, t, 0.55, 'sine', 68 * R(), 28, 0.75, 0.002); },
+    // 총(기관포·CIWS·기관총): 짧고 단단한 '탕'
+    gun(o, t) { this.noise(o, t, 0.045, 'bandpass', 2300 * R(), 1600, 1, 0.5, 'white', 0.001); this.noise(o, t, 0.11, 'lowpass', 700, 120, 0.7, 0.28, 'brown', 0.001); this.tone(o, t, 0.04, 'square', 150, 70, 0.08, 0.001); },
+    // 미사일·로켓 발사: 점화 '팟' + 로켓 굉음 + 타닥타닥 연소음 (가스 소리와 다름)
+    launch(o, t, k) { this.noise(o, t, 0.06, 'highpass', 2600, 1500, 0.6, 0.35, 'white', 0.001); this.noise(o, t + 0.02, 1.3, 'lowpass', 1500 * R(), 420, 0.7, 0.6, 'brown', 0.03); this.noise(o, t + 0.02, 0.8, 'bandpass', 900, 2600, 0.8, 0.22, 'pink', 0.05); this.crackle(o, t + 0.05, 0.9, 10, 0.08); },
+    // 대륙간 탄도 미사일: 길고 거대한 굉음
+    rocket(o, t, k) { this.noise(o, t, 4.5, 'lowpass', 800, 180, 0.6, 0.95, 'brown', 0.4); this.tone(o, t, 4, 'sine', 42, 30, 0.7, 0.5); this.crackle(o, t + 0.3, 3.5, 40, 0.1); this.noise(o, t, 3.5, 'bandpass', 1200, 500, 0.6, 0.25, 'pink', 0.6); },
+  });
+  // 매 프레임: 바람·휘파람·와이어 감기·부스터·땅울림·비·폭풍·전함·비행정 엔진
+  S.update = function () {
+    if (!this.ctx || !this.loops.boost) return;
+    this.lastUpdate = performance.now();
+    const t = this.ctx.currentTime, p = Player, human = !Shifter.active, L = this.loops, set = (l, v, tc = 0.08) => l.g.gain.setTargetAtTime(v, t, tc);
+    const veh = (typeof Ship !== 'undefined' && Ship.cur) || (typeof Aircraft !== 'undefined' && Aircraft.cur);
+    const sp = human && !veh ? p.vel.length() : 0, k = p.keys || {};
+    set(L.wind, Math.min(0.42, Math.max(0, (sp - 8) / 80))); L.wind.fl.frequency.setTargetAtTime(260 + sp * 12, t, 0.1);
+    set(L.whistle, Math.min(0.06, Math.max(0, (sp - 45) / 500))); L.whistle.fl.frequency.setTargetAtTime(1400 + sp * 10, t, 0.1);
+    const hooked = human && !veh && p.isHooked && p.isHooked(), boost = human && !veh && (k.ShiftLeft || k.ShiftRight) && !p.onGround;
+    set(L.reel, hooked && k.Space ? 0.2 : hooked ? 0.035 : 0, 0.04);
+    set(L.boost, boost ? 0.5 : 0, 0.05); set(L.boostHi, boost ? 0.07 : 0, 0.05);
+    set(L.rumble, Shifter.rumble ? 0.9 : 0, 0.3);
+    const W = typeof Weather !== 'undefined' ? Weather : null, wk = W && !W.dry() ? W.k : 0, storm = W && W.want && W.want() === 'storm' ? wk : 0, under = typeof Nuke !== 'undefined' && Nuke.inBunker;
+    set(L.rain, under ? 0 : wk * 0.22, 0.4);
+    const gust = 0.6 + 0.4 * Math.sin(t * 0.37) * Math.sin(t * 0.13 + 1);
+    set(L.storm, under ? 0 : storm * 0.5 * gust, 0.3); L.storm.fl.frequency.setTargetAtTime(200 + gust * 160, t, 0.3);
+    const s = typeof Ship !== 'undefined' ? Ship.cur : null, sv = s ? Math.abs(s.speed) : 0;
+    L.shipEng.g.gain.setTargetAtTime(s ? 0.08 + Math.min(0.12, Math.abs(s.order) * 0.1 + (s.boosting ? 0.05 : 0)) : 0, t, 0.2);
+    if (s) { const f = 34 + Math.abs(s.order) * 22 + (s.boosting ? 10 : 0); L.shipEng.o1.frequency.setTargetAtTime(f, t, 0.4); L.shipEng.o2.frequency.setTargetAtTime(f * 1.51, t, 0.4); }
+    set(L.water, s ? Math.min(0.28, sv / 160) : 0, 0.3); if (s) L.water.fl.frequency.setTargetAtTime(500 + sv * 12, t, 0.3);
+    const a = typeof Aircraft !== 'undefined' ? Aircraft.cur : null;
+    L.plane.g.gain.setTargetAtTime(a && !a.crashT ? 0.05 + a.throttle * 0.1 : 0, t, 0.15);
+    if (a) { L.plane.o.frequency.setTargetAtTime(80 + a.throttle * 55, t, 0.3); L.plane.lfo.frequency.setTargetAtTime(14 + a.throttle * 26, t, 0.3); }
+  };
+  // 효과음 설정(켜기/작게/끄기)이 새 크기 기준을 따르게
+  if (S.master && S.ctx) S.master.gain.value = S.vol * 0.62;
 }
 
 </script>
