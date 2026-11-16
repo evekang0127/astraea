@@ -16548,7 +16548,7 @@ Nuke.ddEnd = function () {
 // ---------- 탈것 피해: 마레군 공격이 전함·비행정에도(체력·화면 표시·격침·추락), 거인화 중엔 거인 몸이 받음 ----------
 // (Game은 game.js에서 이 파일 다음에 만들어지므로 페이지를 다 읽은 뒤 연결)
 const vehicleDamage90 = () => {
-  const HPS = { ship: 600, air: 220 };
+  const HPS = { ship: 3000, air: 1100 };   // 90차-9: 강병현 지시로 5배
   const css = document.createElement('style'); css.textContent = `#vhp88{position:fixed;left:20px;bottom:178px;z-index:15;width:300px;pointer-events:none;font:800 12px 'Noto Sans KR','Inter',sans-serif;color:#e9f4fa;display:none;padding:9px 12px 10px;border-radius:10px;background:linear-gradient(180deg,rgba(14,22,34,.82),rgba(8,13,22,.72));border:1px solid rgba(120,200,255,.22);box-shadow:0 6px 18px rgba(0,0,0,.35)}
 #vhp88 .h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;letter-spacing:.04em}#vhp88 .h b{font-size:13px}#vhp88 .h em{font:800 15px 'Inter',sans-serif;font-style:normal}#vhp88 .h em small{font-size:11px;opacity:.55;margin-left:2px}
 #vhp88 .t{position:relative;height:12px;border-radius:6px;background:rgba(255,255,255,.09);overflow:hidden}#vhp88 .t i,#vhp88 .t u{position:absolute;left:0;top:0;bottom:0;display:block;border-radius:6px}#vhp88 .t u{background:rgba(255,255,255,.75)}#vhp88 .t i{transition:background .3s}
@@ -16563,8 +16563,8 @@ const vehicleDamage90 = () => {
   const dp0 = Game.damagePlayer;
   Game.damagePlayer = function (dmg, knock) {
     if (this.over) return dp0.apply(this, arguments);   // 90차-8: 훈련 모드에서도 탈것은 피해를 받음(내 몸만 무적)
-    if (typeof Ship !== 'undefined' && Ship.cur) { const s = Ship.cur; s.hp = (s.hp ?? HPS.ship) - dmg * 2.2; s.hitT = performance.now(); Effects.shake(0.6); for (let i = 0; i < 8; i++) Effects.sparks && Effects.sparks.emit(Player.pos, new THREE.Vector3(Effects.rand(10), Math.random() * 8, Effects.rand(10)), 0.5, 0.4); hitFx(Math.round(dmg * 2.2)); show('⚓ 전함 선체', Math.max(0, s.hp), HPS.ship); if (s.hp <= 0) Ship.sink(s); return; }
-    if (typeof Aircraft !== 'undefined' && Aircraft.cur) { const a = Aircraft.cur; a.hp = (a.hp ?? HPS.air) - dmg * 1.6; a.hitT = performance.now(); Effects.shake(0.5); hitFx(Math.round(dmg * 1.6)); show('✈ 비행정 기체', Math.max(0, a.hp), HPS.air); if (a.hp <= 0) { a.hp = HPS.air; this.toast('기체 대파 · 추락!', '#ff3b30'); try { Aircraft.crash(a); } catch (e) {} } return; }
+    if (typeof Ship !== 'undefined' && Ship.cur) { const s = Ship.cur; s.hp = (s.hp ?? HPS.ship) - (dmg >= 900 ? 1e6 : dmg * 2.2);   /* 핵 직격은 체력과 상관없이 격침 */ s.hitT = performance.now(); Effects.shake(0.6); for (let i = 0; i < 8; i++) Effects.sparks && Effects.sparks.emit(Player.pos, new THREE.Vector3(Effects.rand(10), Math.random() * 8, Effects.rand(10)), 0.5, 0.4); hitFx(Math.round(dmg * 2.2)); show('⚓ 전함 선체', Math.max(0, s.hp), HPS.ship); if (s.hp <= 0) Ship.sink(s); return; }
+    if (typeof Aircraft !== 'undefined' && Aircraft.cur) { const a = Aircraft.cur; a.hp = (a.hp ?? HPS.air) - (dmg >= 900 ? 1e6 : dmg * 1.6); a.hitT = performance.now(); Effects.shake(0.5); hitFx(Math.round(dmg * 1.6)); show('✈ 비행정 기체', Math.max(0, a.hp), HPS.air); if (a.hp <= 0) { a.hp = HPS.air; this.toast('기체 대파 · 추락!', '#ff3b30'); try { Aircraft.crash(a); } catch (e) {} } return; }
     return dp0.apply(this, arguments);
   };
   Ship.sink = function (s) {
@@ -16577,13 +16577,13 @@ const vehicleDamage90 = () => {
     su0.call(this, dt);
     for (const s of this.list) {
       if (s.sinking) { s.sinking += dt; s.root.position.y -= dt * 1.4; s.root.rotation.z += dt * 0.02; s.root.rotation.x += dt * 0.008; s.speed = 0; s.order = 0; if (Math.random() < 0.5) Arms.smoke.emit(s.root.position.clone().setY(s.root.position.y + 20), new THREE.Vector3(Effects.rand(2), 8, Effects.rand(2)), 4, 6, 18); if (s.sinking > 25) { if (s.root.parent) s.root.parent.remove(s.root); this.list.splice(this.list.indexOf(s), 1); } }
-      else if (s.hp !== undefined && s.hp < HPS.ship && performance.now() - (s.hitT || 0) > 15000) s.hp = Math.min(HPS.ship, s.hp + 12 * dt);
+      else if (s.hp !== undefined && s.hp < HPS.ship && performance.now() - (s.hitT || 0) > 15000) s.hp = Math.min(HPS.ship, s.hp + 60 * dt);
       if (s.hp !== undefined && s.hp < HPS.ship * 0.4 && !s.sinking && Math.random() < 0.3) Arms.smoke.emit(new THREE.Vector3(0, 12, 10).applyMatrix4(s.root.matrixWorld), new THREE.Vector3(Effects.rand(2), 7, Effects.rand(2)), 4, 4, 14);
     }
     if (this.cur && !this.cur.sinking) show('⚓ 전함 선체', this.cur.hp ?? HPS.ship, HPS.ship); else if (!(typeof Aircraft !== 'undefined' && Aircraft.cur)) bar.style.display = 'none';
   };
   const au0 = Aircraft.update;
-  Aircraft.update = function (dt) { au0.call(this, dt); const a = this.cur; if (a) { if (a.hp !== undefined && performance.now() - (a.hitT || 0) > 12000) a.hp = Math.min(HPS.air, a.hp + 8 * dt); show('✈ 비행정 기체', a.hp ?? HPS.air, HPS.air); if (a.hp < HPS.air * 0.35 && Math.random() < 0.4) Arms.smoke.emit(a.root.position, new THREE.Vector3(Effects.rand(2), 3, Effects.rand(2)), 2, 2, 8); } else if (!(typeof Ship !== 'undefined' && Ship.cur)) bar.style.display = 'none'; };
+  Aircraft.update = function (dt) { au0.call(this, dt); const a = this.cur; if (a) { if (a.hp !== undefined && performance.now() - (a.hitT || 0) > 12000) a.hp = Math.min(HPS.air, a.hp + 40 * dt); show('✈ 비행정 기체', a.hp ?? HPS.air, HPS.air); if (a.hp < HPS.air * 0.35 && Math.random() < 0.4) Arms.smoke.emit(a.root.position, new THREE.Vector3(Effects.rand(2), 3, Effects.rand(2)), 2, 2, 8); } else if (!(typeof Ship !== 'undefined' && Ship.cur)) bar.style.display = 'none'; };
   // 마레군 포탄: 내 배(160m)·비행정에 맞았는지는 내 몸이 아니라 탈것 크기로
   Marley.hitDist = function (p) {
     if (typeof Ship !== 'undefined' && Ship.cur) { const s = Ship.cur, inv = this._si || (this._si = new THREE.Matrix4()); inv.copy(s.root.matrixWorld).invert(); const q = (this._sq || (this._sq = new THREE.Vector3())).copy(p).applyMatrix4(inv); return Math.hypot(Math.max(0, Math.abs(q.x) - s.beam / 2), Math.max(0, Math.abs(q.z) - s.len / 2), Math.max(0, q.y - 25)); }
