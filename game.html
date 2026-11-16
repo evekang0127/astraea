@@ -17163,6 +17163,100 @@ Up91.flash = function (at, power, radius, color, dur) {
   Effects.lightning = function (at, h) { const r = lt0.apply(this, arguments); try { Up91.flash(at.clone().setY(at.y + h * 0.6), 9, 120 + h * 4, 0xfff0a0, 0.45); } catch (e) {} return r; };
 }
 
+// ===== 91차-2: 날씨 — 맑음 · 비 · 폭풍우(번개·천둥) · 자동(몇 분마다 바뀜) =====
+// 비: 카메라 둘레 120m 상자 안에서만 빗줄기 2400개를 돌려 씀(선 묶음 1개 = 그리기 호출 1개), 땅에 튀는 물방울, 하늘·안개·빛을 흐리게
+// 폭풍우: 6~14초마다 번개(하늘 전체가 번쩍 + 주변을 실제로 밝힘) → 거리만큼 늦게 천둥
+// 지하 지휘소·동굴·우주·사막 장소에서는 내리지 않음
+const Weather = {
+  KEY: 'astraea-set-weather',
+  OPTS: [['auto', '자동'], ['clear', '맑음'], ['rain', '비'], ['storm', '폭풍우']],
+  DRY: { mourning: 1, slatoa: 1, underground: 1, undercrypt: 1, paths: 1 },
+  mode: 'auto', cur: 'clear', k: 0, next: 0, bolt: 0, N: 2400,
+  load() { try { const v = localStorage.getItem(this.KEY); if (this.OPTS.some(o => o[0] === v)) this.mode = v; } catch (_) {} },
+  set(v) { this.mode = v; try { localStorage.setItem(this.KEY, v); } catch (_) {} this.next = 0; for (const id of ['weather91', 'pWeather91']) { const el = document.getElementById(id); if (el) el.value = v; } },
+  build(scene) {
+    if (this.mesh) { if (this.mesh.parent !== scene) scene.add(this.mesh); return; }
+    const N = this.N, P = new Float32Array(N * 6); this.d = new Float32Array(N * 4);   // 빗방울: x, y, z(카메라 기준), 속도
+    for (let i = 0; i < N; i++) { this.d[i * 4] = (Math.random() - 0.5) * 120; this.d[i * 4 + 1] = (Math.random() - 0.5) * 70; this.d[i * 4 + 2] = (Math.random() - 0.5) * 120; this.d[i * 4 + 3] = 34 + Math.random() * 16; }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setDrawRange(0, 0);
+    this.mesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xc4d2e0, transparent: true, opacity: 0.38, depthWrite: false }));
+    this.mesh.frustumCulled = false; this.mesh.renderOrder = 7; scene.add(this.mesh);
+    this.gray = new THREE.Color(0x5c6670); this.dark = new THREE.Color(0x3a414a);
+  },
+  dry() { return !!this.DRY[World.mapId] || (typeof Nuke !== 'undefined' && (Nuke.inBunker || Nuke.riding)) || (typeof Space !== 'undefined' && Space.in); },
+  want() {
+    if (this.mode !== 'auto') return this.mode;
+    const now = performance.now() / 1000;
+    if (now > this.next) { const r = Math.random(); this.cur = r < 0.62 ? 'clear' : r < 0.86 ? 'rain' : 'storm'; this.next = now + 300 + Math.random() * 360; }
+    return this.cur;
+  },
+  update(dt) {
+    if (!this.mesh || typeof camera === 'undefined') return;
+    const w = this.dry() ? 'clear' : this.want(), tgt = w === 'storm' ? 1 : w === 'rain' ? 0.62 : 0;
+    this.k += Math.max(-dt * 0.12, Math.min(dt * 0.12, tgt - this.k));
+    const k = this.k, show = k > 0.02 && !this.dry();
+    this.mesh.visible = show; if (!show) { this.mesh.geometry.setDrawRange(0, 0); return; }
+    // 빗줄기: 카메라를 따라다니는 상자 안에서 떨어지고 밑으로 나가면 위로
+    const b = typeof Up91 !== 'undefined' ? Up91.budget() : 1, n = Math.floor(this.N * Math.min(1, k * 1.1) * b), P = this.mesh.geometry.attributes.position.array, D = this.d, c = camera.position;
+    const wind = w === 'storm' ? 9 : 4, len = 1.5 + k;
+    if (!this._c) this._c = c.clone(); const mx = c.x - this._c.x, my = c.y - this._c.y, mz = c.z - this._c.z; this._c.copy(c);
+    for (let i = 0; i < n; i++) {
+      const j = i * 4; let x = D[j] - mx + wind * dt, y = D[j + 1] - my - D[j + 3] * dt, z = D[j + 2] - mz;
+      if (y < -35) { y += 70; x = (Math.random() - 0.5) * 120; z = (Math.random() - 0.5) * 120; } else if (y > 35) y -= 70;
+      if (x > 60) x -= 120; else if (x < -60) x += 120; if (z > 60) z -= 120; else if (z < -60) z += 120;
+      D[j] = x; D[j + 1] = y; D[j + 2] = z;
+      const o = i * 6; P[o] = c.x + x; P[o + 1] = c.y + y; P[o + 2] = c.z + z; P[o + 3] = c.x + x - wind * 0.04; P[o + 4] = c.y + y - len; P[o + 5] = c.z + z;
+    }
+    this.mesh.geometry.setDrawRange(0, n * 2); this.mesh.geometry.attributes.position.needsUpdate = true;
+    this.mesh.material.opacity = 0.18 + 0.28 * k;
+    // 땅에 튀는 물방울
+    if (typeof Arms !== 'undefined' && Arms.ready && (this._sp = (this._sp || 0) + dt * 60 * k * b) >= 1) {
+      for (; this._sp >= 1; this._sp--) { const x = c.x + (Math.random() - 0.5) * 50, z = c.z + (Math.random() - 0.5) * 50, wl = World.waterLevel(x, z), gy = wl !== null ? wl : Arms.floor(x, z); if (Math.abs(gy - c.y) > 40) continue; Arms.spray.emit(new THREE.Vector3(x, gy + 0.1, z), new THREE.Vector3(Effects.rand(1.2), 2 + Math.random() * 1.5, Effects.rand(1.2)), 0.3, 0.25, 0.4); }
+    }
+    // 폭풍우: 번개 → 천둥
+    if (w === 'storm' && k > 0.6 && (this.bolt -= dt) <= 0) {
+      this.bolt = 6 + Math.random() * 8;
+      const a = Math.random() * Math.PI * 2, r = 300 + Math.random() * 900, at = new THREE.Vector3(c.x + Math.cos(a) * r, c.y + 350, c.z + Math.sin(a) * r);
+      if (typeof Up91 !== 'undefined') Up91.flash(new THREE.Vector3(c.x, c.y + 120, c.z), 7, 2000, 0xdfe8ff, 0.32);
+      const f = this.fl; if (f) { f.style.transition = 'none'; f.style.opacity = '0.55'; requestAnimationFrame(() => { f.style.transition = 'opacity .45s'; f.style.opacity = '0'; }); setTimeout(() => { f.style.transition = 'none'; f.style.opacity = '0.35'; requestAnimationFrame(() => { f.style.transition = 'opacity .3s'; f.style.opacity = '0'; }); }, 160); }
+      setTimeout(() => { try { Sound.play('thunder', at, 1.6, 4000); } catch (e) {} }, r / 340 * 1000 * 0.6);
+    }
+  },
+  // 하늘·안개·빛 흐리게(낮밤 계산 뒤에 덮어씀)
+  tint() {
+    const k = this.k; if (k <= 0.005 || typeof World === 'undefined' || !World.scene || !World.scene.fog) return;
+    const W = World, D = typeof DayNight !== 'undefined' ? DayNight : null, g = this.gray || new THREE.Color(0x5c6670);
+    const night = D && D.on ? Math.max(0, -Math.sin((D.h - 6) / 12 * Math.PI)) : 0, tc = this.tc || (this.tc = new THREE.Color()); tc.copy(g).multiplyScalar(1 - night * 0.8);
+    W.scene.fog.color.lerp(tc, k * 0.7); if (W.scene.background && W.scene.background.isColor) W.scene.background.copy(W.scene.fog.color);
+    if (W.sun) W.sun.intensity *= 1 - 0.72 * k; if (D && D.hemi) D.hemi.intensity *= 1 + 0.12 * k;   /* 흐린 날: 그림자는 옅게, 하늘빛은 고르게 */
+    if (D && D.dome) { const u = D.dome.material.uniforms; if (u.top) u.top.value.lerp(tc, k * 0.8); if (u.horizon) u.horizon.value.lerp(tc, k * 0.75); if (u.sunCol) u.sunCol.value.multiplyScalar(1 - 0.85 * k); }
+    if (D && D.night && D.night.visible) { for (const s of D.stars || []) s.material.opacity *= 1 - k; for (const s of D.mw || []) s.material.opacity *= 1 - k; if (D.moon) { D.moon.material.opacity *= 1 - k; D.moonHalo.material.opacity *= 1 - k; } }
+    if (D && D.cloudMats) for (const m of D.cloudMats) m.color.multiplyScalar(1 - (0.5 + night * 0.3) * k);
+  },
+};
+Weather.load();
+{
+  const wi0 = World.init;
+  World.init = function (...a) { const r = wi0.apply(this, a); try { Weather.build(this.scene); } catch (e) { console.warn('weather', e); } return r; };
+  if (typeof DayNight !== 'undefined') { const ap0 = DayNight.apply; DayNight.apply = function (dt) { const r = ap0.apply(this, arguments); try { Weather.tint(); } catch (e) {} return r; }; }
+  const u0 = Up91.update;
+  Up91.update = function (dt) { try { Weather.update(dt); } catch (e) { if (!Weather._w) { Weather._w = 1; console.warn('weather', e); } } return u0.call(this, dt); };
+  // 햇빛 번짐은 비가 오면 약하게
+  const go = () => {
+    const fl = document.createElement('div'); fl.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:4;background:#e8f0ff;opacity:0;mix-blend-mode:screen'; document.body.appendChild(fl); Weather.fl = fl;
+    const opts = Weather.OPTS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+    const add = () => {
+      const f = document.querySelector('#panel-setup .fields'), g = document.querySelector('#pause .pause-grid');
+      if (f && !document.getElementById('weather91')) f.insertAdjacentHTML('afterbegin', `<label>날씨<select id="weather91">${opts}</select></label>`);
+      if (g && !document.getElementById('pWeather91')) g.insertAdjacentHTML('afterbegin', `<label>날씨 (바로 적용)<select id="pWeather91">${opts}</select></label>`);
+      for (const id of ['weather91', 'pWeather91']) { const el = document.getElementById(id); if (el && !el._w91) { el._w91 = true; el.value = Weather.mode; el.addEventListener('change', e => Weather.set(e.target.value)); } }
+    };
+    add(); setInterval(add, 1500);
+    const s91 = document.getElementById('sun91'); if (s91) setInterval(() => { s91.style.filter = Weather.k > 0.05 ? `opacity(${Math.max(0, 1 - Weather.k * 1.6).toFixed(2)})` : ''; }, 250);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+}
+
 </script>
 <script>
 // ===== 게임 메인: 렌더러, 입력, HUD, 메인 루프 =====
