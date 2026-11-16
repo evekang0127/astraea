@@ -19801,6 +19801,116 @@ body:has(#go92[style*="grid"]) #tutor{display:none!important}`;
   const wi0 = World.init; World.init = function (...a) { V.cur = null; V.list.length = 0; return wi0.apply(this, a); };
 }
 
+// ---------- ⑫ 온라인: 친구와 같이 (방 코드로 접속 · P2P) ----------
+// 일시정지 → '친구와 같이' → 방 만들기(코드 표시) / 코드로 참가. 접속을 누를 때만 PeerJS(공개 연결 중개 서버)를 불러옴.
+// 같은 장소에 있는 친구가 보이고(이름표·위치·자세·거인화·탈것), 폭발·신호탄·채팅(Y)이 공유됨. 거인·마레군은 각자 화면에서 따로 움직임.
+{
+  const N = window.Net92 = { peer: null, conns: new Map(), host: false, code: '', id: '', name: '', others: new Map(), t: 0, ready: false, log: [] };
+  try { N.name = localStorage.getItem('astraea-net-name') || ('병사' + Math.floor(100 + Math.random() * 900)); } catch (_) { N.name = '병사' + Math.floor(100 + Math.random() * 900); }
+  const PREFIX = 'astraea92-room-';
+  N.load = () => new Promise((res, rej) => { if (window.Peer) return res(); const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js'; s.onload = res; s.onerror = () => { const t = document.createElement('script'); t.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'; t.onload = res; t.onerror = rej; document.head.appendChild(t); }; document.head.appendChild(s); });
+  N.say = function (m, col) { this.log.push(m); if (this.log.length > 6) this.log.shift(); this.ui && this.ui.refresh(); if (typeof Game !== 'undefined') Game.toast(m, col || '#9fe0b0'); };
+  N.mkCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += A[Math.floor(Math.random() * A.length)]; return s; };
+  N.wire = function (c) {
+    c.on('open', () => { this.conns.set(c.peer, c); this.send({ t: 'hello', name: this.name }, c); this.say(this.host ? '친구가 들어왔습니다' : '방에 들어왔습니다 · 친구가 보입니다'); });
+    c.on('data', d => this.recv(d, c));
+    c.on('close', () => { this.conns.delete(c.peer); this.drop(c.peer); this.say('친구 연결이 끊겼습니다', '#ffb347'); });
+    c.on('error', e => console.warn('net92', e));
+  };
+  N.create = async function () {
+    await this.load(); this.leave(true); this.host = true; this.code = this.mkCode();
+    this.peer = new Peer(PREFIX + this.code); this.id = this.peer.id || PREFIX + this.code;
+    this.peer.on('open', id => { this.id = id; this.ready = true; this.say(`방을 만들었습니다 · 코드 ${this.code} · 친구에게 알려 주세요`); });
+    this.peer.on('connection', c => this.wire(c));
+    this.peer.on('error', e => { this.say('연결 오류: ' + (e.type || e.message), '#ff6a5a'); });
+  };
+  N.join = async function (code) {
+    code = String(code || '').trim().toUpperCase(); if (!code) return; await this.load(); this.leave(true); this.host = false; this.code = code;
+    this.peer = new Peer(); this.peer.on('open', id => { this.id = id; this.ready = true; const c = this.peer.connect(PREFIX + code, { reliable: false }); this.wire(c); });
+    this.peer.on('error', e => { this.say(e.type === 'peer-unavailable' ? '그 코드의 방이 없습니다' : '연결 오류: ' + (e.type || e.message), '#ff6a5a'); });
+  };
+  N.leave = function (quiet) { for (const c of this.conns.values()) try { c.close(); } catch (e) {} this.conns.clear(); if (this.peer) try { this.peer.destroy(); } catch (e) {} this.peer = null; this.ready = false; for (const id of [...this.others.keys()]) this.drop(id); if (!quiet) { this.code = ''; this.say('온라인에서 나왔습니다', '#cfd8e6'); } this.ui && this.ui.refresh(); };
+  N.send = function (m, only) { m.from = this.id; const s = JSON.stringify(m); if (only) { try { only.send(s); } catch (e) {} return; } for (const c of this.conns.values()) try { if (c.open) c.send(s); } catch (e) {} };
+  N.recv = function (raw, c) {
+    let m; try { m = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return; } if (!m || !m.t) return;
+    if (this.host && m.t !== 'hello') for (const [pid, o] of this.conns) if (o !== c && o.open) try { o.send(JSON.stringify(m)); } catch (e) {}   // 방장이 다른 친구에게 전달
+    const id = m.from || c.peer;
+    if (m.t === 'hello') { const o = this.other(id); o.name = String(m.name || '친구').slice(0, 16); }
+    else if (m.t === 's') { const o = this.other(id); Object.assign(o.s, m); o.name = m.n || o.name; o.last = performance.now(); }
+    else if (m.t === 'boom' && m.map === World.mapId) { try { this._echo = true; Arms.boom(new THREE.Vector3(m.x, m.y, m.z), m.S, { noDmg: true }); } finally { this._echo = false; } }
+    else if (m.t === 'chat') this.say(`💬 ${String(m.n || '친구').slice(0, 16)}: ${String(m.msg).slice(0, 120)}`, '#cfeaff');
+  };
+  N.other = function (id) {
+    let o = this.others.get(id); if (o) return o;
+    const fake = Object.create(Player), model = Player.buildModel.call(fake); model.traverse(x => { if (x.isMesh) { x.castShadow = true; } });
+    const tag = document.createElement('div'); tag.className = 'nt92'; document.body.appendChild(tag);
+    o = { id, name: '친구', model, rig: fake.rig, tag, s: {}, pos: new THREE.Vector3(), yaw: 0, last: performance.now(), walk: 0 };
+    World.scene.add(model); this.others.set(id, o); return o;
+  };
+  N.drop = function (id) { const o = this.others.get(id); if (!o) return; if (o.model.parent) o.model.parent.remove(o.model); o.tag.remove(); this.others.delete(id); };
+  N.update = function (dt) {
+    if (!this.peer) return;
+    // 내 상태 10번/초
+    if ((this.t += dt) > 0.1 && this.conns.size) {
+      this.t = 0; const p = Player.pos, veh = (typeof Ship !== 'undefined' && Ship.cur) ? '전함' : (typeof Aircraft !== 'undefined' && Aircraft.cur) ? '비행정' : (window.Veh92 && Veh92.cur) ? (Veh92.cur.kind === 'tank' ? '전차' : '발사차량') : '';
+      const sh = Shifter.active && Shifter.titan ? { k: Shifter.kind, h: Shifter.titan.height, x: Shifter.titan.pos.x, y: Shifter.titan.pos.y, z: Shifter.titan.pos.z } : null;
+      this.send({ t: 's', n: this.name, map: World.mapId, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), yaw: +Player.yaw.toFixed(3), v: +Player.vel.length().toFixed(1), g: Player.onGround ? 1 : 0, veh, sh });
+    }
+    // 친구 그리기: 같은 장소만, 부드럽게 따라감, 오래 소식 없으면 지움
+    const now = performance.now(), V = this._v || (this._v = new THREE.Vector3());
+    for (const [id, o] of this.others) {
+      const s = o.s; if (now - o.last > 15000) { this.drop(id); continue; }
+      const here = s.map === World.mapId && s.x !== undefined; o.model.visible = here && !s.veh; if (!here) { o.tag.style.display = 'none'; continue; }
+      const tx = s.sh ? s.sh.x : s.x, ty = s.sh ? s.sh.y : s.y, tz = s.sh ? s.sh.z : s.z;
+      if (o.pos.lengthSq() === 0 || o.pos.distanceTo(V.set(tx, ty, tz)) > 80) o.pos.set(tx, ty, tz); else o.pos.lerp(V.set(tx, ty, tz), Math.min(1, dt * 10));
+      o.yaw += Math.atan2(Math.sin(s.yaw - o.yaw), Math.cos(s.yaw - o.yaw)) * Math.min(1, dt * 10);
+      o.model.position.copy(o.pos); o.model.rotation.y = o.yaw; const sc = s.sh ? Math.max(1, s.sh.h / 1.8) : 1; o.model.scale.setScalar(sc);
+      o.walk += dt * Math.min(12, s.v || 0) * 0.9; if (o.rig && o.rig.legs) { const a = Math.sin(o.walk) * Math.min(0.7, (s.v || 0) / 10) * (s.g ? 1 : 0.3); const L0 = o.rig.legs[0], L1 = o.rig.legs[1]; if (L0 && L0.thigh) L0.thigh.rotation.x = a; if (L1 && L1.thigh) L1.thigh.rotation.x = -a; }
+      // 이름표
+      V.copy(o.pos).setY(o.pos.y + 2.3 * sc).project(camera); const vis = V.z < 1 && Math.abs(V.x) < 1.1 && Math.abs(V.y) < 1.1;
+      o.tag.style.display = vis && Game.running ? 'block' : 'none';
+      if (vis) { const d = Math.round(camera.position.distanceTo(o.pos)); o.tag.style.transform = `translate(${((V.x + 1) / 2 * innerWidth).toFixed(0)}px,${((1 - V.y) / 2 * innerHeight).toFixed(0)}px) translate(-50%,-100%)`; o.tag.textContent = `${o.name}${s.veh ? ' · ' + s.veh : ''}${s.sh ? ' · 거인화' : ''} · ${d}m`; }
+    }
+  };
+  // 내 폭발을 친구 화면에도(같은 장소)
+  const bm0 = Arms.boom; Arms.boom = function (at, S, o) { const r = bm0.apply(this, arguments); if (N.peer && N.conns.size && !N._echo && S >= 1.2) N.send({ t: 'boom', map: World.mapId, x: +at.x.toFixed(1), y: +at.y.toFixed(1), z: +at.z.toFixed(1), S: Math.min(S, 14) }); return r; };
+  const au0 = Arms.update; Arms.update = function (dt) { const r = au0.apply(this, arguments); try { N.update(dt); } catch (e) { if (!N._w) { N._w = 1; console.warn('net92', e); } } return r; };
+  const wi0 = World.init; World.init = function (...a) { const r = wi0.apply(this, a); for (const o of N.others.values()) if (o.model.parent !== this.scene) this.scene.add(o.model); return r; };
+  // 화면: 이름표 · 접속 창 · 채팅
+  const css = document.createElement('style');
+  css.textContent = `.nt92{position:fixed;left:0;top:0;z-index:12;pointer-events:none;padding:3px 8px;border-radius:6px;font:800 11px 'Noto Sans KR',sans-serif;color:#eaffef;background:rgba(10,40,24,.72);border:1px solid rgba(120,255,170,.4);white-space:nowrap;display:none}
+#net92{position:fixed;inset:0;z-index:70;display:none;place-items:center;background:rgba(0,0,0,.55)}#net92 .bx{width:min(460px,92vw);padding:22px;border-radius:16px;background:linear-gradient(180deg,#121a26,#0a0f17);border:1px solid rgba(255,255,255,.12);color:#e6eef4;font:600 13px 'Noto Sans KR',sans-serif}
+#net92 h3{margin:0 0 4px;font:900 20px 'Noto Sans KR'}#net92 p{margin:0 0 12px;color:#9fb0bf;font-size:12px;line-height:1.5}#net92 .row{display:flex;gap:8px;margin:8px 0}#net92 input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#0b1118;color:#fff;font:800 15px 'Inter',sans-serif;letter-spacing:2px;text-transform:uppercase}
+#net92 button{padding:10px 14px;border-radius:10px;border:1px solid rgba(255,210,122,.5);background:rgba(255,210,122,.12);color:#ffd27a;font:800 13px 'Noto Sans KR';cursor:pointer}#net92 button.p{background:linear-gradient(180deg,#d23a2a,#9a1f16);border-color:#ff8a7a;color:#fff}
+#net92 .code{font:900 34px 'Inter',sans-serif;letter-spacing:8px;text-align:center;padding:8px;border-radius:10px;background:#000;color:#9fe0b0;margin:6px 0}#net92 .st{font-size:12px;color:#cfeaff;min-height:18px}#net92 .lg{font-size:11.5px;color:#8fa2b2;margin-top:8px;max-height:96px;overflow:auto}
+#chat92{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:41;display:none}#chat92 input{width:min(520px,80vw);padding:10px 14px;border-radius:999px;border:1px solid rgba(159,224,176,.6);background:rgba(8,14,22,.9);color:#fff;font:600 14px 'Noto Sans KR'}`;
+  document.head.appendChild(css);
+  const go = () => {
+    const el = document.createElement('div'); el.id = 'net92';
+    el.innerHTML = `<div class="bx"><h3>🌐 친구와 같이</h3><p>방을 만들고 코드를 친구에게 알려 주거나, 친구의 코드로 들어가세요. 같은 장소에 있으면 서로 보이고 폭발·신호탄·채팅(Y)이 함께 보입니다. 연결은 공개 중개 서버(PeerJS)를 거쳐 기기끼리 직접 이어집니다.</p>
+<div class="row"><input class="nm" maxlength="16" placeholder="내 이름"></div><div class="row"><button class="p mk">방 만들기</button><button class="lv">나가기</button><button class="x">닫기</button></div>
+<div class="code" hidden></div><div class="row"><input class="cd" maxlength="5" placeholder="친구 코드 5자리"><button class="jn">참가</button></div><div class="st"></div><div class="lg"></div></div>`;
+    document.body.appendChild(el);
+    const q = s => el.querySelector(s), nm = q('.nm'); nm.value = N.name;
+    nm.addEventListener('change', () => { N.name = nm.value.trim().slice(0, 16) || N.name; try { localStorage.setItem('astraea-net-name', N.name); } catch (_) {} });
+    for (const i of el.querySelectorAll('input')) i.addEventListener('keydown', e => e.stopPropagation());
+    q('.mk').onclick = () => N.create().catch(() => N.say('PeerJS를 불러오지 못했습니다(인터넷 연결 확인)', '#ff6a5a'));
+    q('.jn').onclick = () => N.join(q('.cd').value).catch(() => N.say('PeerJS를 불러오지 못했습니다(인터넷 연결 확인)', '#ff6a5a'));
+    q('.lv').onclick = () => N.leave(); q('.x').onclick = () => { el.style.display = 'none'; };
+    N.ui = { el, refresh() { const c = q('.code'); c.hidden = !(N.host && N.code); c.textContent = N.code; q('.st').textContent = N.peer ? (N.ready ? `연결됨 · 친구 ${N.conns.size}명${N.host ? ' · 방장' : ''}` : '연결 중…') : '오프라인'; q('.lg').innerHTML = N.log.map(x => `<div>${x.replace(/</g, '&lt;')}</div>`).join(''); } };
+    setInterval(() => { if (el.style.display === 'grid') N.ui.refresh(); }, 500);
+    N.open = () => { el.style.display = 'grid'; N.ui.refresh(); };
+    // 일시정지 빠른 버튼에 추가
+    setInterval(() => { const ch = document.querySelector('#pause .c92'); if (ch && !ch.querySelector('.net92b')) { const b = document.createElement('button'); b.type = 'button'; b.className = 'net92b'; b.textContent = '🌐 친구와 같이'; b.onclick = () => N.open(); ch.appendChild(b); } }, 800);
+    // 채팅: Y
+    const cb = document.createElement('div'); cb.id = 'chat92'; cb.innerHTML = '<input maxlength="120" placeholder="친구에게 보낼 말 · Enter 보내기 · Esc 취소">'; document.body.appendChild(cb);
+    const ci = cb.querySelector('input');
+    ci.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { const t = ci.value.trim(); if (t) { N.send({ t: 'chat', n: N.name, msg: t }); N.say(`💬 나: ${t}`, '#cfeaff'); } ci.value = ''; cb.style.display = 'none'; ci.blur(); } else if (e.key === 'Escape') { ci.value = ''; cb.style.display = 'none'; ci.blur(); } });
+    addEventListener('keydown', e => { if (e.code === 'KeyY' && !e.repeat && N.peer && N.conns.size && typeof Game !== 'undefined' && Game.running && document.activeElement === document.body) { e.preventDefault(); cb.style.display = 'block'; setTimeout(() => ci.focus(), 0); } });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+}
+
 </script>
 <script>
 // ===== 92차-3: 소리 전면 개편 (강병현 지시: 부스터·입체기동 소리 구분, 품질↑, 강약·겹침 정리, 너무 크지 않게, 고증) =====
