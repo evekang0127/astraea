@@ -13251,15 +13251,22 @@ const Ship = {
       s.t += dt;
       const ctl = s === this.cur, p = s.root.position, before = this._b || (this._b = new THREE.Vector3()); before.copy(p); const yaw0 = s.yaw;
       if (ctl) {
-        if (k.KeyW) s.order = Math.min(1, s.order + dt * 0.35); if (k.KeyS) s.order = Math.max(-0.5, s.order - dt * 0.35);
-        const want = (k.KeyA ? 1 : 0) - (k.KeyD ? 1 : 0); s.rudder += (want - s.rudder) * Math.min(1, dt * 2);
-      } else { s.rudder *= 1 - Math.min(1, dt); }
-      const max = 18 * (ctl && (k.ShiftLeft || k.ShiftRight) && s.order > 0.6 ? 1.45 : 1), target = s.order * max;
-      s.speed += Math.max(-1.2 * dt, Math.min(1.2 * dt, target - s.speed));
-      s.yaw += s.rudder * Math.min(1, Math.abs(s.speed) / 6) * Math.sign(s.speed || 1) * 0.09 * dt;
+        // 92차: 엔진 명령 W/S(전진 중 S는 빠르게 줄임), Space 비상 제동, Shift 부스터(게이지 소모), A/D 방향타
+        if (k.KeyW) s.order = Math.min(1, s.order + dt * 0.6);
+        if (k.KeyS) s.order = Math.max(-0.5, s.order - dt * (s.order > 0 ? 1.1 : 0.6));
+        s.brake = !!k.Space; if (s.brake) s.order = 0;
+        const want = (k.KeyA ? 1 : 0) - (k.KeyD ? 1 : 0); s.rudder += (want - s.rudder) * Math.min(1, dt * 3);
+      } else { s.rudder *= 1 - Math.min(1, dt); s.brake = false; }
+      if (s.boostE === undefined) s.boostE = 1;
+      s.boosting = ctl && !!(k.ShiftLeft || k.ShiftRight) && !s.brake && s.boostE > 0.02 && s.order >= 0;
+      if (s.boosting) { s.order = Math.max(s.order, 0.35); s.boostE = Math.max(0, s.boostE - dt / 7); } else s.boostE = Math.min(1, s.boostE + dt / 18);
+      const MAX = this.MAXV || 45, max = MAX * (s.boosting ? 1.55 : 1), target = s.boosting ? max : s.order * max;
+      const acc = s.brake ? 24 : s.boosting ? 10 : Math.abs(target) < Math.abs(s.speed) ? 6 : 4.6;
+      s.speed += Math.max(-acc * dt, Math.min(acc * dt, target - s.speed));
+      s.yaw += s.rudder * Math.min(1, Math.abs(s.speed) / 6) * Math.sign(s.speed || 1) * (0.16 - Math.min(0.05, Math.abs(s.speed) / 900)) * dt;
       const fx = -Math.sin(s.yaw), fz = -Math.cos(s.yaw), nx = p.x + fx * s.speed * dt, nz = p.z + fz * s.speed * dt;
       // 앞(또는 뒤)으로 82m 지점이 물이 아니면 멈춤
-      const probe = Math.sign(s.speed || 1) * 82;
+      const probe = Math.sign(s.speed || 1) * (82 + Math.abs(s.speed) * 1.4);   // 92차: 빨라진 만큼 더 앞을 봄
       if (!this.wet(nx + fx * probe, nz + fz * probe)) { if (Math.abs(s.speed) > 2 && ctl) { Effects.shake(0.5); Game.toast('좌초 위험! 앞이 육지', '#ffb347'); } s.speed = 0; s.order = 0; }
       else { p.x = nx; p.z = nz; }
       const wl = this.water(p.x, p.z) ?? 2.4;
@@ -14607,7 +14614,7 @@ Object.assign(Ship.W[0], { short: '주포 406mm' }); Object.assign(Ship.W[1], { 
     if (w.id === 'mlrs') {
       Arms.init(); s['cd_mlrs'] = w.cd; const a = this.aimNow(9000), n = Math.min(12, w.ammo);
       this.mlrsQ = this.mlrsQ || [];
-      for (let i = 0; i < n; i++) this.mlrsQ.push({ t: i * 0.12, aim: a.p.clone().add(new THREE.Vector3(Effects.rand(30), 0, Effects.rand(30))) });
+      for (let i = 0; i < n; i++) this.mlrsQ.push({ t: i * 0.12, aim: a.p.clone().add(new THREE.Vector3(Effects.rand(i ? 9 : 0), 0, Effects.rand(i ? 9 : 0)))   /* 92차: 탄착 흩어짐 30m → 9m(첫 발은 정확히) */ });
       Game.toast(`다연장 로켓 ${n}발 일제 사격`, '#9fe0b0'); return;
     }
     return f0.call(this);
@@ -14622,7 +14629,7 @@ Object.assign(Ship.W[0], { short: '주포 406mm' }); Object.assign(Ship.W[1], { 
         const q = Q.shift(), w = this.W[6]; if (w.ammo <= 0) { Q.length = 0; break; }
         w.ammo--; const i = 47 - w.ammo; s.root.updateMatrixWorld(); const from = new THREE.Vector3(((i % 4) - 1.5) * 1.1, 16, 44 + Math.floor(i / 4) % 3 * 1.1).applyMatrix4(s.root.matrixWorld);
         Arms.muzzle(from, new THREE.Vector3(0, 1, 0), 1.2);
-        Arms.shoot({ k: 'msl', prof: 'vls', p: from, v: new THREE.Vector3(Effects.rand(4), 70, Effects.rand(4)), aim: q.aim, ms: 0.7, vmax: 330, acc: 260, turn: 5, life: 30, S: 3.6, r: 18, hits: 2, mul: 2.4, dest: q.aim });
+        Arms.shoot({ k: 'msl', prof: 'vls', p: from, v: new THREE.Vector3(Effects.rand(4), 70, Effects.rand(4)), aim: q.aim, ms: 0.8, vmax: 380, acc: 320, turn: 7, life: 30, S: 4.4, r: 22, hits: 3, mul: 2.8, dest: q.aim });
         if (typeof Sound !== 'undefined') Sound.play('gas', from, 1.2, 160);
       }
     }
@@ -16226,7 +16233,7 @@ Object.assign(Nuke, {
       if (!o.isInstancedMesh || !o.count || o === Arms.trc || o.userData.noScar) return;
       const A = o.instanceMatrix.array; let hit = false;
       for (let i = 0; i < o.count; i++) { const b = i * 16, dx = A[b + 12] - x, dz = A[b + 14] - z, d = Math.hypot(dx, dz); if (d > R2) continue;
-        if (!o.instanceColor) { o.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(o.instanceMatrix.count * 3).fill(1), 3); if (o.material) [].concat(o.material).forEach(m => m.needsUpdate = true); }
+        if (!o.instanceColor) Nuke.giveCol(o, o.instanceMatrix.count);
         const k = d < R1 ? 0.1 + 0.08 * (d / R1) : 0.18 + 0.82 * ((d - R1) / (R2 - R1)); const ca = o.instanceColor.array; ca[i * 3] = Math.min(ca[i * 3], k); ca[i * 3 + 1] = Math.min(ca[i * 3 + 1], k * 0.92); ca[i * 3 + 2] = Math.min(ca[i * 3 + 2], k * 0.85); hit = true; }
       if (hit) o.instanceColor.needsUpdate = true;
     });
@@ -16616,7 +16623,7 @@ Nuke.devastate = function (x, z) {
     for (let i = 0; i < e.n; i++) { const px = P ? P[i * 3] : S[i * 16 + 12], pz = P ? P[i * 3 + 2] : S[i * 16 + 14], d = Math.hypot(px - x, pz - z); if (d > R2) continue;
       flatten(S, i * 16, i, d);
       if (!e.srcC) { e.srcC = new Float32Array(e.n * 3).fill(1); if (m.instanceColor) e.srcC.set(m.instanceColor.array.subarray(0, e.n * 3)); }
-      if (!m.instanceColor || m.instanceColor.count < e.n) { m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(e.n, m.instanceMatrix.count) * 3).fill(1), 3); [].concat(m.material).forEach(mt => mt.needsUpdate = true); }
+      if (!m.instanceColor || m.instanceColor.count < e.n) { Nuke.giveCol(m, Math.max(e.n, m.instanceMatrix.count)); }
       const k = tone(d), C = e.srcC; C[i * 3] *= k; C[i * 3 + 1] *= k * 0.92; C[i * 3 + 2] *= k * 0.85; hit = true; }
     if (hit) { if (!e.src) { m.instanceMatrix.needsUpdate = true; for (let j = 0; j < e.n * 3; j++) m.instanceColor.array[j] = e.srcC[j]; m.instanceColor.needsUpdate = true; } e.ax = 1e9; }
   }
@@ -16625,7 +16632,7 @@ Nuke.devastate = function (x, z) {
     if (!o.isInstancedMesh || done.has(o) || !o.count || o === Arms.trc || skip(o)) return;
     const A = o.instanceMatrix.array; let hit = false;
     for (let i = 0; i < o.count; i++) { const b = i * 16, d = Math.hypot(A[b + 12] - x, A[b + 14] - z); if (d > R2) continue; flatten(A, b, i, d);
-      if (!o.instanceColor) { o.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(o.instanceMatrix.count * 3).fill(1), 3); [].concat(o.material).forEach(mt => mt.needsUpdate = true); }
+      if (!o.instanceColor) Nuke.giveCol(o, o.instanceMatrix.count);
       const k = tone(d), C = o.instanceColor.array; C[i * 3] *= k; C[i * 3 + 1] *= k * 0.92; C[i * 3 + 2] *= k * 0.85; hit = true; }
     if (hit) { o.instanceMatrix.needsUpdate = true; o.instanceColor.needsUpdate = true; }
   });
@@ -16942,6 +16949,16 @@ Nuke.ddCamera = function (cam) {
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
 }
+
+
+// 92차: 묶음 그리기(InstancedMesh)에 색을 새로 줄 때 재질을 그 묶음 전용으로 복제
+// 원인: 같은 재질을 쓰는 다른 묶음은 색이 없는데 재질이 '색 있음' 셰이더로 바뀌어, 핵 피격 뒤 매 장면 그리기가 멈췄음(three r128)
+Nuke.giveCol = function (o, n) {
+  const old = o.instanceColor ? o.instanceColor.array : null;
+  o.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);
+  if (old) o.instanceColor.array.set(old.subarray(0, Math.min(old.length, n * 3)));
+  if (!o.userData.ownMat92) { o.material = Array.isArray(o.material) ? o.material.map(m => m.clone()) : o.material.clone(); o.userData.ownMat92 = true; }
+};
 
 </script>
 <script>
@@ -19168,5 +19185,166 @@ const Music = {
   },
 };
 Music.init();
+
+</script>
+<script>
+// ===== 92차: 편의 · 전함 조종 · 무기 위력/정확도 · 화면 겹침 (강병현 지시) =====
+
+// ---------- ① 전함 계기판 새로: 엔진 전신기(후진~전속) · 큰 속도(노트) · 방향타 · 부스터 게이지 · 제동 표시 ----------
+{
+  Ship.MAXV = 45;   // 예전 18m/s(35노트) → 2.5배
+  const css = document.createElement('style');
+  css.textContent = `#shud92{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:15;width:min(640px,94vw);pointer-events:none;display:none;font-family:'Inter','Noto Sans KR',sans-serif;color:#e8f3fa}
+#shud92 .bx{display:grid;grid-template-columns:150px 1fr 150px;gap:14px;align-items:center;padding:12px 16px 10px;border-radius:14px;background:linear-gradient(180deg,rgba(10,18,30,.86),rgba(6,11,20,.8));border:1px solid rgba(120,200,255,.2);box-shadow:0 10px 28px rgba(0,0,0,.4)}
+#shud92 .spd b{display:block;font:800 40px/1 'Inter',sans-serif;letter-spacing:-1px;font-variant-numeric:tabular-nums}#shud92 .spd small{font:700 10px/1 'Inter';letter-spacing:2px;color:#8fb6cc}
+#shud92 .spd .km{font:600 11px 'Inter';color:#8fb6cc;margin-top:3px}
+#shud92 .tel{display:flex;gap:4px}#shud92 .tel i{flex:1;font-style:normal;text-align:center;padding:6px 0;border-radius:6px;font:800 10.5px/1.1 'Noto Sans KR';letter-spacing:.5px;color:#7f97a8;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);transition:all .15s}
+#shud92 .tel i.on{color:#081018;background:linear-gradient(180deg,#9ff0ff,#38c8f0);border-color:#9ff0ff;box-shadow:0 0 14px rgba(56,200,240,.45)}#shud92 .tel i.rv.on{background:linear-gradient(180deg,#ffd27a,#e8a03a);border-color:#ffd27a}
+#shud92 .hdg{margin-top:8px;display:flex;justify-content:space-between;font:700 11px 'Inter';color:#9fb8c8;letter-spacing:1px}#shud92 .hdg b{color:#fff;font-size:13px}
+#shud92 .rud{position:relative;height:6px;margin-top:6px;border-radius:3px;background:rgba(255,255,255,.08)}#shud92 .rud i{position:absolute;top:-3px;width:4px;height:12px;border-radius:2px;background:#ffd27a;left:50%;transform:translateX(-50%)}#shud92 .rud:after{content:'';position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.35)}
+#shud92 .bst small{font:700 10px 'Inter';letter-spacing:2px;color:#8fb6cc;display:flex;justify-content:space-between}#shud92 .bst .g{height:9px;margin-top:5px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden}#shud92 .bst .g i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ff7a2a,#ffd27a);transition:width .1s}
+#shud92 .bst.on .g i{background:linear-gradient(90deg,#ff3b1f,#ffb347);box-shadow:0 0 12px #ff7a2a}#shud92 .flag{margin-top:7px;display:flex;gap:5px}#shud92 .flag em{font:800 10px 'Inter';letter-spacing:1.5px;font-style:normal;padding:3px 7px;border-radius:4px;color:#6f8696;background:rgba(255,255,255,.05)}
+#shud92 .flag em.on{color:#fff;background:#d23a2a}#shud92 .flag em.b.on{background:#ff7a2a}#shud92 .flag em.a.on{background:#2a8ad2}
+#shud92 .st{margin:6px auto 0;width:fit-content;max-width:100%;padding:4px 12px;border-radius:999px;background:rgba(6,11,20,.72);text-align:center;font:600 11px 'Noto Sans KR';color:#b9d0de;letter-spacing:.3px}
+body:has(#shud92.on) #mw88{bottom:182px}`;
+  document.head.appendChild(css);
+  const el = document.createElement('div'); el.id = 'shud92';
+  el.innerHTML = `<div class="bx"><div class="spd"><small>속도 · KNOTS</small><b>0.0</b><div class="km">0 km/h</div></div>
+<div><div class="tel"><i class="rv" data-o="-1">후진</i><i data-o="0">정지</i><i data-o="1">1/3</i><i data-o="2">2/3</i><i data-o="3">전속</i></div><div class="hdg"><span>방위</span><b>000° N</b><span>타각 <b class="ra">0°</b></span></div><div class="rud"><i></i></div></div>
+<div class="bst"><small><span>부스터</span><span class="bp">100%</span></small><div class="g"><i></i></div><div class="flag"><em class="b">BOOST</em><em class="k">BRAKE</em><em class="a">AUTO</em></div></div></div><div class="st"></div>`;
+  const add = () => document.body.appendChild(el); if (document.body) add(); else document.addEventListener('DOMContentLoaded', add);
+  const q = s => el.querySelector(s), sp = q('.spd b'), km = q('.spd .km'), tel = [...el.querySelectorAll('.tel i')], hd = q('.hdg b'), ra = q('.ra'), rud = q('.rud i'), bp = q('.bp'), bg = q('.bst .g i'), bst = q('.bst'), fB = q('.flag .b'), fK = q('.flag .k'), fA = q('.flag .a'), st = q('.st');
+  const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const show = on => { el.style.display = on ? 'block' : 'none'; el.classList.toggle('on', on); };
+  const p0 = Ship.panel;
+  Ship.panel = function () {
+    p0.apply(this, arguments);
+    const s = this.cur;
+    if (!s || !Game.running || Game.dying) { show(false); return; }
+    try { Aircraft.panelEl().hidden = true; } catch (e) {}
+    show(true);
+    const now = performance.now(); if (now - (this._p92 || 0) < 50) return; this._p92 = now;
+    const warp = this.auto ? (this.warpEff || 1) : 1, v = Math.abs(s.speed) * warp;
+    sp.textContent = (v * 1.944).toFixed(1); km.textContent = `${Math.round(v * 3.6)} km/h${warp > 1 ? ` · ×${warp}` : ''}`;
+    const o = s.order, idx = o < -0.02 ? 0 : o < 0.12 ? 1 : o < 0.45 ? 2 : o < 0.8 ? 3 : 4;
+    tel.forEach((t, i) => t.classList.toggle('on', i === (s.boosting ? 4 : idx)));
+    const h = ((-s.yaw * 180 / Math.PI) % 360 + 360) % 360; hd.textContent = `${String(Math.round(h)).padStart(3, '0')}° ${DIRS[Math.round(h / 45) % 8]}`;
+    const r = Math.round(s.rudder * 35); ra.textContent = (r > 0 ? '좌 ' : r < 0 ? '우 ' : '') + Math.abs(r) + '°'; rud.style.left = (50 - s.rudder * 46) + '%';
+    const be = s.boostE ?? 1; bp.textContent = Math.round(be * 100) + '%'; bg.style.width = (be * 100).toFixed(0) + '%'; bst.classList.toggle('on', !!s.boosting);
+    fB.classList.toggle('on', !!s.boosting); fK.classList.toggle('on', !!s.brake); fA.classList.toggle('on', !!this.auto);
+    const W = this.W[this.wsel], di = this.auto && Aircraft.dest ? Aircraft.destInfo() : null;
+    st.textContent = di ? `⚓ 자동 항해 → ${Aircraft.dest.name} · ${di.km < 10 ? di.km.toFixed(1) : Math.round(di.km)}km · [ ] 배속 · O 끄기` : `W/S 엔진 · A/D 방향타 · Space 제동 · Shift 부스터 · ${this.wsel + 1} ${W.short || W.name} · F 내리기`;
+  };
+  const ex0 = Ship.exit; Ship.exit = function () { show(false); return ex0.apply(this, arguments); };
+  // 전함·비행정·말에 타면 왼쪽 아래 'm/s' 사람 속도 줄은 숨김(계기판과 겹침)
+  setInterval(() => { const t = document.getElementById('speedText'); if (!t) return; const veh = (typeof Ship !== 'undefined' && Ship.cur) || (typeof Aircraft !== 'undefined' && Aircraft.cur); t.style.visibility = veh ? 'hidden' : ''; if (!Ship.cur) show(false); }, 200);
+}
+
+// ---------- ② M 세계 지도: Esc·M·배경 클릭으로 닫으면 일시정지 없이 바로 게임으로 ----------
+// 원인: M을 누르면 게임을 먼저 멈춘 뒤 지도를 열어서 '일시정지에서 연 지도'로 기억 → Esc가 일시정지 화면으로 돌아갔음.
+//       또 브라우저는 Esc 키로는 마우스 잠금을 다시 걸 수 없음 → Esc로 닫으면 '클릭하면 계속' 작은 안내만 띄우고 클릭 한 번으로 이어감.
+{
+  const pz = () => document.getElementById('pause');
+  const mt0 = Minimap.toggle;
+  Minimap.toggle = function () { Atlas._play92 = !!(typeof Game !== 'undefined' && Game.running); return mt0.apply(this, arguments); };
+  const om0 = Atlas.openModal;
+  Atlas.openModal = function () { const r = om0.apply(this, arguments); if (this._play92) { this.fromPause = false; const p = pz(); if (p) p.hidden = true; } this._play92 = false; return r; };
+  const css = document.createElement('style');
+  css.textContent = `#go92{position:fixed;inset:0;z-index:40;display:none;place-items:center;cursor:pointer;background:radial-gradient(circle,rgba(0,0,0,0) 30%,rgba(0,0,0,.35))}#go92 div{padding:12px 22px;border-radius:999px;font:800 14px 'Noto Sans KR',sans-serif;letter-spacing:.5px;color:#fff;background:rgba(10,18,30,.82);border:1px solid rgba(159,224,176,.6);box-shadow:0 8px 24px rgba(0,0,0,.4)}`;
+  document.head.appendChild(css);
+  const go = document.createElement('div'); go.id = 'go92'; go.innerHTML = '<div>🖱 클릭하면 바로 계속</div>';
+  go.addEventListener('click', () => { go.style.display = 'none'; requestPlay(); });
+  const addGo = () => document.body.appendChild(go); if (document.body) addGo(); else document.addEventListener('DOMContentLoaded', addGo);
+  const cm0 = Atlas.closeModal;
+  Atlas.closeModal = function (resume = false) {
+    const fromPlay = !this.fromPause; const r = cm0.call(this, fromPlay ? true : resume);
+    if (fromPlay) setTimeout(() => { if (typeof Game !== 'undefined' && Game.started && !Game.over && !Game.running && !Atlas.isOpen()) { const p = pz(); if (p) p.hidden = true; go.style.display = 'grid'; } }, 180);
+    return r;
+  };
+  document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) go.style.display = 'none'; });
+  // 클릭 안내가 떠 있는 동안 일시정지 화면이 뒤에 뜨지 않게
+  const sp0 = window.setPaused;
+  if (typeof sp0 === 'function') window.setPaused = function (p) { const r = sp0.apply(this, arguments); if (p && go.style.display === 'grid') { const e = pz(); if (e) e.hidden = true; } if (!p) go.style.display = 'none'; return r; };
+}
+
+// ---------- ③ 화면 겹침: 안내 상자·경고·이름표가 일시정지/지도/발사 콘솔 위에 겹치던 것 ----------
+{
+  const css = document.createElement('style');
+  css.textContent = `body:has(#pause:not([hidden])) #tutor,body:has(#atlasModal:not([hidden])) #tutor,body:has(#nkUi[style*="flex"]) #tutor,body:has(#ddUi:not([hidden])) #tutor,html.title #tutor{display:none!important}
+body:has(#atlasModal:not([hidden])) #mt88,body:has(#atlasModal:not([hidden])) #mw88,body:has(#atlasModal:not([hidden])) #vhp88,body:has(#atlasModal:not([hidden])) #wp88,body:has(#atlasModal:not([hidden])) #shud92{display:none!important}
+body:has(#pause:not([hidden])) #vhp88,body:has(#pause:not([hidden])) #wp88,body:has(#pause:not([hidden])) #shud92,body:has(#pause:not([hidden])) #lk88{display:none!important}
+body:has(#go92[style*="grid"]) #tutor{display:none!important}`;
+  document.head.appendChild(css);
+}
+
+// ---------- ④ 무기: 모든 내 무기 위력·폭발 크기 강화(핵·적 포탄은 제외) ----------
+{
+  const bm0 = Arms.boom;
+  Arms.boom = function (at, S, o = {}) {
+    if (o && o.r && !o.enemy && S < 20) { o = Object.assign({}, o, { r: o.r * 1.5, hits: Math.ceil((o.hits || 1) * 1.8), mul: (o.mul || 2) * 1.5 }); S = S >= 1.2 ? S * 1.3 : S; }
+    return bm0.call(this, at, S, o);
+  };
+}
+
+// ---------- ⑤ 핵 발사 과정 ----------
+// (가) 발사 콘솔: 화면 전체를 덮던 창 → 가운데 창(통제실이 뒤로 비침), 지도·패널 비율 조정
+{
+  const css = document.createElement('style');
+  css.textContent = `#nkUi{inset:6vh 5vw!important;border-radius:16px;overflow:hidden;grid-template-columns:minmax(0,1fr) 380px!important;border:1px solid rgba(255,90,74,.35);box-shadow:0 0 0 100vmax rgba(0,0,0,.55),0 24px 60px rgba(0,0,0,.6);background:rgba(4,8,14,.96)!important}
+#nkUi canvas{border-right:1px solid rgba(255,255,255,.06)}#nkUi .side{gap:8px!important;padding:16px!important}
+@media (max-height:760px){#nkUi{inset:3vh 3vw!important}#nkUi .pad button{padding:5px 0!important}}`;
+  document.head.appendChild(css);
+}
+// (나) 발사·낙하·종말 연출 중에는 안내 상자·체력·무기판 등 겹치던 화면 요소를 숨김
+{
+  const css = document.createElement('style');
+  css.textContent = `html.cine92 #tutor,html.cine92 #trainBadge,html.cine92 #hud,html.cine92 #vhp88,html.cine92 #wp88,html.cine92 #shud92,html.cine92 #mt88,html.cine92 #mw88,html.cine92 #lk88,html.cine92 #skillbar,html.cine92 #go92,html.cine92 #minimap,html.cine92 #crosshair{display:none!important}
+#look92{position:fixed;right:18px;bottom:18px;z-index:62;pointer-events:none;font:700 11px 'Noto Sans KR',sans-serif;color:rgba(230,240,248,.75);background:rgba(6,10,18,.55);padding:6px 10px;border-radius:8px;display:none}html.cine92 #look92{display:block}`;
+  document.head.appendChild(css);
+  const tip = document.createElement('div'); tip.id = 'look92'; tip.textContent = '마우스: 시점 돌리기 · 휠: 확대/축소 · 가운데 클릭: 원래 시점';
+  const add = () => document.body.appendChild(tip); if (document.body) add(); else document.addEventListener('DOMContentLoaded', add);
+}
+// (다) 연출 중 시점 이동: 마우스로 돌려 보기 · 휠 확대/축소(연출 카메라 기준). 지하에서는 제자리 회전, 밖에서는 보는 대상 둘레로 회전.
+//     낙하·폭발 장면에서 카메라가 산·건물 속에 들어가 화면이 가려지던 것도 막음.
+{
+  const L = { yaw: 0, pitch: 0, zoom: 1, on: false };
+  const cine = () => typeof ICBM !== 'undefined' && !!(ICBM.seq || ICBM.imp) || (typeof Nuke !== 'undefined' && !!Nuke.dd);
+  addEventListener('mousemove', e => { if (!L.on || (typeof Nuke !== 'undefined' && Nuke.ui)) return; const dx = e.movementX || 0, dy = e.movementY || 0; L.yaw -= dx * 0.0032; L.pitch = Math.max(-1.1, Math.min(1.1, L.pitch - dy * 0.0028)); });
+  addEventListener('wheel', e => { if (!L.on) return; L.zoom = Math.max(0.35, Math.min(3, L.zoom * Math.pow(1.0015, Math.max(-200, Math.min(200, e.deltaY))))); e.stopImmediatePropagation(); }, true);
+  addEventListener('mousedown', e => { if (L.on && e.button === 1) { L.yaw = L.pitch = 0; L.zoom = 1; } });
+  const fw = new THREE.Vector3(), tg = new THREE.Vector3(), off = new THREE.Vector3(), ray = new THREE.Raycaster(), hits = [];
+  let fr = 0;
+  const r0 = renderer.render.bind(renderer);
+  renderer.render = function (sc, cam) {
+    const on = cine() && cam === camera;
+    if (on !== L.on) { L.on = on; document.documentElement.classList.toggle('cine92', on); if (!on) { L.yaw = L.pitch = 0; L.zoom = 1; } }
+    if (on && (L.yaw || L.pitch || L.zoom !== 1)) {
+      try {
+        cam.getWorldDirection(fw);
+        if (typeof Nuke !== 'undefined' && Nuke.inBunker) {
+          const qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), L.yaw), qx = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), L.pitch); cam.quaternion.premultiply(qy).multiply(qx);
+        } else {
+          let D = 150; const m = ICBM.missile, I = ICBM.imp;
+          if (ICBM.seq && m && m.visible) { m.getWorldPosition(tg); D = cam.position.distanceTo(tg); }
+          else if (I && I.p) D = cam.position.distanceTo(I.p);
+          D = Math.max(40, Math.min(4000, D)); tg.copy(cam.position).addScaledVector(fw, D);
+          off.copy(cam.position).sub(tg).multiplyScalar(L.zoom);
+          off.applyAxisAngle(new THREE.Vector3(0, 1, 0), L.yaw);
+          const side = new THREE.Vector3().crossVectors(off, new THREE.Vector3(0, 1, 0)).normalize(); off.applyAxisAngle(side, L.pitch);
+          cam.position.copy(tg).add(off); cam.lookAt(tg);
+        }
+      } catch (e) {}
+    }
+    // 카메라가 땅·건물 속에 묻히지 않게(밖에서만, 6장면마다 검사)
+    if (on && !(typeof Nuke !== 'undefined' && Nuke.inBunker)) {
+      try {
+        const gy = Arms.floor(cam.position.x, cam.position.z); if (cam.position.y < gy + 6) cam.position.y = gy + 6;
+        if (++fr % 6 === 0) { cam.getWorldDirection(fw); ray.set(cam.position, fw); ray.far = 25; hits.length = 0; ray.intersectObjects(World.hookables, false, hits); L.block = hits.length ? hits[0].distance : 0; }
+        if (L.block && L.block < 25) cam.position.y += 30;
+      } catch (e) {}
+    }
+    return r0(sc, cam);
+  };
+}
 
 </script>
