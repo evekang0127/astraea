@@ -16665,7 +16665,6 @@ Nuke.doom3D = function () {
   const f = World.scene.fog; D.fog0 = f ? [f.near, f.far] : null; D.far0 = camera.far;
   // 황폐화 기록(세계 12곳)
   const L = this.scars(); for (const h of (D.hits || []).slice(0, 12)) L.push({ km: [+h[0].toFixed(3), +h[1].toFixed(3)], at: Date.now() }); while (L.length > 24) L.shift(); try { localStorage.setItem(this.SKEY, JSON.stringify(L)); } catch (e) {}
-  this.cap('발사 · LAUNCH', '모든 사일로 개방 · 일제 발사');
   for (let k = 0; k < 8; k++) setTimeout(() => this.beep(k % 2 ? 620 : 880, 0.45, 0.12), k * 500);
 };
 // 세계 각지 표적(전화 장면 뒤 기록용): 장소들 중 무작위
@@ -16696,13 +16695,13 @@ Nuke.ddUpdate = function (dt) {
   for (const b of D.det) {
     const a = t - b.t0; if (a < 0) continue;
     if (!b.m) { b.m = D.pool.find(p => !p.used) || null; if (b.m) b.m.used = true; Effects.shake(0.6); const now = performance.now(), wo = now - (this._wo3 || 0) > 900; if (wo) this._wo3 = now; const W = document.createElement('div'); W.style.cssText = `position:fixed;inset:0;z-index:44;pointer-events:none;background:#fff6e4;opacity:${wo ? 0.3 : 0};transition:opacity 1.2s`; document.body.appendChild(W); requestAnimationFrame(() => requestAnimationFrame(() => W.style.opacity = 0)); setTimeout(() => W.remove(), 1400); if (typeof Sound !== 'undefined') setTimeout(() => Sound.play('boom', camera.position, 1.6, 200), 900); }
-    if (b.m) { const g = b.m.g, r = b.m.r; if (a < 1.1) { g.visible = true; g.position.copy(b.p).setY(b.p.y + 250 + a * 200); g.scale.setScalar(220 + a * 380); g.material.opacity = Math.max(0, 0.75 * (1 - a / 1.1)); }   /* 섬광은 짧고 작게(가장자리 딱딱한 큰 원으로 보이던 것) */ else if (g.visible) { g.visible = false; } if (a < 8) { r.visible = true; r.position.set(b.p.x, b.p.y + 30, b.p.z); r.scale.setScalar(300 + a * 1600); r.material.opacity = Math.max(0, 0.7 - a / 8); } else if (r.visible) { r.visible = false; b.m.used = false; b.m = 0; } }
-    if (a < 14) { const h = Math.min(4000, 500 + a * 340), cr = 500 + Math.min(1, a / 10) * 1500; for (let i = 0; i < 8; i++) { const th = Math.random() * 7, rr = cr * (0.4 + Math.random() * 0.6); (a < 4 && i % 3 === 0 ? C.mid : Math.random() < 0.5 ? C.smk : C.ash).emit(Q.set(b.p.x + Math.cos(th) * rr, b.p.y + h + Effects.rand(cr * 0.2), b.p.z + Math.sin(th) * rr), V.set(Math.cos(th) * 12, 6, Math.sin(th) * 12), 10, cr * 0.6, cr * 0.9); } if (a < 3) for (let i = 0; i < 6; i++) C.hot.emit(Q.set(b.p.x + Effects.rand(300), b.p.y + 200 + a * 250, b.p.z + Effects.rand(300)), V.set(0, 60, 0), 2, 600, 900); for (let i = 0; i < 4; i++) C.ash.emit(Q.set(b.p.x + Effects.rand(260), b.p.y + Math.random() * h, b.p.z + Effects.rand(260)), V.set(0, 60, 0), 8, 300, 600); }
+    if (b.m) { const g = b.m.g, r = b.m.r; if (a < 1.1) { g.visible = false; for (let i = 0; i < 5; i++) Arms.core.emit(Q.set(b.p.x + Effects.rand(120), b.p.y + 150 + a * 250, b.p.z + Effects.rand(120)), V.set(0, 0, 0), 0.25, 700, 900); }   /* 섬광: 딱딱한 구 대신 빛 입자 */   /* 섬광은 짧고 작게(가장자리 딱딱한 큰 원으로 보이던 것) */ else if (g.visible) { g.visible = false; } if (a < 8) { r.visible = true; r.position.set(b.p.x, b.p.y + 30, b.p.z); r.scale.setScalar(300 + a * 1600); r.material.opacity = Math.max(0, 0.7 - a / 8); } else if (r.visible) { r.visible = false; b.m.used = false; b.m = 0; } }
+    if (a < 14) { const h = Math.min(4000, 500 + a * 340), cr = 500 + Math.min(1, a / 10) * 1500; for (let i = 0; i < 8; i++) { const th = Math.random() * 7, rr = cr * (0.4 + Math.random() * 0.6); (a < 4 && i % 3 === 0 ? C.mid : Math.random() < 0.5 ? C.smk : C.ash).emit(Q.set(b.p.x + Math.cos(th) * rr, b.p.y + h + Effects.rand(cr * 0.2), b.p.z + Math.sin(th) * rr), V.set(Math.cos(th) * 12, 6, Math.sin(th) * 12), 10, cr * 0.6, cr * 0.9); } if (a < 3) for (let i = 0; i < 6; i++) C.hot.emit(Q.set(b.p.x + Effects.rand(300), b.p.y + 200 + a * 250, b.p.z + Effects.rand(300)), V.set(0, 60, 0), 2, 600, 900); for (let i = 0; i < 9; i++) { const y = Math.random() * h, w = 160 + (1 - y / h) * 200; (y < h * 0.4 ? C.ash : C.smk).emit(Q.set(b.p.x + Effects.rand(w), b.p.y + y, b.p.z + Effects.rand(w)), V.set(0, 70, 0), 7, w * 1.1, w * 1.9); } }   /* 땅에서 머리까지 이어지는 굵은 기둥 */
   }
   // 화면 글·하늘
-  if (t > 7 && !D.c2) { D.c2 = true; this.cap('GLOBAL LAUNCH', '전 세계 사일로에서 동시 발사'); const f = World.scene.fog; if (f) { f.near = 3000; f.far = 70000; } }
-  if (t > 17.5 && !D.c3) { D.c3 = true; this.cap('IMPACT', '전 세계 주요 도시 피격'); const tn = document.getElementById('ddTint'); if (tn) { tn.style.transition = 'opacity 6s'; tn.style.opacity = 0.7; } }
-  if (t > 24 && !D.c4) { D.c4 = true; this.cap('', ''); }
+  if (t > 7 && !D.c2) { D.c2 = true; const f = World.scene.fog; if (f) { f.near = 3000; f.far = 70000; } }
+  if (t > 17.5 && !D.c3) { D.c3 = true; const tn = document.getElementById('ddTint'); if (tn) { tn.style.transition = 'opacity 6s'; tn.style.opacity = 0.7; } }
+  
   // ④ 우리 머리 위로 떨어지는 탄두 → 내가 쏠 때와 같은 낙하·폭발·파괴 연출
   if (t > 28.5) {
     for (const q of D.sil) { q.sl.missile.visible = false; for (const d of q.sl.doors) d.position.x = d.userData.s * 2.3; q.sl.state = 'reload'; q.sl.rt = 180; }
@@ -16719,7 +16718,7 @@ Nuke.ddCamera = function (cam) {
   cam.far = Math.max(cam.far, 150000);
   if (t < 7) { cam.position.set(c.x - 30, c.y + 9, c.z + 190); const q = D.sil[1] || D.sil[0]; L.set(c.x, c.y + (q ? Math.max(30, Math.min(400, q.y - c.y)) * 0.8 : 60), c.z); cam.fov = 58; }   // 땅에서 올려다봄
   else if (t < 17.5) { const th = D.th + (t - 7) * 0.012, b = th + Math.PI; cam.position.set(c.x + Math.cos(b) * 1200, c.y + 350 + (t - 7) * 25, c.z + Math.sin(b) * 1200); L.set(c.x + Math.cos(th) * 7000, c.y + 1300 + (t - 7) * 220, c.z + Math.sin(th) * 7000); cam.fov = 70; }   /* 언덕 위에서 하늘로 솟는 미사일들 */   // 하늘: 사방에서 솟는 미사일
-  else { const th = D.th + (t - 17.5) * 0.01, b = th + Math.PI; cam.position.set(c.x + Math.cos(b) * 2200, c.y + 1500, c.z + Math.sin(b) * 2200); L.set(c.x + Math.cos(th) * 8000, c.y + 1200, c.z + Math.sin(th) * 8000); cam.fov = 64; }   /* 지평선 너머 연쇄 핵폭발 */   // 고공: 땅 곳곳의 섬광
+  else { const th = D.th + (t - 17.5) * 0.01, b = th + Math.PI; cam.position.set(c.x + Math.cos(b) * 2200, c.y + 1500, c.z + Math.sin(b) * 2200); L.set(c.x + Math.cos(th) * 8000, c.y + 1300, c.z + Math.sin(th) * 8000); cam.fov = 64; }   /* 지평선 너머 연쇄 핵폭발 */   // 고공: 땅 곳곳의 섬광
   cam.position.x += Effects.rand(t < 7 ? 0.6 : 0.2); cam.position.y += Effects.rand(t < 7 ? 0.6 : 0.2);
   cam.lookAt(L); cam.updateProjectionMatrix(); return true;
 };
@@ -16731,6 +16730,118 @@ Nuke.ddCamera = function (cam) {
     if (Nuke._finale) { Nuke._finale = false; let e = document.getElementById('ddTxt'); if (!e) { e = document.createElement('div'); e.id = 'ddTxt'; document.body.appendChild(e); } e.innerHTML = '종말의 날<small>DOOMSDAY · 전 세계 주요 도시 초토화</small>'; e.style.opacity = 1; setTimeout(() => e.style.opacity = 0, 5000); const tn = document.getElementById('ddTint'); if (tn) tn.style.opacity = 0.35; if (Player.viewModel) Player.viewModel.visible = !Player.thirdPerson; for (const id of ['hint', 'crosshair']) { const h = document.getElementById(id); if (h) h.style.visibility = ''; } }
     return r;
   };
+}
+
+// ===== 90차-4: 종말의 날 더 극적으로 — 영화 띠·DEFCON 1·카운트다운·전 세계 사일로 발사 몽타주(4개국), 폭발 뒤 장면 절반(12초) =====
+{
+  // 폭발 뒤 장면: 24초 → 12초
+  const ar0 = ICBM.arrive;
+  ICBM.arrive = function (dt) { ar0.call(this, dt); const I = this.imp; if (I && I.boom && I.t - I.fall > 12) this.endImpact(); };
+  // 영화 띠(위아래 검은 막) — 종말 연출·핵 낙하 동안
+  const st = document.createElement('style');
+  st.textContent = `.lb90{position:fixed;left:0;right:0;height:0;background:#000;z-index:41;pointer-events:none;transition:height .8s cubic-bezier(.2,.8,.2,1)}.lb90.t{top:0}.lb90.b{bottom:0}.lb90.on{height:11vh}
+#cap90{position:fixed;left:0;right:0;bottom:13vh;z-index:46;text-align:center;pointer-events:none;opacity:0;transition:opacity .25s}#cap90.on{opacity:1}
+#cap90 b{display:inline-block;font:900 34px Inter,'Noto Sans KR',sans-serif;letter-spacing:10px;color:#fff;text-shadow:0 0 22px rgba(255,60,30,.9),0 2px 3px #000}#cap90 i{display:block;margin-top:8px;font:700 15px 'Noto Sans KR',sans-serif;font-style:normal;letter-spacing:5px;color:#ffb4a8;text-shadow:0 1px 3px #000}
+#def90{position:fixed;left:50%;top:14vh;transform:translateX(-50%);z-index:46;pointer-events:none;font:900 22px Inter,sans-serif;letter-spacing:8px;color:#fff;background:#c41a10;padding:6px 18px;border-radius:4px;box-shadow:0 0 30px rgba(255,40,20,.8);display:none;animation:def90 .5s steps(2) infinite}@keyframes def90{50%{background:#5a0a06}}`;
+  document.head.appendChild(st);
+  const lt = document.createElement('div'), lb = document.createElement('div'); lt.className = 'lb90 t'; lb.className = 'lb90 b'; document.body.appendChild(lt); document.body.appendChild(lb);
+  const cap = document.createElement('div'); cap.id = 'cap90'; cap.innerHTML = '<b></b><i></i>'; document.body.appendChild(cap);
+  const def = document.createElement('div'); def.id = 'def90'; def.textContent = 'DEFCON 1 · 전면 핵전쟁'; document.body.appendChild(def);
+  Nuke.cine = on => { lt.classList.toggle('on', on); lb.classList.toggle('on', on); if (!on) { cap.classList.remove('on'); def.style.display = 'none'; } };
+  Nuke.cap = function (a, b) { if (!a && !b) { cap.classList.remove('on'); return; } cap.children[0].textContent = a; cap.children[1].textContent = b || ''; cap.classList.remove('on'); void cap.offsetWidth; cap.classList.add('on'); ICBM.txt('', ''); };
+  const cut = () => { const W = document.createElement('div'); W.style.cssText = 'position:fixed;inset:0;z-index:43;pointer-events:none;background:#fff;opacity:.5;transition:opacity .35s'; document.body.appendChild(W); requestAnimationFrame(() => requestAnimationFrame(() => W.style.opacity = 0)); setTimeout(() => W.remove(), 450); };
+  Nuke.cutFlash = cut;
+
+  // 전 세계 사일로(몽타주용): 장면 안 사방 1.6~3km에 나라마다 다른 모습으로 잠시 세움
+  const NATIONS = [
+    { n: '마레 본토 · 레벨리오 전략 미사일 기지', c: 0x8e2a22, g: 0x7d776c },
+    { n: '중동 연합 · 북부 사막 사일로', c: 0xb08a4a, g: 0xc2ab7a },
+    { n: '히즈루국 · 동방 산악 사일로', c: 0x2a3a6a, g: 0x5a5f66 },
+    { n: '북방 연방 · 설원 사일로', c: 0xd8dde4, g: 0xe6ebf0 },
+  ];
+  Nuke.foreign = function (D) {
+    const c = D.c, out = [];
+    NATIONS.forEach((N, i) => {
+      const a = D.th + Math.PI * 0.5 + i * 1.2 + Effects.rand(0.2), r = 1600 + i * 450, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r, y = Math.max(Arms.floor(x, z), World.waterLevel(x, z) ?? -1e9);
+      const g = new THREE.Group(); g.position.set(x, y, z); World.scene.add(g);
+      const con = new THREE.MeshStandardMaterial({ color: N.g, roughness: 0.9 }), band = new THREE.MeshStandardMaterial({ color: N.c, roughness: 0.6 }), dk = new THREE.MeshLambertMaterial({ color: 0x0c0c0e });
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(34, 38, 1, 28), con); pad.position.y = 0.5; g.add(pad);
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(19, 21, 5.5, 28, 1, true), con); col.position.y = 2.75; g.add(col);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(9.3, 19, 28), con); ring.rotation.x = -Math.PI / 2; ring.position.y = 5.5; g.add(ring);
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(9.4, 24), dk); hole.rotation.x = -Math.PI / 2; hole.position.y = 0.3; g.add(hole);
+      for (const s of [-1, 1]) { const d = new THREE.Mesh(new THREE.BoxGeometry(10, 1.5, 21), con); d.position.set(s * 16, 6.4, 0); g.add(d); }
+      const stripe = new THREE.Mesh(new THREE.CylinderGeometry(21.1, 21.1, 1.2, 28, 1, true), band); stripe.position.y = 4; g.add(stripe);
+      for (let k = 0; k < 2; k++) { const fp = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 18, 8), con); fp.position.set(28 + k * 6, 9, -10); g.add(fp); const fl = new THREE.Mesh(new THREE.PlaneGeometry(6, 3.6), new THREE.MeshLambertMaterial({ color: N.c, side: THREE.DoubleSide })); fl.position.set(31 + k * 6, 16, -10); g.add(fl); }
+      for (let k = 0; k < 6; k++) { const L = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), new THREE.MeshBasicMaterial({ color: 0xff2010 })); L.position.set(Math.cos(k) * 22, 6.2, Math.sin(k) * 22); g.add(L); }
+      g.traverse(o => { o.frustumCulled = false; });
+      const m = ICBM.buildMissile(); m.position.set(x, y - 26 * ICBM.MS, z); World.scene.add(m);
+      out.push({ N, g, m, p: new THREE.Vector3(x, y, z), y: y - 26 * ICBM.MS, a, ign: false, last: null });
+    });
+    return out;
+  };
+  // 시간표 다시: 0~3 카운트다운(통제실) · 3~9 우리 기지 일제 발사 · 9~17 4개국 몽타주(2초씩) · 17~22 하늘을 덮는 미사일 · 22~28 지평선 연쇄 핵폭발 · 28 우리 근처 낙하
+  const d30 = Nuke.doom3D;
+  Nuke.doom3D = function () {
+    d30.call(this); const D = this.dd; if (!D) return;
+    for (const q of D.sil) q.t0 += 3;
+    for (const s of D.far) s.t0 = 17 + Math.random() * 4.5;
+    for (const b of D.det) b.t0 = 22 + Math.random() * 5.5;
+    D.fx = this.foreign(D);
+    D.fx.forEach((f, i) => { f.t0 = 9 + i * 2; });
+    this.cine(true); def.style.display = 'block';
+    this.cap('DEFCON 1', '전 세계 동시 핵 발사 명령'); this._siren = setInterval(() => { if (!this.dd) { clearInterval(this._siren); return; } this.beep(this._sw = this._sw === 560 ? 840 : 560, 0.5, 0.11); }, 520);
+  };
+  const du0 = Nuke.ddUpdate;
+  Nuke.ddUpdate = function (dt) {
+    const D = this.dd; if (!D || D.phase !== 'cine') return du0.call(this, dt);
+    const t0 = D.t, r = du0.call(this, dt); if (!this.dd) return r;   // 마지막 낙하로 넘어감
+    const t = D.t, V = this._v4 || (this._v4 = new THREE.Vector3()), Q = this._q4 || (this._q4 = new THREE.Vector3()), MS = ICBM.MS;
+    // 카운트다운
+    for (const k of [0.6, 1.4, 2.2]) if (t0 < k && t >= k) { this.cap(`T - ${Math.round(3 - (k - 0.6) / 0.8)}`, '전 사일로 발사 준비'); this.beep(1200, 0.2, 0.2); }
+    if (t0 < 3 && t >= 3) { this.cap('발사', '우리 기지 · 사일로 3기 일제 발사'); cut(); }
+    if (t0 < 9 && t >= 9) def.style.display = 'none';
+    // 4개국 사일로: 자기 차례에 문 열린 채 바로 점화해 솟구침(장면 끝나도 계속 올라감)
+    for (const f of D.fx) {
+      const u = t - f.t0; if (u < -0.2) continue;
+      if (u >= -0.2 && !f.cap) { f.cap = true; this.cap(f.N.n.split(' · ')[0], f.N.n.split(' · ')[1] + ' · 발사'); cut(); Effects.shake(1.2); }
+      if (u < 0) continue;
+      if (!f.ign) { f.ign = true; const s0 = f.m.userData.stages[0]; s0.userData.f1.visible = s0.userData.f2.visible = true; for (let i = 0; i < 90; i++) { const a = Math.random() * 7, s = 30 + Math.random() * 50; Arms.smoke.emit(Q.set(f.p.x + Math.cos(a) * 9, f.p.y + 2, f.p.z + Math.sin(a) * 9), V.set(Math.cos(a) * s, 3 + Math.random() * 10, Math.sin(a) * s), 4, 12, 40); } for (let i = 0; i < 40; i++) Arms.fire.emit(Q.set(f.p.x + Effects.rand(6), f.p.y + 4, f.p.z + Effects.rand(6)), V.set(Effects.rand(14), 20 + Math.random() * 30, Effects.rand(14)), 1, 10, 20); Arms.flash(0.25); if (typeof Sound !== 'undefined') Sound.play('thunder', camera.position, 1, 400); }
+      f.y = f.p.y - 26 * MS + Math.min(1, u / 0.5) * 30 * MS + 30 * u * u + 8 * u * u * u; f.m.position.set(f.p.x, f.y, f.p.z);
+      const e = f.m.userData.stages[0].localToWorld(Q.set(0, -1.5, 0)); if (!f.last) f.last = e.clone(); const n = Math.min(18, Math.ceil(f.last.distanceTo(e) / 4)); for (let i = 0; i < n; i++) Arms.trail.emit(this._lq5 = (this._lq5 || new THREE.Vector3()).copy(f.last).lerp(e, i / n), V.set(Effects.rand(2), Effects.rand(2), Effects.rand(2)), 12, 7, 34); f.last.copy(e);
+      for (let i = 0; i < 3; i++) Arms.fire.emit(e, V.set(Effects.rand(8), -45 - Math.random() * 30, Effects.rand(8)), 0.35, 7, 10);
+      if (u < 1.8) Effects.shake(0.3);
+    }
+    // 장면 바뀔 때 섬광
+    for (const k of [17, 22]) if (t0 < k && t >= k) { cut(); this.cap(k === 17 ? '하늘을 덮는 미사일' : '전 세계 주요 도시 피격', k === 17 ? '전 세계 사일로에서 수백 발 발사' : 'GLOBAL THERMONUCLEAR WAR'); }
+    return r;
+  };
+  // 카메라: 0~3 통제실 경광등 · 3~9 우리 기지(땅에서 올려다봄) · 9~17 4개국 근접 · 17~22 하늘 · 22~ 지평선
+  const dc0 = Nuke.ddCamera;
+  Nuke.ddCamera = function (cam) {
+    const D = this.dd; if (!D || D.phase !== 'cine') return false; const t = D.t, S = this.site;
+    if (t < 3 && S) { if (!D.hid) dc0.call(this, cam); cam.position.set(S.O.x + 9, S.O.y + 5.6, S.O.z - 52); cam.lookAt(S.O.x - 4 + Math.sin(t) * 3, S.O.y + 3.5, S.O.z - 68); cam.fov = 66; cam.position.x += Effects.rand(0.05); cam.updateProjectionMatrix(); return true; }
+    if (t >= 9 && t < 17 && D.fx && D.fx.length) {
+      const i = Math.min(D.fx.length - 1, Math.floor((t - 9) / 2)), f = D.fx[i], u = t - f.t0, a = f.a + 2.2 + u * 0.12;
+      cam.position.set(f.p.x + Math.cos(a) * 185, f.p.y + 14 + u * 4, f.p.z + Math.sin(a) * 185); cam.position.x += Effects.rand(0.7); cam.position.y += Effects.rand(0.7);
+      cam.lookAt(f.p.x, f.p.y + Math.max(30, Math.min(260, (f.y - f.p.y) * 0.55 + 30)), f.p.z); cam.fov = 56;   /* 사일로·연기·불기둥·미사일이 한 화면에 */ cam.far = Math.max(cam.far, 150000); cam.updateProjectionMatrix(); return true;
+    }
+    if (t >= 3 && t < 9) { const r = dc0.call(this, cam); return r; }
+    // 17~ : 원래 하늘·지평선 장면(시간만 당김)
+    const real = D.t; D.t = t < 22 ? 7 + (t - 17) * 2.1 : 17.5 + (t - 22) * 1.5; const r = dc0.call(this, cam); D.t = real; return r;
+  };
+  // 마지막 낙하 시점(28초)과 정리
+  const du1 = Nuke.ddUpdate;
+  Nuke.ddUpdate = function (dt) {
+    const D = this.dd; if (D && D.phase === 'cine' && D.t >= 27.8 && !D.fin) { D.fin = true; D.t = 28.6; }
+    return du1.call(this, dt);
+  };
+  const ei0 = ICBM.endImpact;
+  ICBM.endImpact = function () { const fin = Nuke._finale; const r = ei0.apply(this, arguments); if (fin || !Nuke.dd) Nuke.cine(false); return r; };
+  const si0 = ICBM.startImpact;
+  ICBM.startImpact = function () { const r = si0.apply(this, arguments); if (Nuke._finale) Nuke.cine(true); return r; };
+  // 종말 연출이 끝나면 4개국 사일로 치우기
+  const dd0 = Nuke.ddUpdate;
+  Nuke.ddUpdate = function (dt) { const D = this.dd; const r = dd0.call(this, dt); if (D && !this.dd && D.fx) { for (const f of D.fx) { if (f.g.parent) f.g.parent.remove(f.g); if (f.m.parent) f.m.parent.remove(f.m); } D.fx = null; clearInterval(this._siren); } return r; };
 }
 
 </script>
