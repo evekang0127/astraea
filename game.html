@@ -15098,7 +15098,7 @@ Arms.lockTone = function (on) {
   const html = `<div class="g88">
 <div class="g88grid">
 ${card('🧭', '기본 · 입체기동', [['W A S D', '이동 (공중에서 W = 방향 전환)'], ['우클릭', '누르고 있기 = 양손 와이어 · 떼면 해제'], ['Space', '점프 · 와이어 빨리 감기'], ['Shift', '달리기 · 공중 가스 분사'], ['Q', '회피'], ['V 휠', '1인칭 · 3인칭']])}
-${card('⚔️', '공격', [['좌클릭', '베기 (목덜미 근처면 돌진 베기)'], ['좌클릭', '마레 전차·열차·기구도 칼로 벨 수 있음'], ['R', '동료 명령 바꾸기']])}
+${card('⚔️', '공격', [['좌클릭', '베기 (목덜미 근처면 돌진 베기)'], ['좌클릭', '마레 전차·열차·기구도 칼로 벨 수 있음'], ['R', '동료 명령 바꾸기'], ['X', '뇌창 · 거인에 박힌 뒤 폭발(목덜미면 즉사) · 6발'], ['Z', '신호탄 · 초록→빨강→검정→노랑']])}
 ${card('🦾', '거인화', [['1~9', '(사람일 때) 변신할 거인 고르기'], ['T', '게이지가 차면 변신'], ['1 2 3', '거인 스킬'], ['좌클릭 우클릭', '연타 · 강타 (마레 병기도 맞음, 밟으면 부서짐)'], ['Q', '대시'], ['E', '해제']])}
 ${card('🗺️', '지도 · 이동', [['M', '미니맵 160m → 800m → 4km → 20km → 세계 지도'], ['Esc', '일시정지 · 세계 지도 · 빠른 이동'], ['G', '들판에서 가까운 장소로 들어가기'], ['O', '자동 운항 (지도에서 목적지 고른 뒤)'], ['[ ]', '배속 내리기 · 올리기']])}
 ${card('🐎', '말', [['H', '부르기 · 타기 · 내리기'], ['Shift', '질주']])}
@@ -19534,6 +19534,106 @@ body:has(#go92[style*="grid"]) #tutor{display:none!important}`;
   // 전함이 폭풍에 크게 흔들림
   const su0 = Ship.update;
   Ship.update = function (dt) { const r = su0.call(this, dt); const g = Weather.St ? Weather.St.gust : 0; if (g > 0.02) for (const s of this.list) { if (s.sinking) continue; s.root.rotation.z += Math.sin(s.t * 0.9) * 0.05 * g; s.root.rotation.x += Math.sin(s.t * 0.63 + 1) * 0.025 * g; s.root.position.y += Math.sin(s.t * 0.8) * 1.4 * g; s.root.updateMatrixWorld(); } return r; };
+}
+
+// ---------- ⑨ 9거인 강화·제약 완화 (강병현 지시: 능력이 약하고 제약이 많다) ----------
+// 체력 1.8배 · 지속 2.2배(처치할 때마다 +4초) · 이동 1.25배 · 받는 피해 75% · 모두 초당 회복 · 스킬 재사용 55% · 대시·강타 재사용 절반
+// 게이지 다 차는 시간 25초 → 12초, 처치 충전 1.7배 · 거인 공격 위력 1.8배 · 해제 후 게이지 0이 아니라 35%부터
+{
+  for (const s of Object.values(Shifter.stats)) { s.hp = Math.round(s.hp * 1.8); s.dur = Math.round(s.dur * 2.2); s.speed *= 1.25; s.taken *= 0.75; s.regen = Math.max(4, (s.regen || 0) * 1.5); }
+  for (const list of Object.values(Shifter.skills || {})) for (const sk of list) sk[1] = Math.max(1.5, +(sk[1] * 0.55).toFixed(1));
+  Shifter.CHARGE_TIME = 12;
+  const ok0 = Shifter.onKill;
+  Shifter.onKill = function (credit) { const r = ok0.call(this, credit); if (!this.active) this.charge = Math.min(1, this.charge + (credit ? 0.04 : 0.1)); else { this.timeLeft = Math.min((this.stats[this.kind] || {}).dur || 99, this.timeLeft + 4); } return r; };
+  const ts0 = Titans.strike;
+  Titans.strike = function (titan, opts = {}) { if (opts && opts.source === 'shifter') opts = Object.assign({}, opts, { mul: (opts.mul ?? 1) * 1.8 }); return ts0.call(this, titan, opts); };
+  const da0 = Shifter.dash; if (da0) Shifter.dash = function () { const r = da0.apply(this, arguments); if (this.dashCdT > 0) this.dashCdT *= 0.5; return r; };
+  const up0 = Shifter.update;
+  Shifter.update = function (dt) {
+    const r = up0.apply(this, arguments);
+    if (this.active && this.heavyCd > 0.6) this.heavyCd = 0.6;   // 회복은 원래 코드가 regen 값으로 처리
+    return r;
+  };
+  const ex0 = Shifter.exit;
+  if (ex0) Shifter.exit = function () { const r = ex0.apply(this, arguments); if (!this.active) this.charge = Math.max(this.charge, 0.35); return r; };
+}
+
+// ---------- ⑩ 원작 기능: 뇌창(X) · 신호탄(Z) · 자유의 날개 문장 ----------
+// 뇌창: 조준점으로 날아가 거인에 박힌 뒤 1초 뒤 폭발(목덜미 근처면 바로 처치) · 6발, 15초마다 1발 보충 · 사람일 때만
+// 신호탄: 하늘로 쏘아 올리면 색 연기가 오래 남음(초록 → 빨강 → 검정 → 노랑 차례로)
+{
+  const TS = { ammo: 6, max: 6, regen: 0, list: [], hud: null, flareI: 0 };
+  window.Thunder92 = TS;
+  const geo = new THREE.CylinderGeometry(0.06, 0.09, 1.7, 8).rotateX(Math.PI / 2), mat = new THREE.MeshStandardMaterial({ color: 0x3a3f46, metalness: 0.7, roughness: 0.35, emissive: 0x0a1420 });
+  const tipM = new THREE.MeshBasicMaterial({ color: 0x9fe8ff });
+  const css = document.createElement('style');
+  css.textContent = `#ts92{position:fixed;left:50%;top:calc(50% + 46px);transform:translateX(-50%);z-index:12;pointer-events:none;font:800 11px 'Noto Sans KR',sans-serif;color:#cfeaff;letter-spacing:.5px;text-shadow:0 1px 3px #000;opacity:.85;display:none}#ts92 b{color:#9fe8ff}html.cine92 #ts92{display:none!important}`;
+  document.head.appendChild(css);
+  const add = () => { TS.hud = document.createElement('div'); TS.hud.id = 'ts92'; document.body.appendChild(TS.hud); };
+  if (document.body) add(); else document.addEventListener('DOMContentLoaded', add);
+  const human = () => typeof Game !== 'undefined' && Game.running && !Shifter.active && !(typeof Ship !== 'undefined' && Ship.cur) && !(typeof Aircraft !== 'undefined' && Aircraft.cur) && !(typeof Cannons !== 'undefined' && Cannons.cur) && !(typeof Nuke !== 'undefined' && Nuke.inBunker);
+  TS.fire = function () {
+    if (!human()) return;
+    if (this.ammo <= 0) { Game.toast(`뇌창 없음 · ${Math.ceil(15 - this.regen)}초 뒤 1발 보충`, '#cfd8e6'); return; }
+    this.ammo--; Arms.init();
+    const a = Arms.aim(900), from = Player.hipPos().clone().add(new THREE.Vector3(0, 0.3, 0)), dir = a.p.clone().sub(from).normalize();
+    const g = new THREE.Group(), m = new THREE.Mesh(geo, mat), tip = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), tipM); tip.position.z = 0.9; g.add(m, tip); g.position.copy(from); g.lookAt(from.clone().add(dir)); World.scene.add(g);
+    this.list.push({ g, v: dir.multiplyScalar(170), t: 0, stuck: null, off: new THREE.Vector3(), fuse: 0, aim: a.p.clone() });
+    if (typeof Sound !== 'undefined') Sound.play('launch', from, 0.7, 60);
+    Arms.muzzle(from, dir, 0.6); Effects.shake(0.15);
+  };
+  TS.blow = function (s) {
+    const p = s.g.position.clone(); World.scene.remove(s.g); s.dead = true;
+    Arms.boom(p, 2.6, { r: 13, hits: 4, mul: 3, stun: 2.2 });
+    const T = s.stuck; if (T && !T.dead && T.nape) { const np = T.nape.getWorldPosition(new THREE.Vector3()); if (np.distanceTo(p) < Math.max(4, T.height * 0.22)) { Titans.strike(T, { source: 'player', speed: 80, mul: 99, bonus: 1 }); Game.toast('뇌창 · 목덜미 폭파!', '#9fe8ff'); } }
+  };
+  TS.update = function (dt) {
+    if (this.ammo < this.max) { this.regen += dt; if (this.regen >= 15) { this.regen = 0; this.ammo++; } } else this.regen = 0;
+    for (const s of this.list) {
+      if (s.dead) continue; s.t += dt;
+      if (s.stuck) { if (s.stuck.dead) { this.blow(s); continue; } s.g.position.copy(s.stuck.pos).add(s.off); s.fuse -= dt; if (Math.random() < 0.5) Arms.core.emit(s.g.position, new THREE.Vector3(), 0.1, 0.9, 0.5); if (s.fuse <= 0) this.blow(s); continue; }
+      const p0 = s.g.position.clone(); s.v.y -= 4 * dt; s.g.position.addScaledVector(s.v, dt); s.g.lookAt(s.g.position.clone().add(s.v));
+      if (Math.random() < 0.9) Arms.trail.emit(s.g.position, new THREE.Vector3(0, 0.2, 0), 0.7, 0.35, 0.9);
+      // 맞음: 거인 몸통 원기둥 · 조준점 · 땅
+      let hitT = null; for (const T of Titans.list) { if (T.dead) continue; const d = Math.hypot(s.g.position.x - T.pos.x, s.g.position.z - T.pos.z); if (d < 1.5 * T.scale + 1 && s.g.position.y > T.pos.y && s.g.position.y < T.pos.y + T.height) { hitT = T; break; } }
+      if (hitT) { s.stuck = hitT; s.off.copy(s.g.position).sub(hitT.pos); s.fuse = 1.0; s.v.set(0, 0, 0); if (typeof Sound !== 'undefined') Sound.play('attach', s.g.position, 1.2, 60); Game.toast('뇌창 명중 · 1초 뒤 폭발', '#9fe8ff'); continue; }
+      const gy = Arms.floor(s.g.position.x, s.g.position.z);
+      if (s.g.position.y <= gy + 0.2 || s.g.position.distanceTo(s.aim) < 3 || p0.distanceTo(s.aim) < s.v.length() * dt || s.t > 6) { s.fuse = 0.4; s.stuck = { pos: s.g.position.clone(), dead: false }; s.off.set(0, 0, 0); }
+    }
+    this.list = this.list.filter(s => !s.dead);
+    if (this.hud) { const on = human(); this.hud.style.display = on ? 'block' : 'none'; if (on) this.hud.innerHTML = `뇌창 <b>${this.ammo}</b>/${this.max} · X  ·  신호탄 Z`; }
+  };
+  // 신호탄: 색마다 연기 입자(오래 남음)
+  const FL = [['초록', 0x3dd66a], ['빨강', 0xe23a2a], ['검정', 0x1a1a1a], ['노랑', 0xf2d23a]];
+  TS.flares = []; TS.smk = null;
+  TS.flare = function () {
+    if (!human()) return; Arms.init();
+    if (!this.smk) this.smk = FL.map(([, c]) => { const p = new Particles(World.scene, 900, c, { gravity: -0.6, drag: 0.6 }); p.mat.vertexShader = p.mat.vertexShader.replace('110.0', '320.0'); p.points.renderOrder = 6; return p; });
+    const i = this.flareI++ % FL.length, from = Player.hipPos().clone().add(new THREE.Vector3(0, 0.6, 0)), d = Player.lookDir().clone(); d.y = Math.max(0.75, d.y + 0.9); d.normalize();
+    this.flares.push({ p: from, v: d.multiplyScalar(95), t: 0, i });
+    if (typeof Sound !== 'undefined') { Sound.play('gun', from, 1.3, 120); Sound.play('gas', from, 0.6, 60); }
+    Game.toast(`신호탄 · ${FL[i][0]}`, '#' + FL[i][1].toString(16).padStart(6, '0'));
+  };
+  TS.updFlares = function (dt) {
+    if (!this.smk) return;
+    for (const f of this.flares) { if (f.done) continue; f.t += dt; f.v.y -= 9.8 * dt * 0.35; f.p.addScaledVector(f.v, dt); this.smk[f.i].emit(f.p, new THREE.Vector3(Effects.rand(0.6), 0.4, Effects.rand(0.6)), 26, 2.2, 3.2); this.smk[f.i].emit(f.p, new THREE.Vector3(Effects.rand(0.4), 0.2, Effects.rand(0.4)), 26, 1.6, 2.6); Arms.core.emit(f.p, new THREE.Vector3(), 0.08, 2.2, 1); if (f.t > 3.2) f.done = true; }
+    this.flares = this.flares.filter(f => !f.done);
+    const sc = Effects.steam.mat.uniforms.scale.value; for (const s of this.smk) { s.mat.uniforms.scale.value = sc; s.update(dt); }
+  };
+  addEventListener('keydown', e => { if (e.repeat || typeof Game === 'undefined' || !Game.running) return; if (e.code === 'KeyX') TS.fire(); else if (e.code === 'KeyZ') TS.flare(); });
+  const au0 = Arms.update; Arms.update = function (dt) { const r = au0.apply(this, arguments); try { TS.update(dt); TS.updFlares(dt); } catch (e) { if (!TS._w) { TS._w = 1; console.warn('ts92', e); } } return r; };
+  const wi0 = World.init; World.init = function (...a) { TS.list.length = 0; TS.flares.length = 0; TS.smk = null; return wi0.apply(this, a); };
+  // 자유의 날개 문장(조사병단) — 망토 등판
+  const emblem = () => {
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+    g.fillStyle = '#e9e2cf'; g.beginPath(); g.moveTo(64, 8); g.lineTo(112, 22); g.lineTo(106, 78); g.quadraticCurveTo(64, 122, 64, 122); g.quadraticCurveTo(64, 122, 22, 78); g.lineTo(16, 22); g.closePath(); g.fill();
+    g.lineWidth = 4; g.strokeStyle = '#5a4630'; g.stroke();
+    const wing = (sx, col) => { g.fillStyle = col; for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(64, 92 - i * 4); g.quadraticCurveTo(64 + sx * (20 + i * 9), 70 - i * 16, 64 + sx * (14 + i * 11), 30 + i * 4); g.quadraticCurveTo(64 + sx * (8 + i * 6), 62 - i * 8, 64, 92 - i * 4); g.fill(); } };
+    wing(-1, '#f4f4f0'); wing(1, '#2f5f9e'); g.globalAlpha = 0.35; wing(-1, '#9aa3ad'); g.globalAlpha = 1;
+    return new THREE.CanvasTexture(c);
+  };
+  const giveEmblem = () => { try { const cl = Player.rig && Player.rig.cloak; if (!cl || cl.userData.wings) return; const m = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.24), new THREE.MeshStandardMaterial({ map: emblem(), transparent: true, roughness: 0.9, side: THREE.DoubleSide })); m.position.set(0, -0.28, -0.215); m.rotation.y = Math.PI; cl.add(m); cl.userData.wings = true; } catch (e) {} };
+  setTimeout(giveEmblem, 1500); setInterval(giveEmblem, 5000);
 }
 
 </script>
