@@ -322,7 +322,7 @@
       <p class="lead">거인이 쉼 없이 몰려오는 성벽의 세계. 와이어로 날아올라 목덜미를 베고, 위기의 순간에는 아홉 거인 중 하나로 변신하라.</p>
       <div class="deploy">
         <button type="button" class="btn-gold" data-view="3" disabled>출격</button>
-        <button type="button" id="trainStart" data-view="3" disabled title="피해 없음 · 거인화 게이지 가득 · 표적 소환 · 기록 제외">훈련으로 출격</button>
+        <button type="button" id="trainStart" data-view="3" disabled title="피해 없음 · 거인화 게이지 가득 · 표적 소환">훈련으로 출격</button>
         <div class="viewpick" role="group" aria-label="시점"><button type="button" data-viewpick="3" class="on">3인칭</button><button type="button" data-viewpick="1">1인칭</button></div>
       </div>
       <p id="loading" role="status">도시를 준비하고 있습니다…</p><p id="startText"></p>
@@ -5642,7 +5642,7 @@ addEventListener('keydown', e => {
     Game.started = true; document.documentElement.classList.remove('title');
     const kept = typeof Session !== 'undefined' && Session.restore();
     const ov = document.getElementById('overlay'); if (ov) ov.style.display = 'none';
-    const d = fx(`<div class="c"><small>ARRIVED</small><b>${t.name}</b><i>클릭하면 계속 · Enter</i>${kept ? `<br><em style="font-style:normal;font-size:12px;color:#cfcfcf">이번 출격 이어짐 · 생존 ${Game.clock()} · 토벌 ${Game.kills} · 점수 ${Game.score}${Game.training ? ' · 훈련 모드 유지' : Game.trainedRun ? ' · 기록 제외 출격' : ''}${Session.note ? '<br>' + Session.note : ''}</em>` : ''}</div>`, 'arrive');
+    const d = fx(`<div class="c"><small>ARRIVED</small><b>${t.name}</b><i>클릭하면 계속 · Enter</i>${kept ? `<br><em style="font-style:normal;font-size:12px;color:#cfcfcf">이번 출격 이어짐 · 토벌 ${Game.kills}${Game.training ? ' · 훈련 모드 유지' : ''}${Session.note ? '<br>' + Session.note : ''}</em>` : ''}</div>`, 'arrive');
     const go = e => { if (e) { e.preventDefault(); e.stopPropagation(); } d.hidden = true; removeEventListener('keydown', key, true); if (typeof requestPlay === 'function') requestPlay(); };
     const key = e => { if (e.code === 'Enter' || e.code === 'Space') go(e); };
     d.onclick = go; addEventListener('keydown', key, true);
@@ -10891,7 +10891,7 @@ const Menu = {
   showPause(){
     const $=id=>document.getElementById(id);
     $('pView').value=Player.thirdPerson?'3':'1';
-    $('pauseStats').textContent=`생존 ${Game.clock()} · 토벌 ${Game.kills} (직접 ${Game.ownKills} · 동료 ${Game.allyKills}) · 점수 ${Game.score}`;
+    $('pauseStats').textContent=`이번 출격 토벌 ${Game.kills} (직접 ${Game.ownKills} · 동료 ${Game.allyKills})`;
     if(typeof Resume!=='undefined')Resume.snap();
     if(typeof Records!=='undefined'){Records.commit();const r=$('pauseRecords');if(r)r.textContent=Records.summary();}
     $('pauseHint').textContent=Game.noLock?'Esc 또는 계속하기로 돌아가기':'계속하기를 누르면 마우스가 다시 잠깁니다';
@@ -11487,7 +11487,7 @@ const SaveBox = {
     });
     if ($('saveUndo')) { let has = false; try { has = !!localStorage.getItem('astraea-backup'); } catch (_) {} $('saveUndo').hidden = !has; $('saveUndo').addEventListener('click', () => { const res = this.undoImport(); msg(res.msg); sum(); if (res.ok) $('saveUndo').hidden = true; }); }
     $('saveResetSet').addEventListener('click', () => { if (!confirm('설정(화질·소리·조작·프레임 제한 등)을 처음 값으로 되돌립니다. 개인 기록은 그대로입니다. 계속할까요?')) return; this.resetSettings(); location.reload(); });
-    $('saveWipe').addEventListener('click', () => { if (!confirm('개인 기록(최장 생존·최고 점수·누적 토벌 등)을 모두 지웁니다. 되돌릴 수 없습니다. 지울까요?')) return; this.wipeRecords(); msg('개인 기록을 지웠습니다'); sum(); });
+    $('saveWipe').addEventListener('click', () => { if (!confirm('개인 기록(누적 토벌·거인별 토벌 등)을 모두 지웁니다. 되돌릴 수 없습니다. 지울까요?')) return; this.wipeRecords(); msg('개인 기록을 지웠습니다'); sum(); });
   },
 };
 
@@ -11540,12 +11540,12 @@ const Freeplay = {
     Keymap.init();   // 53차: 키 바꾸기 칸(조작법 창)
     // 51차: 훈련 모드 켜고 끄기 (53차: 현장 목표 기능은 삭제함 — 훈련 중 표시는 왼쪽 위 작은 띠로)
     const tr = $('trainToggle'), badge = document.createElement('div');
-    this.badge = badge; badge.id = 'trainBadge'; badge.hidden = true; badge.textContent = '훈련 모드 · 피해 없음 · 거인화 게이지 가득 · 스킬 재사용 4배 · 기록 제외'; document.body.appendChild(badge);
+    this.badge = badge; badge.id = 'trainBadge'; badge.hidden = true; badge.textContent = '훈련 모드 · 피해 없음 · 거인화 게이지 가득 · 스킬 재사용 4배'; document.body.appendChild(badge);
     const label = () => { if (tr) tr.textContent = Game.training ? '훈련 모드 끄기' : '훈련 모드 켜기'; badge.hidden = !Game.training; for (const id of ['trainTargets', 'trainHome', 'trainClear']) if ($(id)) $(id).hidden = !Game.training; };
     if ($('trainClear')) $('trainClear').addEventListener('click', () => { let n = 0; for (const t of Titans.list) if (t.dummy && !t.dead) { t.dead = true; t.removed = true; t.root.visible = false; n++; } $('pauseHint').textContent = n ? `표적 ${n}마리를 치웠습니다` : '치울 표적이 없습니다'; });
     if ($('trainTargets')) $('trainTargets').addEventListener('click', () => { Game.trainTargets(); $('pauseHint').textContent = '정면에 표적 거인 3마리 · 계속하기를 누르세요'; });
     if ($('trainHome')) $('trainHome').addEventListener('click', () => { Game.trainHome(); $('pauseHint').textContent = '출발 지점으로 옮겼습니다'; });
-    if (tr) tr.addEventListener('click', () => { Game.setTraining(!Game.training); label(); $('pauseHint').textContent = Game.training ? '훈련 모드: 피해를 받지 않습니다 · 이번 출격은 개인 기록에 넣지 않습니다' : '훈련 모드를 껐습니다'; });
+    if (tr) tr.addEventListener('click', () => { Game.setTraining(!Game.training); label(); $('pauseHint').textContent = Game.training ? '훈련 모드: 피해를 받지 않습니다' : '훈련 모드를 껐습니다'; });
     label();
     for (const id of ['fpsCap', 'pFpsCap']) {
       const sel = $(id); if (!sel) continue;
@@ -15103,7 +15103,7 @@ ${card('🦾', '거인화', [['1~9', '(사람일 때) 변신할 거인 고르기
 ${card('🗺️', '지도 · 이동', [['M', '미니맵 160m → 800m → 4km → 20km → 세계 지도'], ['Esc', '일시정지 · 세계 지도 · 빠른 이동'], ['G', '들판에서 가까운 장소로 들어가기'], ['O', '자동 운항 (지도에서 목적지 고른 뒤)'], ['[ ]', '배속 내리기 · 올리기']])}
 ${card('🐎', '말', [['H', '부르기 · 타기 · 내리기'], ['Shift', '질주']])}
 ${card('✈️', '비행정', [['P', '부르기 (하늘에서 날아와 자동 탑승)'], ['F', '가까이서 타기 · 내리기'], ['W S', '추력 · 감속(브레이크)'], ['마우스', '방향'], ['Shift', '부스트'], ['L', '고도 고정 (무기 겨눠도 일정 고도) · PgUp/PgDn 높이'], ['휠', '카메라 거리']])}
-${card('🛡️', '전차 · 발사차량', [['B', '전차 부르기 (땅 위)'], ['N', 'ICBM 이동식 발사차량 부르기'], ['F', '가까이서 타기 · 내리기'], ['W S A D', '주행 · 제자리 회전'], ['마우스 · 클릭', '포탑 조준 · 발사 (전차 1 주포 2 기관총 / 발사차량 1 재래식 2 핵)'], ['Space Shift', '제동 · 부스트']])}
+${card('🛡️', '전차 · 발사차량 · 열차', [['B', '전차 부르기 (땅 위)'], ['N', 'ICBM 이동식 발사차량 부르기'], ['K', '장갑 열차 부르기 (근처 평지에 선로)'], ['F', '가까이서 타기 · 내리기'], ['W S A D', '주행 · 제자리 회전'], ['마우스 · 클릭', '포탑 조준 · 발사 (전차 1 주포 2 기관총 / 발사차량 1 재래식 2 핵)'], ['Space Shift', '제동 · 부스트']])}
 ${card('🚢', '전함', [['P', '물에 있을 때 = 전함 부르기 (달려와 자동 탑승)'], ['F', '가까이서 타기 · 내리기'], ['W S', '엔진 전신기 올리기 · 내리기(전진 중 S = 빠른 감속)'], ['A D', '방향타 (멈춰 있어도 제자리 회전)'], ['Space', '비상 제동'], ['Shift', '부스터 (게이지 소모 · 최고 63m/s)'], ['O [ ]', '자동 항해 · 배속(최대 ×500)']])}
 ${card('🎯', '무기 공통', [['1~7', '무기 고르기 (오른쪽 계기판)'], ['좌클릭', '발사 · 누르고 있기 = 연사'], ['우클릭', '조준경 (내 배·비행정은 숨겨짐)'], ['휠', '조준경 배율'], ['자동', '탄약을 다 쓰면 자동 재장전']])}
 ${card('🚀', '전함 무기', [['1', '주포 406mm · 조준점에 포탄'], ['2', 'VLS 순항미사일 · 락온 4'], ['3', 'CIWS · 누르고 있기'], ['4', '5인치 함포'], ['5', 'Mk48 어뢰 · 락온 2'], ['6', '하푼 대함미사일 · 락온 2'], ['7', '다연장 로켓 12발']])}
@@ -15198,7 +15198,7 @@ details.g88d>summary{font-weight:800;color:#ffd27a;cursor:pointer}
 }
 
 // 일시정지 화면 위에 마레 병기 이름표·포격 경고가 남던 것 → 일시정지 중엔 숨김
-{ const st = document.createElement('style'); st.textContent = 'body:has(#pause:not([hidden])) #mt88,body:has(#pause:not([hidden])) #mw88{display:none!important}'; document.head.appendChild(st); }
+{ const st = document.createElement('style'); st.textContent = '';   /* 92차: html.ps92 클래스 방식으로 옮김(upgrade92.js) */ document.head.appendChild(st); }
 
 </script>
 <script>
@@ -17393,7 +17393,7 @@ const Game = {
     Titans._hooksDirty = true; this.toast('표적 거인 3마리 (움직이지 않음)', '#9fe0b0');
   },
   trainHome() { if (!this.training) return; Player.releaseHook(); Player.pos.copy(World.START); Player.vel.set(0, 0, 0); Player.yaw = World.START_YAW; this.toast('출발 지점으로', '#9fe0b0'); },
-  setTraining(on) { this.training = !!on; if (on) this.trainedRun = true; this.toast(on ? '훈련 모드 · 피해 없음 (이번 출격은 기록 제외)' : '훈련 모드 끔 · 이번 출격은 계속 기록 제외', '#9fe0b0'); },
+  setTraining(on) { this.training = !!on; if (on) this.trainedRun = true; this.toast(on ? '훈련 모드 · 피해 없음' : '훈련 모드 끔', '#9fe0b0'); },
 
   // 동시에 있을 거인 수: 처음 5마리, 40초마다 1마리씩 늘어 최대 24마리
   // 66차: 자유 모드 조건 — 탐험(거인 없음) / 조용히(최대 6) / 기본 전투(처음 5, 40초마다 1씩 최대 24) / 거인 대결(최대 4, 출현 거인 설정을 따름). 화질과 상관없음(저화질이 몰래 쉬워지지 않음). 스토리는 기본 규칙
@@ -17436,7 +17436,7 @@ const Game = {
     this.running = false;
     document.exitPointerLock();
     this.$('overlay').innerHTML = `<div class="gameover"><div class="eyebrow">THE WALLS HAVE FALLEN</div><h1>전사했습니다</h1>
-      <p>생존 ${this.clock()} · 토벌 ${this.kills} (직접 ${this.ownKills} · 동료 ${this.allyKills}) · 점수 ${this.score}</p>${typeof Records !== 'undefined' ? Records.commit(true) : ''}
+      <p>토벌 ${this.kills} (직접 ${this.ownKills} · 동료 ${this.allyKills})</p>${typeof Records !== 'undefined' ? (Records.commit(true), '') : ''}
       <p class="again">클릭해서 다시 시작</p></div>`;
     this.$('overlay').onclick = () => location.reload();
     this.$('overlay').style.display = '';   // 스타일시트의 grid 배치로 되돌림
@@ -17574,8 +17574,7 @@ const Records = {
     if (Game.rule !== 'battle') { Game.ruleRun = true; }   // 66차: 기본 전투가 아닌 조건을 쓴 출격은 최장 생존·최고 점수 비교에서 뺌(누적 토벌은 셈)
     const comparable = !Game.ruleRun;
     const d = this.load(), news = [];
-    if (comparable && Game.time > d.bestTime + 1) { if (final && d.bestTime > 0) news.push('최장 생존'); d.bestTime = Game.time; }
-    if (comparable && Game.score > d.bestScore) { if (final && d.bestScore > 0) news.push('최고 점수'); d.bestScore = Game.score; }
+    /* 92차: 생존 시간·점수 기록 없앰(강병현 지시) */
     if (comparable && Game.kills > d.bestKills) d.bestKills = Game.kills;
     if (Game.topSpeed > d.topSpeed) d.topSpeed = Math.round(Game.topSpeed);
     d.totalKills += Game.kills - this.base.kills; d.ownKills += Game.ownKills - this.base.own; d.allyKills += Game.allyKills - this.base.ally;
@@ -17588,7 +17587,7 @@ const Records = {
     return news.length ? `<p class="again" style="color:#e8c36a">새 기록 · ${news.join(' · ')}</p>` : '';
   },
   clockOf(t) { const s = Math.floor(t); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; },
-  summary() { const d = this.load(); return d.totalKills || d.bestTime ? `개인 기록 — 최장 생존 ${this.clockOf(d.bestTime)} · 최고 점수 ${d.bestScore} · 누적 토벌 ${d.totalKills} (직접 ${d.ownKills}) · 최고 속도 ${d.topSpeed} m/s` + (this.failed ? ' · 저장 실패(브라우저 저장 공간 확인)' : '') : '개인 기록 — 아직 없음 (이 브라우저에 저장됩니다)'; },
+  summary() { const d = this.load(); return d.totalKills ? `개인 기록 — 누적 토벌 ${d.totalKills} (직접 ${d.ownKills}) · 최고 속도 ${d.topSpeed} m/s` + (this.failed ? ' · 저장 실패(브라우저 저장 공간 확인)' : '') : '개인 기록 — 아직 없음 (이 브라우저에 저장됩니다)'; },
 };
 addEventListener('pagehide', () => { if (Game.started && !Game.over) Records.commit(); });
 
@@ -17632,7 +17631,7 @@ const Resume = {
     if (!d || !dep) return;
     const name = (Atlas.PLACES[d.map] || {}).name || d.map, ago = Math.max(1, Math.round((Date.now() - d.at) / 60000));
     const b = document.createElement('button'); b.type = 'button'; b.id = 'resumeRun';
-    b.innerHTML = `이어하기<small>${name} · 생존 ${Records.clockOf(d.time)} · 점수 ${d.score} · ${ago < 60 ? ago + '분' : ago < 2880 ? Math.round(ago / 60) + '시간' : Math.round(ago / 1440) + '일'} 전${d.trn || d.tr ? ' · 훈련(기록 제외)' : ''}</small>`;
+    b.innerHTML = `이어하기<small>${name} · ${ago < 60 ? ago + '분' : ago < 2880 ? Math.round(ago / 60) + '시간' : Math.round(ago / 1440) + '일'} 전${d.trn || d.tr ? ' · 훈련' : ''}</small>`;
     b.onclick = e => { e.stopPropagation(); b.disabled = true; this.go(d); };
     dep.after(b);
     const n = document.createElement('p'); n.id = 'resumeNote'; n.textContent = '출격을 누르면 새 게임 (이어하기 기록은 새 출격이 저장될 때 바뀝니다)'; b.after(n);
@@ -18958,9 +18957,7 @@ const Death = {
         <h1>전사했습니다</h1>
         <p class="cause">${cause}${ch ? ` · ${st.ch + 1}장 「${ch.title}」` : ''}</p>
         <div class="stats">
-          <div><b data-n="${Math.floor(Game.time)}" data-clock="1">0:00</b><span>생존 시간</span></div>
           <div><b data-n="${Game.kills}">0</b><span>토벌</span></div>
-          <div><b data-n="${Game.score}">0</b><span>점수</span></div>
         </div>
         <p class="quote">쓰러진 자리에서, 다음 병사가 칼을 든다.</p>
         <div class="btns"><button class="go" type="button">${st ? `${st.ch + 1}장 다시 하기` : '다시 출격'}</button><button class="home" type="button">처음 화면으로</button></div>
@@ -19207,7 +19204,7 @@ Music.init();
 #shud92 .bst.on .g i{background:linear-gradient(90deg,#ff3b1f,#ffb347);box-shadow:0 0 12px #ff7a2a}#shud92 .flag{margin-top:7px;display:flex;gap:5px}#shud92 .flag em{font:800 10px 'Inter';letter-spacing:1.5px;font-style:normal;padding:3px 7px;border-radius:4px;color:#6f8696;background:rgba(255,255,255,.05)}
 #shud92 .flag em.on{color:#fff;background:#d23a2a}#shud92 .flag em.b.on{background:#ff7a2a}#shud92 .flag em.a.on{background:#2a8ad2}
 #shud92 .st{margin:6px auto 0;width:fit-content;max-width:100%;padding:4px 12px;border-radius:999px;background:rgba(6,11,20,.72);text-align:center;font:600 11px 'Noto Sans KR';color:#b9d0de;letter-spacing:.3px}
-body:has(#shud92.on) #mw88{bottom:182px}`;
+html.ship92 #mw88{bottom:182px}`;
   document.head.appendChild(css);
   const el = document.createElement('div'); el.id = 'shud92';
   el.innerHTML = `<div class="bx"><div class="spd"><small>속도 · KNOTS</small><b>0.0</b><div class="km">0 km/h</div></div>
@@ -19219,10 +19216,11 @@ body:has(#shud92.on) #mw88{bottom:182px}`;
   const show = on => { el.style.display = on ? 'block' : 'none'; el.classList.toggle('on', on); };
   const p0 = Ship.panel;
   Ship.panel = function () {
-    p0.apply(this, arguments);
+    // 92차: 예전 비행 계기판(전함에선 숨김)은 매번 화면 폭을 읽어 강제 레이아웃(첫 탑승 0.2초·이후 10~20ms 멈칫) → 건너뛰고 무기판만 갱신
     const s = this.cur;
-    if (!s || !Game.running || Game.dying) { show(false); return; }
-    try { Aircraft.panelEl().hidden = true; } catch (e) {}
+    try { this.updateBar(); } catch (e) {}
+    if (!s || !Game.running || Game.dying) { show(false); try { Aircraft.panelEl().hidden = true; } catch (e) {} return; }
+    if (!this._acHid) { this._acHid = true; try { Aircraft.panelEl().hidden = true; } catch (e) {} }
     show(true);
     const now = performance.now(); if (now - (this._p92 || 0) < 50) return; this._p92 = now;
     const warp = this.auto ? (this.warpEff || 1) : 1, v = Math.abs(s.speed) * warp;
@@ -19236,7 +19234,7 @@ body:has(#shud92.on) #mw88{bottom:182px}`;
     const W = this.W[this.wsel], di = this.auto && Aircraft.dest ? Aircraft.destInfo() : null;
     st.textContent = di ? `⚓ 자동 항해 → ${Aircraft.dest.name} · ${di.km < 10 ? di.km.toFixed(1) : Math.round(di.km)}km · [ ] 배속 · O 끄기` : `W/S 엔진 · A/D 방향타 · Space 제동 · Shift 부스터 · ${this.wsel + 1} ${W.short || W.name} · F 내리기`;
   };
-  const ex0 = Ship.exit; Ship.exit = function () { show(false); return ex0.apply(this, arguments); };
+  const ex0 = Ship.exit; Ship.exit = function () { show(false); this._acHid = false; return ex0.apply(this, arguments); };
   // 전함·비행정·말에 타면 왼쪽 아래 'm/s' 사람 속도 줄은 숨김(계기판과 겹침)
   setInterval(() => { const t = document.getElementById('speedText'); if (!t) return; const veh = (typeof Ship !== 'undefined' && Ship.cur) || (typeof Aircraft !== 'undefined' && Aircraft.cur) || (window.Veh92 && Veh92.cur); t.style.visibility = veh ? 'hidden' : ''; if (!Ship.cur) show(false); }, 200);
 }
@@ -19271,10 +19269,16 @@ body:has(#shud92.on) #mw88{bottom:182px}`;
 // ---------- ③ 화면 겹침: 안내 상자·경고·이름표가 일시정지/지도/발사 콘솔 위에 겹치던 것 ----------
 {
   const css = document.createElement('style');
-  css.textContent = `body:has(#pause:not([hidden])) #tutor,body:has(#atlasModal:not([hidden])) #tutor,body:has(#nkUi[style*="flex"]) #tutor,body:has(#ddUi:not([hidden])) #tutor,html.title #tutor{display:none!important}
-body:has(#atlasModal:not([hidden])) #mt88,body:has(#atlasModal:not([hidden])) #mw88,body:has(#atlasModal:not([hidden])) #vhp88,body:has(#atlasModal:not([hidden])) #wp88,body:has(#atlasModal:not([hidden])) #shud92{display:none!important}
-body:has(#pause:not([hidden])) #vhp88,body:has(#pause:not([hidden])) #wp88,body:has(#pause:not([hidden])) #shud92,body:has(#pause:not([hidden])) #lk88{display:none!important}
-body:has(#go92[style*="grid"]) #tutor{display:none!important}`;
+  css.textContent = `html.ps92 #tutor,html.at92 #tutor,html.nk92 #tutor,html.dd92 #tutor,html.title #tutor,html.go92 #tutor,
+html.at92 #mt88,html.at92 #mw88,html.at92 #vhp88,html.at92 #wp88,html.at92 #shud92,
+html.ps92 #vhp88,html.ps92 #wp88,html.ps92 #shud92,html.ps92 #lk88,html.ps92 #mt88,html.ps92 #mw88{display:none!important}`;
+  // 92차: 예전엔 body:has(…) 규칙이라 화면 글자 하나 바뀔 때마다 문서 전체 스타일을 다시 계산(전함 계기판 갱신 0.35초 멈칫) → 상태를 html 클래스로 0.15초마다 표시
+  const H = document.documentElement, st = (c, on) => { if (H.classList.contains(c) !== on) H.classList.toggle(c, on); };
+  setInterval(() => {
+    const g = id => document.getElementById(id);
+    const ps = g('pause'), at = g('atlasModal'), nk = g('nkUi'), dd = g('ddUi'), go = g('go92'), sh = g('shud92');
+    st('ps92', !!(ps && !ps.hidden)); st('at92', !!(at && !at.hidden)); st('nk92', !!nk); st('dd92', !!(dd && !dd.hidden)); st('go92', !!(go && go.style.display === 'grid')); st('ship92', !!(sh && sh.style.display === 'block'));
+  }, 150);
   document.head.appendChild(css);
 }
 
@@ -19911,6 +19915,103 @@ body:has(#go92[style*="grid"]) #tutor{display:none!important}`;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
 }
 
+// ---------- ⑬ 기차: K = 장갑 열차 부르기(근처 평지에 1.6km 직선 선로를 깔고 열차 배치) ----------
+// W/S 전진·후진(선로를 따라, 끝에서 멈춤) · Space 제동 · Shift 부스트 · 마우스 포탑 · 1 열차포 105mm · 2 기관총 · F 타기·내리기 · 들이받으면 거인 피해
+{
+  const V = Veh92;
+  const TRAIN_W = [{ id: 't120', name: '열차포 105mm', short: '열차포 105mm', ammo: 60, max: 60, cd: 1.8, rl: 10 }, { id: 'tmg', name: '열차 기관총 12.7mm', short: '기관총', ammo: 1200, max: 1200, cd: 0.06, auto: true, rl: 6 }];
+  V.findLine = function (c) {
+    // 방향 24개 × 옆으로 3줄: 플레이어 옆 지점에서 양쪽으로 16m씩 나아가며 물·급경사·건물에 막히기 전까지가 쓸 수 있는 구간 → 가장 긴 것(300m 이상)
+    const ok = (x, z, py) => { if (World.waterLevel(x, z) !== null) return null; const y = Arms.floor(x, z); if (py !== null && Math.abs(y - py) > 4) return null; if (Arms.solid(new THREE.Vector3(x, y + 2.5, z))) return null; return y; };
+    let best = null;
+    for (let i = 0; i < 24; i++) for (const off of [16, 34, 56]) {
+      const a = i / 24 * Math.PI, dx = Math.cos(a), dz = Math.sin(a), ox = c.x - dz * off, oz = c.z + dx * off;
+      const y0 = ok(ox, oz, null); if (y0 === null) continue;
+      let A = 0, B = 0, py = y0; for (let s = 16; s <= 800; s += 16) { const y = ok(ox + dx * s, oz + dz * s, py); if (y === null) break; py = y; A = s; }
+      py = y0; for (let s = 16; s <= 800; s += 16) { const y = ok(ox - dx * s, oz - dz * s, py); if (y === null) break; py = y; B = s; }
+      const len = A + B; if (!best || len > best.len) best = { len, ox: ox + dx * (A - B) / 2, oz: oz + dz * (A - B) / 2, dx, dz, half: len / 2 };
+      if (best.len >= 1400) return best;
+    }
+    return best && best.len >= 300 ? best : null;
+  };
+  V.buildRails = function (L) {
+    if (V.rails) { World.scene.remove(V.rails); V.rails = null; }
+    const g = new THREE.Group(), m = M2(), N = Math.floor(L.half * 2 / 2.2) + 1, sl = new THREE.InstancedMesh(new THREE.BoxGeometry(3.2, 0.22, 0.5), m.wood, N), M4 = new THREE.Matrix4(), Q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(L.dx, L.dz)), S1 = new THREE.Vector3(1, 1, 1), P = new THREE.Vector3();
+    for (let i = 0; i < N; i++) { const s = -L.half + i * 2.2, x = L.ox + L.dx * s, z = L.oz + L.dz * s; P.set(x, Arms.floor(x, z) + 0.12, z); M4.compose(P, Q, S1); sl.setMatrixAt(i, M4); }
+    const R = Math.floor(L.half * 2 / 20), rl = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.2, 20.2), m.rail, R * 2); let k = 0;
+    for (const sx of [-0.78, 0.78]) for (let i = 0; i < R; i++) { const s = -L.half + i * 20 + 10, x = L.ox + L.dx * s + L.dz * sx, z = L.oz + L.dz * s - L.dx * sx; P.set(x, Arms.floor(x, z) + 0.33, z); M4.compose(P, Q, S1); rl.setMatrixAt(k++, M4); }
+    sl.receiveShadow = rl.receiveShadow = true; g.add(sl, rl); World.scene.add(g); V.rails = g;
+  };
+  const M2 = () => V._m2 || (V._m2 = { wood: new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 0.95 }), rail: new THREE.MeshStandardMaterial({ color: 0x8a8f94, roughness: 0.35, metalness: 0.85 }) });
+  V.makeTrain = function () {
+    const m = (V._m || (V._m = null)), g = new THREE.Group(), cars = [];
+    const mat = { olive: new THREE.MeshStandardMaterial({ color: 0x4f5a3a, roughness: 0.85, metalness: 0.2 }), dark: new THREE.MeshStandardMaterial({ color: 0x23262a, roughness: 0.8, metalness: 0.4 }), steel: new THREE.MeshStandardMaterial({ color: 0x4a4e52, roughness: 0.5, metalness: 0.7 }), green: new THREE.MeshStandardMaterial({ color: 0x2f4a3a, roughness: 0.8 }), lamp: new THREE.MeshBasicMaterial({ color: 0xfff1b0 }) };
+    const box = (p, w, h, d, mt, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mt); o.position.set(x, y, z); o.castShadow = true; p.add(o); return o; };
+    const cyl = (p, r1, r2, h, mt, x, y, z, rx = 0, rz = 0, n = 14) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, n), mt); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); o.castShadow = true; p.add(o); return o; };
+    let tur = null, gun = null;
+    for (let i = 0; i < 3; i++) {
+      const c = new THREE.Group(); c.position.z = (i - 1) * 13; g.add(c); cars.push(c);
+      for (const s of [-1, 1]) for (const z of [-3.6, -2.4, 2.4, 3.6]) cyl(c, 0.5, 0.5, 0.3, mat.dark, s * 0.78, 0.55, z, 0, Math.PI / 2, 10);
+      box(c, 2.9, 0.4, 12, mat.dark, 0, 1.1, 0);
+      if (i === 0) { cyl(c, 1.3, 1.3, 7.5, mat.olive, 0, 2.6, -1.2, Math.PI / 2); box(c, 3.0, 3.0, 3.4, mat.olive, 0, 3.0, 3.8); cyl(c, 0.42, 0.58, 1.7, mat.dark, 0, 4.4, -3.8); box(c, 3.1, 1.5, 12.2, mat.olive, 0, 1.75, 0); cyl(c, 0.3, 0.3, 0.2, mat.lamp, 0, 2.8, -6.1, Math.PI / 2); box(c, 0.05, 0.5, 4, mat.green, 1.56, 2.2, 0); box(c, 0.05, 0.5, 4, mat.green, -1.56, 2.2, 0); }
+      else { box(c, 3.0, 2.4, 11.6, mat.olive, 0, 2.5, 0); box(c, 2.7, 0.5, 11, mat.dark, 0, 3.9, 0); if (i === 1) { tur = new THREE.Group(); tur.position.set(0, 4.2, 0); c.add(tur); cyl(tur, 1.4, 1.6, 1.3, mat.olive, 0, 0.6, 0, 0, 0, 16); gun = new THREE.Group(); gun.position.set(0, 0.7, -1.4); tur.add(gun); cyl(gun, 0.16, 0.2, 4.6, mat.steel, 0, 0, -2.3, Math.PI / 2, 0, 10); cyl(gun, 0.08, 0.08, 1.3, mat.dark, 0.6, 0.2, -0.6, Math.PI / 2, 0, 6); } }
+    }
+    return { kind: 'train', root: g, cars, tur, gun, max: 30, boost: 42, turn: 0, hp: 4000, maxHp: 4000, W: TRAIN_W.map(w => Object.assign({}, w)), len: 20, wid: 2, camH: 9, camD: 34, s: 0, cd: {} };
+  };
+  V.spawnTrain = function () {
+    const c = Player.pos, L = this.findLine(c); if (!L) { Game.toast('근처에 선로를 깔 평지가 없습니다 · 넓은 땅에서 다시', '#cfd8e6'); return; }
+    this.list = this.list.filter(v => { if (v.kind === 'train') { World.scene.remove(v.root); return false; } return true; });
+    this.buildRails(L); const v = this.makeTrain(); v.line = L; v.yaw = Math.atan2(-L.dx, -L.dz);
+    const s0 = Math.max(-L.half + 30, Math.min(L.half - 30, (c.x - L.ox) * L.dx + (c.z - L.oz) * L.dz)); v.s = s0; v.speed = 0; World.scene.add(v.root); this.list.push(v); this.placeTrain(v);
+    Game.toast(`장갑 열차 도착 · 선로 ${Math.round(L.half * 2)}m · F 탑승`, '#9fe0b0');
+  };
+  V.placeTrain = function (v) {
+    const L = v.line, x = L.ox + L.dx * v.s, z = L.oz + L.dz * v.s; v.root.position.set(x, Arms.floor(x, z) + 0.15, z); v.root.rotation.set(0, v.yaw, 0);
+    v.root.updateMatrixWorld(true); const W = new THREE.Vector3();
+    for (const c of v.cars) { c.getWorldPosition(W); c.position.y = Arms.floor(W.x, W.z) + 0.15 - v.root.position.y; }
+  };
+  V.trainStep = function (v, dt, ctl, k) {
+    for (const id in v.cd) v.cd[id] = Math.max(0, v.cd[id] - dt);
+    if (ctl) {
+      const boost = (k.ShiftLeft || k.ShiftRight) && !k.Space, mx = boost ? v.boost : v.max;
+      if (k.Space) v.speed *= Math.max(0, 1 - dt * 3); else if (k.KeyW) v.speed = Math.min(mx, v.speed + dt * (boost ? 6 : 3.5)); else if (k.KeyS) v.speed = Math.max(-v.max * 0.5, v.speed - dt * (v.speed > 0 ? 8 : 3)); else v.speed *= Math.max(0, 1 - dt * 0.25);
+      if (this.trigger && this.W[this.wsel].auto) this.fire();
+    } else v.speed *= Math.max(0, 1 - dt * 0.6);
+    const L = v.line, lim = L.half - 22; v.s += v.speed * dt;   // 열차 앞(-z) = 선로 + 방향
+    if (v.s < -lim || v.s > lim) { v.s = Math.max(-lim, Math.min(lim, v.s)); if (Math.abs(v.speed) > 3 && ctl) { Effects.shake(0.5); Game.toast('선로 끝 · 정지', '#ffb347'); } v.speed = 0; }
+    this.placeTrain(v);
+    const p = v.root.position, fx = -Math.sin(v.yaw), fz = -Math.cos(v.yaw);
+    if (Math.abs(v.speed) > 6) for (const T of Titans.list) { if (T.dead || (T._ram92 || 0) > performance.now()) continue; const dx = T.pos.x - p.x, dz = T.pos.z - p.z, along = dx * fx + dz * fz, side = Math.abs(dx * fz - dz * fx); if (Math.abs(along) < v.len + 1.2 * T.scale && side < 2 + 1.3 * T.scale) { T._ram92 = performance.now() + 900; Titans.strike(T, { source: 'player', speed: Math.abs(v.speed) * 3.5, mul: 2.6 }); T.stunT = Math.max(T.stunT || 0, 2); Effects.shake(0.5); if (typeof Sound !== 'undefined') Sound.play('punch', T.pos, 1.3, 90); } }
+    if (Math.abs(v.speed) > 4 && Math.random() < 0.6) { const ch = new THREE.Vector3(0, 4.6, -3.8).applyMatrix4(v.cars[0].matrixWorld); Arms.smoke.emit(ch, new THREE.Vector3(Effects.rand(1), 4 + Math.abs(v.speed) * 0.1, Effects.rand(1)), 2.5, 1.5, 4); }
+    if (v.tur) { const want = ctl ? Math.atan2(Math.sin(Player.yaw - v.yaw), Math.cos(Player.yaw - v.yaw)) : v.tur.rotation.y, d = Math.atan2(Math.sin(want - v.tur.rotation.y), Math.cos(want - v.tur.rotation.y)); v.tur.rotation.y += Math.max(-1.8 * dt, Math.min(1.8 * dt, d)); if (ctl) v.gun.rotation.x = Math.max(-0.15, Math.min(0.5, Player.pitch + 0.1)); v.recoil = Math.max(0, (v.recoil || 0) - dt * 3); v.gun.position.z = -1.4 + (v.recoil || 0) * 0.5; }
+    if (ctl) { Player.pos.copy(p).setY(p.y + 4); Player.vel.set(fx * v.speed, 0, fz * v.speed); Player.onGround = true; }
+  };
+  // 기존 탈것 처리에 기차를 끼움: 포구(포신이 있으면 포신) · 매 프레임 이동 · 무기판 제목
+  const mz0 = V.muzzle; V.muzzle = function () { const v = this.cur; if (v && v.kind === 'train') { v.root.updateMatrixWorld(true); return new THREE.Vector3(0, 0, -4.8).applyMatrix4(v.gun.matrixWorld); } return mz0.call(this); };
+  const vu0 = V.update;
+  V.update = function (dt) {
+    const k = Player.keys || {}, trains = this.list.filter(v => v.kind === 'train');
+    for (const v of trains) if (!v.dead) this.trainStep(v, dt, v === this.cur, k);
+    const saved = this.list, cur = this.cur; this.list = saved.filter(v => v.kind !== 'train'); if (cur && cur.kind === 'train') this.cur = null;
+    try { vu0.call(this, dt); } finally { this.list = saved; this.cur = cur; }
+    if (this.cur && this.cur.kind === 'train') { Arms.tickReload(this.W, dt); for (const x of this.W) x.tip = x.id === 't120' ? '조준점에 정확히 탄도' : '누르고 있기'; Arms.panel(this.W, this.wsel, 'W/S 전진·후진 · 마우스 포탑 · 클릭 발사 · Space 제동 · Shift 부스트 · F 내리기', `장갑 열차 · ${Math.round(Math.abs(this.cur.speed) * 3.6)} km/h · 체력 ${Math.round(this.cur.hp)}`); }
+  };
+  const bd0 = V.board; V.board = function (v) { const r = bd0.call(this, v); if (v.kind === 'train') Game.toast('장갑 열차 · W/S 전진·후진 · 마우스 포탑 · 1 열차포 · 2 기관총 · Space 제동 · Shift 부스트 · F 내리기', '#9fe0b0'); return r; };
+  const nr0 = V.near; V.near = function () { const b = nr0.call(this); if (b) return b; for (const v of this.list) { if (v.kind !== 'train' || v.dead) continue; for (const c of v.cars) { const w = c.getWorldPosition(new THREE.Vector3()); if (w.distanceTo(Player.pos) < 9) return v; } } return null; };
+  const ex0 = V.exit; V.exit = function () { const v = this.cur; const r = ex0.call(this); if (v && v.kind === 'train') { Player.pos.y = Arms.floor(Player.pos.x, Player.pos.z) + 0.2; } return r; };
+  addEventListener('keydown', e => { if (e.code !== 'KeyK' || e.repeat || typeof Game === 'undefined' || !Game.running || V.cur) return; const busy = Shifter.active || (typeof Ship !== 'undefined' && Ship.cur) || (typeof Aircraft !== 'undefined' && Aircraft.cur) || (typeof Nuke !== 'undefined' && Nuke.inBunker); if (!busy) V.spawnTrain(); }, true);
+  const wi0 = World.init; World.init = function (...a) { V.rails = null; return wi0.apply(this, a); };
+}
+
+// ---------- ⑭ 처음 탈 때 멈칫 방지: 계기판·무기판이 쓰는 글꼴 굵기(한글 600~900·Inter)를 시작할 때 미리 불러 둠 ----------
+// (전함에 처음 탈 때 0.2초 멈칫 — 처음 쓰는 굵은 한글 글꼴을 그 순간 읽고 그려서. 셰이더 미리 준비는 효과가 없어 뺌)
+{
+  const warm = () => { const d = document.createElement('div'); d.setAttribute('aria-hidden', 'true'); d.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;white-space:nowrap';
+    d.innerHTML = [500, 600, 700, 800, 900].map(w => `<span style="font:${w} 13px 'Noto Sans KR'">전함 선체 속도 노트 부스터 무기 재장전 방위 타각 정지 전속 후진 주포 다연장 로켓 가나다라마바사 0123456789</span><span style="font:${w} 13px Inter">0123456789 KNOTS BOOST BRAKE AUTO km/h</span>`).join('');
+    document.body.appendChild(d); if (document.fonts && document.fonts.load) for (const w of [500, 600, 700, 800, 900]) { document.fonts.load(`${w} 13px "Noto Sans KR"`, '전함가'); document.fonts.load(`${w} 13px Inter`, 'K0'); } };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', warm); else warm();
+}
+
 </script>
 <script>
 // ===== 92차-3: 소리 전면 개편 (강병현 지시: 부스터·입체기동 소리 구분, 품질↑, 강약·겹침 정리, 너무 크지 않게, 고증) =====
@@ -20070,6 +20171,101 @@ body:has(#go92[style*="grid"]) #tutor{display:none!important}`;
   };
   // 효과음 설정(켜기/작게/끄기)이 새 크기 기준을 따르게
   if (S.master && S.ctx) S.master.gain.value = S.vol * 0.62;
+}
+
+</script>
+<script>
+// ===== 92차: 게임 설명 (시작 화면 '게임 설명' · 일시정지 '📖 게임 설명' · F1) =====
+// ★ 업데이트 규칙: 기능을 추가·삭제·변경하면 아래 GUIDE 목록만 고치면 메뉴에 그대로 반영됩니다.
+//   무기 목록(비행정·전함·전차·열차·발사차량)과 9거인 스킬은 게임 데이터에서 직접 읽어 와서, 무기·스킬을 바꾸면 설명도 자동으로 바뀝니다.
+//   항목 형식: [키(없으면 ''), 설명]. 섹션: { id, icon, title, intro, items, live(선택: 게임 데이터에서 항목을 만드는 함수) }
+const Guide = {
+  VERSION: '92차 · 2026-11-17',
+  GUIDE: [
+    { id: 'start', icon: '🏁', title: '시작하기', intro: '거인이 몰려오는 성벽의 세계. 입체기동으로 날아올라 목덜미를 베고, 위기에는 9거인으로 변신합니다. 전함·비행정·전차·열차·핵 기지까지 모두 직접 조종할 수 있습니다.', items: [
+      ['출격', '자유 모드로 시작 (장소는 세계 지도·들판에서 이동)'], ['훈련으로 출격', '피해 없음 · 거인화 게이지 가득 · 표적 거인 소환'], ['3인칭 · 1인칭', '시작 화면 또는 V · 휠로 언제든 바꿈'],
+      ['모드 변경', '일시정지 → 자유 ↔ 스토리(장 선택)'], ['이어하기', '시작 화면에 마지막 장소·위치에서 이어서 시작'], ['Esc', '일시정지 · 설정 · 이 설명']] },
+    { id: 'odm', icon: '🧭', title: '입체기동', intro: '와이어를 건물·성벽·나무·거인에 걸고 감아 날아다닙니다.', items: [
+      ['W A S D', '이동 (공중에서 W = 진행 방향 바꾸기)'], ['우클릭 (누르고 있기)', '양손 와이어 걸기 · 떼면 해제'], ['Space', '점프 · 와이어 빨리 감기'], ['Shift', '달리기 · 공중 가스 분사(부스트)'],
+      ['Q', '회피'], ['V · 휠', '1인칭 · 3인칭'], ['속도', '빠를수록 베기 위력·즉사 확률이 올라감 · 화면 가장자리 속도선']] },
+    { id: 'attack', icon: '⚔️', title: '공격 · 원작 장비', intro: '거인은 목덜미를 베어야 쓰러집니다.', items: [
+      ['좌클릭', '베기 · 목덜미 근처면 돌진 베기 · 빠르게 날며 베면 회전 베기'], ['X', '뇌창 · 거인에 박힌 뒤 1초 뒤 폭발 · 목덜미면 즉사 · 6발(15초마다 1발 보충)'],
+      ['Z', '신호탄 · 초록 → 빨강 → 검정 → 노랑 연기'], ['R', '동료 명령 바꾸기'], ['마레 병기', '칼로도 전차·열차·기구를 벨 수 있음']] },
+    { id: 'titan', icon: '🦾', title: '9거인 변신', intro: '게이지가 차면 고른 거인으로 변신합니다. 처치할 때마다 변신 시간이 늘어납니다.', items: [
+      ['1 ~ 9 (사람일 때)', '변신할 거인 고르기'], ['T', '변신 (게이지 약 12초면 가득 · 처치하면 더 빨리)'], ['1 2 3 (거인일 때)', '거인 스킬'], ['좌클릭 · 우클릭', '연타 · 강타'],
+      ['Q', '대시'], ['E', '해제 (게이지 35%부터 다시 참)'], ['휠', '카메라 거리']],
+      live: () => typeof Shifter === 'undefined' || !Shifter.skills ? [] : Object.keys(Shifter.skills).map(k => [(typeof Nine !== 'undefined' && Nine.defs[k] && Nine.defs[k].name) || k, Shifter.skills[k].map((s, i) => `${i + 1} ${s[0]}(${s[1]}초)`).join(' · ') + (Shifter.stats[k] ? ` · 체력 ${Shifter.stats[k].hp} · 지속 ${Shifter.stats[k].dur}초` : '')]) },
+    { id: 'horse', icon: '🐎', title: '말', items: [['H', '말 부르기 · 타기 · 내리기'], ['Shift', '질주']] },
+    { id: 'air', icon: '✈️', title: '비행정', intro: '하늘에서 날아와 와이어로 끌어올려 태워 줍니다.', items: [
+      ['P (땅 위)', '비행정 부르기'], ['F', '가까이서 타기 · 내리기'], ['W S', '추력 올리기 · 내리기(브레이크)'], ['마우스 · A D', '방향'], ['Shift', '부스트'],
+      ['L', '고도 고정 (무기를 겨눠도 일정 고도) · PgUp/PgDn 높이'], ['클릭 · 우클릭 · 휠', '발사 · 조준경 · 배율'], ['O · [ ]', '자동 운항(지도에서 목적지) · 배속']],
+      live: () => typeof Aircraft === 'undefined' || !Aircraft.W ? [] : Aircraft.W.map((w, i) => [`${i + 1}`, `${w.name}${w.max ? ` · ${w.max}발` : ''}${w.lock ? ' · 락온' : ''}`]) },
+    { id: 'ship', icon: '🚢', title: '전함', intro: '최고 87노트 · 체력 3000. 계기판: 엔진 단계·속도·방위·타각·부스터.', items: [
+      ['P (물속)', '전함 부르기'], ['F', '타기 · 내리기'], ['W S', '엔진 단계 올리기 · 내리기 (전진 중 S = 빠른 감속)'], ['A D', '방향타 (멈춰 있어도 회전)'], ['Space', '비상 제동'],
+      ['Shift', '부스터 (게이지 소모)'], ['클릭 · 우클릭', '발사 · 조준경'], ['O · [ ]', '자동 항해 · 배속(최대 ×500)']],
+      live: () => typeof Ship === 'undefined' || !Ship.W ? [] : Ship.W.map((w, i) => [`${i + 1}`, `${w.name}${w.max ? ` · ${w.max}발` : ''}${w.lock ? ' · 락온' : ''}`]) },
+    { id: 'land', icon: '🛡️', title: '전차 · 발사차량 · 열차', intro: '땅 위에서 부르면 바로 옵니다. 타고 있을 때 받는 피해는 차량 체력이 받습니다.', items: [
+      ['B', '전차 부르기 · 마우스 포탑 · 1 주포 2 기관총 · 거인 들이받기'], ['N', 'ICBM 이동식 발사차량 · 1 재래식 탄도미사일 · 2 핵 탄도미사일(조준점에 핵 낙하)'],
+      ['K', '장갑 열차 · 근처 평지에 직선 선로를 깔고 배치 · W/S 전진·후진'], ['F', '타기 · 내리기'], ['W S A D', '주행 · 회전'], ['Space · Shift', '제동 · 부스트'], ['휠', '카메라 거리']] },
+    { id: 'cannon', icon: '💣', title: '대포', items: [['F (포신 옆 6m)', '성벽 대포·해안 포대 등에 타기'], ['마우스 · 클릭', '360° 조준 · 발사(조준점에 정확히 떨어지는 탄도)'], ['휠', '확대 · 축소']] },
+    { id: 'nuke', icon: '☢️', title: '핵 기지 · ICBM', intro: '모든 장소에 있는 지하 150m 미사일 기지. 보안 절차를 거쳐 발사합니다.', items: [
+      ['입구 경비 초소', '출입 카드 받기 → 엘리베이터(F)'], ['보안 문 1 · 2', '카드 단말기 · 손바닥 인식'], ['통제실 봉투', '인증 코드 확인'], ['주 콘솔(F)', '사일로 선택 → 지도에서 표적 클릭 → 코드 입력 → 2초 눌러 무장'],
+      ['발사 키 A · B', '양쪽 키를 5초 안에 돌린 뒤 주 콘솔에서 F 길게 = 발사'], ['비상 전화', '전 세계 지도자 호출 → 종말의 날 연출'], ['연출 중', '마우스로 시점 돌리기 · 휠 확대 · 가운데 클릭 원위치'], ['황폐화 지우기', '일시정지 빠른 버튼']] },
+    { id: 'marley', icon: '🎯', title: '마레군', items: [['전차 · 기구 · 장갑 열차 · 비행선 · 군함', '나와 탈것을 공격 · 빨간 원 = 포탄 떨어질 곳'], ['설정 → 전투 → 마레군', '끄기 · 적게 · 보통 · 많게']] },
+    { id: 'world', icon: '🌦️', title: '날씨 · 시간', items: [['날씨', '자동 · 맑음 · 비 · 폭풍우(먹구름·강풍·번개·천둥)'], ['시간', '흐름(20분에 하루) · 새벽 · 아침 · 낮 · 오후 · 저녁 · 밤']] },
+    { id: 'map', icon: '🗺️', title: '지도 · 이동', items: [['M', '미니맵 160m → 800m → 4km → 20km → 세계 지도 (M·Esc 닫기)'], ['세계 지도', '장소 클릭 = 빠른 이동 · 섬 아무 곳 = 들판'], ['G', '들판에서 가까운 장소로 들어가기'], ['장소 경계', '걸어서·타고 나가면 실제 크기 들판으로 이어짐']] },
+    { id: 'online', icon: '🌐', title: '친구와 같이 (온라인)', intro: '일시정지 → 🌐 친구와 같이. 공개 중개 서버(PeerJS)를 거쳐 기기끼리 직접 연결됩니다.', items: [
+      ['방 만들기', '5자리 코드를 친구에게 알려 주기'], ['참가', '친구 코드 입력'], ['Y', '채팅'], ['함께 보이는 것', '같은 장소의 친구 모습 · 이름표 · 폭발'], ['따로 움직이는 것', '거인 · 마레군은 각자 화면']] },
+    { id: 'etc', icon: '⚙️', title: '설정 · 기타', items: [
+      ['일시정지 탭', '전투 · 세계 · 화면 · 조작 · 소리 · 조작법'], ['화질', '균형(자동 조절) · 노트북 안정 · 고화질'], ['프레임 제한', '자동 · 제한 안 함 · 60 · 30'], ['F3', '성능 표시'],
+      ['끼임 탈출', '몇 초 전 안전한 자리로'], ['저장', '시작 화면 설정 → 기타 → 내보내기 · 가져오기 · 초기화']] },
+  ],
+  open(from) {
+    this.css(); let m = document.getElementById('guide92');
+    if (!m) {
+      m = document.createElement('div'); m.id = 'guide92'; document.body.appendChild(m);
+      m.innerHTML = `<div class="gb"><div class="gh"><div><small>GAME GUIDE · ${this.VERSION}</small><h2>게임 설명</h2></div><input class="gs" placeholder="찾기 (예: 핵, 부스터, 뇌창)"><button type="button" class="gx">닫기 (Esc)</button></div><div class="gm"><nav></nav><div class="gc"></div></div></div>`;
+      m.querySelector('.gx').onclick = () => this.close(); m.addEventListener('click', e => { if (e.target === m) this.close(); });
+      const s = m.querySelector('.gs'); s.addEventListener('input', () => this.render(s.value)); s.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') this.close(); });
+      m.querySelector('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; this.sel = b.dataset.id; s.value = ''; this.render(''); });
+      addEventListener('keydown', e => { if (e.key === 'Escape' && m.style.display === 'grid') { e.stopImmediatePropagation(); e.preventDefault(); this.close(); } }, true);
+    }
+    this.sel = this.sel || 'start'; this.from = from; m.style.display = 'grid'; this.render(''); try { document.exitPointerLock(); } catch (e) {}
+  },
+  close() { const m = document.getElementById('guide92'); if (m) m.style.display = 'none'; },
+  items(sec) { let L = sec.items.slice(); try { if (sec.live) { const x = sec.live(); if (x.length) L = L.concat([['—', sec.id === 'titan' ? '9거인별 스킬' : '무기 (지금 게임 데이터)']], x); } } catch (e) {} return L; },
+  render(q) {
+    const m = document.getElementById('guide92'); if (!m) return; q = (q || '').trim();
+    m.querySelector('nav').innerHTML = this.GUIDE.map(s => `<button type="button" data-id="${s.id}" class="${!q && s.id === this.sel ? 'on' : ''}"><span>${s.icon}</span>${s.title}</button>`).join('');
+    const esc = t => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const sec = s => `<section><h3>${s.icon} ${s.title}</h3>${s.intro ? `<p class="gi">${esc(s.intro)}</p>` : ''}<div class="gl">${this.items(s).filter(([k, d]) => !q || (k + ' ' + d + ' ' + s.title).includes(q)).map(([k, d]) => k === '—' ? `<div class="gsub">${esc(d)}</div>` : `<div class="gr"><b>${esc(k)}</b><span>${esc(d)}</span></div>`).join('')}</div></section>`;
+    const list = q ? this.GUIDE.filter(s => this.items(s).some(([k, d]) => (k + ' ' + d + ' ' + s.title).includes(q))) : this.GUIDE.filter(s => s.id === this.sel);
+    m.querySelector('.gc').innerHTML = list.length ? list.map(sec).join('') : `<p class="gi">'${esc(q)}'에 맞는 설명이 없습니다.</p>`;
+    m.querySelector('.gc').scrollTop = 0;
+  },
+  css() {
+    if (this._css) return; this._css = true; const st = document.createElement('style');
+    st.textContent = `#guide92{position:fixed;inset:0;z-index:90;display:none;place-items:center;background:rgba(0,0,0,.6)}#guide92 .gb{width:min(1080px,95vw);height:min(820px,92vh);display:flex;flex-direction:column;border-radius:18px;background:linear-gradient(180deg,#121823,#0a0e15);border:1px solid rgba(255,255,255,.1);color:#e6eef4;font:600 13.5px 'Noto Sans KR',sans-serif;overflow:hidden}
+#guide92 .gh{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid rgba(255,255,255,.08)}#guide92 .gh small{color:#8fa2b2;letter-spacing:2px;font:800 10px 'Inter',sans-serif}#guide92 h2{margin:2px 0 0;font:900 26px 'Noto Sans KR'}
+#guide92 .gs{flex:1;max-width:340px;margin-left:auto;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:#0b1118;color:#fff;font:600 13px 'Noto Sans KR'}#guide92 .gx{padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.05);color:#e6eef4;font:800 12.5px 'Noto Sans KR';cursor:pointer}
+#guide92 .gm{flex:1;min-height:0;display:grid;grid-template-columns:200px minmax(0,1fr)}#guide92 nav{overflow:auto;padding:12px;border-right:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:3px}
+#guide92 nav button{all:unset;cursor:pointer;display:flex;gap:9px;align-items:center;padding:9px 11px;border-radius:9px;font:800 13px 'Noto Sans KR';color:#a9b7c3}#guide92 nav button:hover{background:rgba(255,255,255,.05);color:#fff}#guide92 nav button.on{background:linear-gradient(90deg,rgba(255,210,122,.18),rgba(255,210,122,.04));color:#ffd27a;box-shadow:inset 3px 0 0 #ffd27a}
+#guide92 .gc{overflow:auto;padding:18px 24px}#guide92 h3{margin:4px 0 8px;font:900 19px 'Noto Sans KR';color:#ffd27a}#guide92 .gi{margin:0 0 12px;color:#b9c8d4;line-height:1.6}#guide92 section{margin-bottom:22px}
+#guide92 .gr{display:grid;grid-template-columns:minmax(120px,200px) 1fr;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06)}#guide92 .gr b{color:#fff;font:800 12.5px 'Noto Sans KR';background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:7px;padding:4px 8px;align-self:start;width:fit-content}#guide92 .gr span{color:#d6e2ea;line-height:1.55}
+#guide92 .gsub{margin:14px 0 4px;font:900 11px 'Inter','Noto Sans KR';letter-spacing:1.5px;color:#8fd0ff}
+@media (max-width:760px){#guide92 .gm{grid-template-columns:1fr}#guide92 nav{flex-direction:row;overflow:auto;border-right:0}#guide92 .gr{grid-template-columns:1fr}}`;
+    document.head.appendChild(st);
+  },
+};
+// 버튼: 시작 화면 메뉴 · 일시정지 빠른 버튼 · F1
+{
+  const add = () => {
+    const nav = document.querySelector('#overlay nav.links'); if (nav && !nav.querySelector('.guide92b')) { const b = document.createElement('button'); b.type = 'button'; b.className = 'guide92b'; b.textContent = '게임 설명'; b.onclick = e => { e.stopPropagation(); Guide.open('title'); }; nav.insertBefore(b, nav.firstChild); }
+    const ch = document.querySelector('#pause .c92'); if (ch && !ch.querySelector('.guide92b')) { const b = document.createElement('button'); b.type = 'button'; b.className = 'guide92b'; b.textContent = '📖 게임 설명'; b.onclick = () => Guide.open('pause'); ch.insertBefore(b, ch.firstChild); }
+  };
+  const go = () => { add(); setInterval(add, 800); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  addEventListener('keydown', e => { if (e.code === 'F1') { e.preventDefault(); const m = document.getElementById('guide92'); if (m && m.style.display === 'grid') Guide.close(); else { if (typeof Game !== 'undefined' && Game.running && typeof setPaused === 'function') setPaused(true); Guide.open('key'); } } });
 }
 
 </script>
