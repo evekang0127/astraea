@@ -20308,6 +20308,144 @@ html.ps92 #ws92,html.cine92 #ws92,html.at92 #ws92,html.title #ws92{display:none!
   };
 }
 
+// ---------- ⑱ 온라인 2판 (강병현: 친구가 안 보이고 실시간 상호작용이 없다 · 미니맵에 친구 위치) ----------
+// 원인: 들판(1:1 세계)은 컴퓨터마다 시작 지점을 원점으로 써서, 같은 곳에 있어도 좌표가 달라 친구가 엉뚱한 곳(또는 안 보이는 곳)에 그려졌음
+// 고침: 세계 공통 좌표(km)로 주고받음 → 장소 이름이 달라도 실제로 가까우면 보임
+// 실시간 상호작용: 방장 기준으로 거인을 함께 씀(참가자 화면의 거인 = 방장 거인), 참가자가 베면 방장 쪽 거인이 맞고 쓰러짐, 신호탄·폭발 공유, 미니맵에 친구(초록 점·이름)
+// 연결: 방화벽·공유기 뒤에서도 이어지게 중계(TURN) 서버를 함께 지정
+{
+  const N = Net92, ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }, { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' }] };
+  const PREFIX = 'astraea92-room-';
+  const G = (x, z) => { try { const [a, b] = Nuke.kmOf(x, z); return [Math.round(a * 10000) / 10, Math.round(b * 10000) / 10]; } catch (e) { return [x, z]; } };   // 세계 좌표(m)
+  const Lc = (gx, gz) => { try { return Nuke.sceneOf(gx / 1000, gz / 1000); } catch (e) { return [gx, gz]; } };          // 내 장소 좌표
+  N.create = async function () {
+    await this.load(); this.leave(true); this.host = true; this.code = this.mkCode();
+    this.peer = new Peer(PREFIX + this.code, { config: ICE }); this.id = PREFIX + this.code;
+    this.peer.on('open', id => { this.id = id; this.ready = true; this.say(`방을 만들었습니다 · 코드 ${this.code} · 친구에게 알려 주세요`); });
+    this.peer.on('connection', c => this.wire(c));
+    this.peer.on('error', e => this.say('연결 오류: ' + (e.type || e.message), '#ff6a5a'));
+  };
+  N.join = async function (code) {
+    code = String(code || '').trim().toUpperCase(); if (!code) return; await this.load(); this.leave(true); this.host = false; this.code = code;
+    this.peer = new Peer({ config: ICE });
+    this.peer.on('open', id => { this.id = id; this.ready = true; const c = this.peer.connect(PREFIX + code, { reliable: true }); this.wire(c); setTimeout(() => { if (!this.conns.size && this.peer) this.say('친구에게 닿지 않습니다 · 코드 확인 또는 두 사람 모두 새로고침(Ctrl+F5)', '#ffb347'); }, 12000); });
+    this.peer.on('error', e => this.say(e.type === 'peer-unavailable' ? '그 코드의 방이 없습니다' : '연결 오류: ' + (e.type || e.message), '#ff6a5a'));
+  };
+  // 상태: 세계 좌표로
+  N.mirror = false; N.lastTi = 0; N.mir = new Map(); N.tid = 0;
+  const recv0 = N.recv;
+  N.recv = function (raw, c) {
+    let m; try { m = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return; } if (!m || !m.t) return;
+    if (m.t === 's' || m.t === 'hello' || m.t === 'chat' || m.t === 'boom') {
+      if (m.t === 'boom' && m.gx !== undefined) { if (this.host) for (const o of this.conns.values()) if (o !== c && o.open) try { o.send(JSON.stringify(m)); } catch (e) {} const [x, z] = Lc(m.gx, m.gz); if (Math.hypot(x - Player.pos.x, z - Player.pos.z) < 6000) { try { this._echo = true; Arms.boom(new THREE.Vector3(x, m.y, z), m.S, { noDmg: true }); } finally { this._echo = false; } } return; }
+      return recv0.call(this, raw, c);
+    }
+    if (this.host) for (const o of this.conns.values()) if (o !== c && o.open && m.t !== 'hit') try { o.send(JSON.stringify(m)); } catch (e) {}
+    if (m.t === 'ti' && !this.host) this.applyTitans(m.L);
+    else if (m.t === 'hit' && this.host) { const t = this.byId && this.byId.get(m.id); if (t && !t.dead) { try { this._hitIn = true; Titans.strike(t, Object.assign({ source: 'ally', speed: 40 }, m.o || {})); } finally { this._hitIn = false; } } }
+    else if (m.t === 'fx' && m.k === 'flare') { const [x, z] = Lc(m.gx, m.gz); if (Math.hypot(x - Player.pos.x, z - Player.pos.z) < 6000) Thunder92.flareAt(new THREE.Vector3(x, m.y, z), new THREE.Vector3(m.dx, m.dy, m.dz), m.col); }
+  };
+  // 내 상태 보내기(세계 좌표) · 친구 그리기 · 방장이면 거인 목록 보내기
+  N.update = function (dt) {
+    if (!this.peer) { if (this.mirror) this.endMirror(); return; }
+    this.t += dt; this.tt = (this.tt || 0) + dt;
+    if (this.t > 0.1 && this.conns.size) {
+      this.t = 0; const p = Player.pos, [gx, gz] = G(p.x, p.z), veh = (typeof Ship !== 'undefined' && Ship.cur) ? '전함' : (typeof Aircraft !== 'undefined' && Aircraft.cur) ? '비행정' : (window.Veh92 && Veh92.cur) ? ({ tank: '전차', tel: '발사차량', train: '열차' }[Veh92.cur.kind] || '탈것') : (typeof Horse !== 'undefined' && Horse.riding) ? '말' : '';
+      const sh = Shifter.active && Shifter.titan ? { k: Shifter.kind, h: Shifter.titan.height } : null, sp = Shifter.active && Shifter.titan ? Shifter.titan.pos : p, [sx, sz] = G(sp.x, sp.z);
+      this.send({ t: 's', n: this.name, gx: sh ? sx : gx, gz: sh ? sz : gz, y: +(sh ? sp.y : p.y).toFixed(2), yaw: +Player.yaw.toFixed(3), v: +Player.vel.length().toFixed(1), g: Player.onGround ? 1 : 0, veh, sh });
+    }
+    if (this.host && this.conns.size && this.tt > 0.15) {   // 방장: 거인 목록(최대 40)
+      this.tt = 0; this.byId = this.byId || new Map(); const L = [];
+      for (const t of Titans.list) { if (L.length >= 40) break; if (!t.root) continue; if (!t._nid) { t._nid = ++this.tid; } this.byId.set(t._nid, t); const [gx, gz] = G(t.pos.x, t.pos.z); L.push([t._nid, t.kind || '', gx, gz, +t.root.position.y.toFixed(2), +t.root.rotation.y.toFixed(3), +t.height.toFixed(2), t.dead ? 1 : 0, +(t.walk || 0).toFixed(2), t.gait ? +t.gait.toFixed(2) : 0]); }
+      for (const [id, t] of this.byId) if (!Titans.list.includes(t)) this.byId.delete(id);
+      this.send({ t: 'ti', L });
+    }
+    if (this.mirror && performance.now() - this.lastTi > 3000) this.endMirror();
+    // 친구 그리기
+    const now = performance.now(), V = this._v || (this._v = new THREE.Vector3());
+    for (const [id, o] of this.others) {
+      const s = o.s; if (now - o.last > 15000) { this.drop(id); continue; }
+      if (s.gx === undefined) { o.model.visible = false; o.tag.style.display = 'none'; continue; }
+      const [lx, lz] = Lc(s.gx, s.gz), d = Math.hypot(lx - Player.pos.x, lz - Player.pos.z); o.lx = lx; o.lz = lz;
+      const here = d < 4000; o.model.visible = here; if (!here) { o.tag.style.display = 'none'; continue; }
+      if (o.pos.lengthSq() === 0 || o.pos.distanceTo(V.set(lx, s.y, lz)) > 80) o.pos.set(lx, s.y, lz); else o.pos.lerp(V.set(lx, s.y, lz), Math.min(1, dt * 10));
+      o.yaw += Math.atan2(Math.sin(s.yaw - o.yaw), Math.cos(s.yaw - o.yaw)) * Math.min(1, dt * 10);
+      o.model.position.copy(o.pos); o.model.rotation.y = o.yaw; const sc = s.sh ? Math.max(1, s.sh.h / 1.8) : 1; o.model.scale.setScalar(sc);
+      o.walk += dt * Math.min(12, s.v || 0) * 0.9; if (o.rig && o.rig.legs) { const a = Math.sin(o.walk) * Math.min(0.7, (s.v || 0) / 10) * (s.g ? 1 : 0.3), L0 = o.rig.legs[0], L1 = o.rig.legs[1]; if (L0 && L0.thigh) L0.thigh.rotation.x = a; if (L1 && L1.thigh) L1.thigh.rotation.x = -a; }
+      V.copy(o.pos).setY(o.pos.y + 2.3 * sc).project(camera); const vis = V.z < 1 && Math.abs(V.x) < 1.1 && Math.abs(V.y) < 1.1;
+      o.tag.style.display = vis && Game.running ? 'block' : 'none';
+      if (vis) { o.tag.style.transform = `translate(${((V.x + 1) / 2 * innerWidth).toFixed(0)}px,${((1 - V.y) / 2 * innerHeight).toFixed(0)}px) translate(-50%,-100%)`; o.tag.textContent = `${o.name}${s.veh ? ' · ' + s.veh : ''}${s.sh ? ' · 거인화' : ''} · ${Math.round(d)}m`; }
+    }
+  };
+  // 폭발: 세계 좌표로
+  const bmB = Arms.boom;
+  Arms.boom = function (at, S, o) { const r = bmB.apply(this, arguments); return r; };
+  N._sendBoom = function (at, S) { const [gx, gz] = G(at.x, at.z); this.send({ t: 'boom', gx, gz, y: +at.y.toFixed(1), S: Math.min(S, 14) }); };
+  { const sendOld = N.send; N.send = function (m, only) { if (m && m.t === 'boom' && m.gx === undefined && m.x !== undefined) { const [gx, gz] = G(m.x, m.z); m = { t: 'boom', gx, gz, y: m.y, S: m.S }; } return sendOld.call(this, m, only); }; }
+  // ---- 거인 함께 쓰기(참가자 쪽) ----
+  N.applyTitans = function (L) {
+    this.lastTi = performance.now();
+    if (!this.mirror) { this.mirror = true; for (const t of Titans.list) if (!t.net92) { t.dead = true; t.removed = true; if (t.root) t.root.visible = false; } this.say('방장의 거인과 함께 싸웁니다', '#9fe0b0'); }
+    const seen = new Set();
+    for (const e of L) {
+      const [id, kind, gx, gz, y, yaw, h, dead, walk, gait] = e; seen.add(id); const [lx, lz] = Lc(gx, gz);
+      let t = this.mir.get(id);
+      if (!t) { if (dead || Math.hypot(lx - Player.pos.x, lz - Player.pos.z) > 3000) continue; try { t = new Titan(Titans.scene, lx, lz, h, false, kind || null); } catch (err) { continue; } t.net92 = id; Titans.list.push(t); this.mir.set(id, t); }
+      t._tg = { x: lx, z: lz, y, yaw, walk, gait, at: performance.now() };
+      if (dead && !t.dead) { try { this._applying = true; t.hits = 4; ts0(t, { source: 'ally', speed: 80, mul: 999, bonus: 1 }); } catch (err) {} finally { this._applying = false; } }
+    }
+    for (const [id, t] of this.mir) if (!seen.has(id)) { if (!t.dead) { t.dead = true; } t.removed = true; if (t.root) t.root.visible = false; this.mir.delete(id); }
+  };
+  N.endMirror = function () { this.mirror = false; for (const t of this.mir.values()) { t.removed = true; t.dead = true; if (t.root) t.root.visible = false; } this.mir.clear(); };
+  // 거울 거인: 방장 위치·방향·걸음으로(인공지능 대신)
+  const tu0 = Titan.prototype.update;
+  Titan.prototype.update = function (dt, player) {
+    if (!this.net92) return tu0.call(this, dt, player);
+    const g = this._tg; if (!g || this.dead) return tu0.call(this, dt, player);
+    const k = Math.min(1, dt * 8); this.pos.x += (g.x - this.pos.x) * k; this.pos.z += (g.z - this.pos.z) * k;
+    const dy = Math.atan2(Math.sin(g.yaw - this.root.rotation.y), Math.cos(g.yaw - this.root.rotation.y)); this.root.rotation.y += dy * k;
+    this.walk = g.walk; this.gait = g.gait;
+    try { if (this.animateWalk) this.animateWalk(0, g.gait > 0.3, player); } catch (e) {}
+  };
+  const spawn0 = Titans.spawn; Titans.spawn = function () { if (N.mirror) return; return spawn0.apply(this, arguments); };
+  // 참가자가 거울 거인을 베면 → 방장에게 보내 그쪽 거인이 맞음(쓰러짐도 방장 기준). 내 화면엔 타격 연출만
+  const ts0 = Titans.strike;
+  Titans.strike = function (t, opts = {}) {
+    if (!N.mirror || !t || !t.net92 || N._applying) return ts0.call(this, t, opts);
+    N.send({ t: 'hit', id: t.net92, o: { speed: opts.speed || 40, mul: opts.mul ?? 1, bonus: opts.bonus || 0, spin: !!opts.spin, source: 'ally' } });
+    const h = t.hits; t.hits = 0; let r = false; try { N._applying = true; const hp = t.hp; r = ts0.call(this, t, Object.assign({}, opts, { mul: 0 })); t.hp = hp; t.dead = false; } catch (e) {} finally { N._applying = false; t.hits = h; }
+    return false;
+  };
+  // 신호탄 공유
+  Thunder92.flareAt = function (p, dir, col) {
+    const i = Math.max(0, Math.min(this.COLORS.length - 1, col | 0)), c = this.COLORS[i][1];
+    if (!this.smkC[i]) { const q = new Particles(World.scene, 900, c, { gravity: -0.6, drag: 0.6 }); q.mat.vertexShader = q.mat.vertexShader.replace('110.0', '320.0'); q.points.renderOrder = 6; this.smkC[i] = q; }
+    this.flares.push({ p: p.clone(), v: dir.clone().normalize().multiplyScalar(95), t: 0, i });
+  };
+  const fl0 = Thunder92.flare;
+  Thunder92.flare = function () { const n = this.flares.length; const r = fl0.apply(this, arguments); const f = this.flares[this.flares.length - 1]; if (this.flares.length > n && f && N.peer && N.conns.size) { const [gx, gz] = G(f.p.x, f.p.z), d = f.v.clone().normalize(); N.send({ t: 'fx', k: 'flare', gx, gz, y: +f.p.y.toFixed(1), dx: +d.x.toFixed(3), dy: +d.y.toFixed(3), dz: +d.z.toFixed(3), col: f.i }); } return r; };
+  // 미니맵: 친구 초록 점 + 이름(범위 밖이면 가장자리 화살표)
+  const md0 = Minimap.draw;
+  Minimap.draw = function () {
+    const r = md0.apply(this, arguments);
+    try {
+      if (!this.visible || this.LEVELS[this.level].world || !N.others.size) return r;
+      const ctx = this.ctx, S = this.size, R = S / 2, k = R / this.RANGE, px = Player.pos.x, pz = Player.pos.z;
+      ctx.save(); ctx.beginPath(); ctx.arc(R, R, R - 1, 0, Math.PI * 2); ctx.clip(); ctx.translate(R, R); ctx.rotate(Player.yaw);
+      ctx.font = `800 ${Math.round(S / 26)}px 'Noto Sans KR',sans-serif`; ctx.textAlign = 'center';
+      for (const o of N.others.values()) {
+        if (o.lx === undefined) continue; let x = (o.lx - px) * k, y = (o.lz - pz) * k; const d = Math.hypot(x, y), lim = R - 10, out = d > lim; if (out) { x *= lim / d; y *= lim / d; }
+        ctx.fillStyle = '#5dff9a'; ctx.strokeStyle = '#04210f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, out ? 5 : 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.save(); ctx.translate(x, y); ctx.rotate(-Player.yaw); ctx.fillStyle = '#eaffef'; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 3; const lb = out ? `${o.name} ${(Math.hypot(o.lx - px, o.lz - pz) / 1000).toFixed(1)}km` : o.name; ctx.strokeText(lb, 0, -11); ctx.fillText(lb, 0, -11); ctx.restore();
+      }
+      ctx.restore();
+    } catch (e) {}
+    return r;
+  };
+  // 방장 접속 끊기면 거울 거인 정리
+  const lv0 = N.leave; N.leave = function () { this.endMirror(); return lv0.apply(this, arguments); };
+}
+
 </script>
 <script>
 // ===== 92차-3: 소리 전면 개편 (강병현 지시: 부스터·입체기동 소리 구분, 품질↑, 강약·겹침 정리, 너무 크지 않게, 고증) =====
@@ -20476,7 +20614,7 @@ html.ps92 #ws92,html.cine92 #ws92,html.at92 #ws92,html.title #ws92{display:none!
 //   무기 목록(비행정·전함·전차·열차·발사차량)과 9거인 스킬은 게임 데이터에서 직접 읽어 와서, 무기·스킬을 바꾸면 설명도 자동으로 바뀝니다.
 //   항목 형식: [키(없으면 ''), 설명]. 섹션: { id, icon, title, intro, items, live(선택: 게임 데이터에서 항목을 만드는 함수) }
 const Guide = {
-  VERSION: '92차-10 · 2026-11-17',
+  VERSION: '92차-12 · 2026-11-17',
   GUIDE: [
     { id: 'start', icon: '🏁', title: '시작하기', intro: '거인이 몰려오는 성벽의 세계. 입체기동으로 날아올라 목덜미를 베고, 위기에는 9거인으로 변신합니다. 전함·비행정·전차·열차·핵 기지까지 모두 직접 조종할 수 있습니다.', items: [
       ['출격', '자유 모드로 시작 (장소는 세계 지도·들판에서 이동)'], ['훈련으로 출격', '피해 없음 · 거인화 게이지 가득 · 표적 거인 소환'], ['3인칭 · 1인칭', '시작 화면 또는 V · 휠로 언제든 바꿈'],
@@ -20511,7 +20649,7 @@ const Guide = {
     { id: 'world', icon: '🌦️', title: '날씨 · 시간', items: [['날씨', '자동 · 맑음 · 비 · 폭풍우(먹구름·강풍·번개·천둥)'], ['시간', '흐름(20분에 하루) · 새벽 · 아침 · 낮 · 오후 · 저녁 · 밤']] },
     { id: 'map', icon: '🗺️', title: '지도 · 이동', items: [['M', '미니맵 160m → 800m → 4km → 20km → 세계 지도 (M·Esc 닫기)'], ['세계 지도', '장소 클릭 = 빠른 이동 · 섬 아무 곳 = 들판'], ['G', '들판에서 가까운 장소로 들어가기'], ['장소 경계', '걸어서·타고 나가면 실제 크기 들판으로 이어짐']] },
     { id: 'online', icon: '🌐', title: '친구와 같이 (온라인)', intro: '일시정지 → 🌐 친구와 같이. 공개 중개 서버(PeerJS)를 거쳐 기기끼리 직접 연결됩니다.', items: [
-      ['방 만들기', '5자리 코드를 친구에게 알려 주기'], ['참가', '친구 코드 입력'], ['Y', '채팅'], ['함께 보이는 것', '같은 장소의 친구 모습 · 이름표 · 폭발'], ['따로 움직이는 것', '거인 · 마레군은 각자 화면']] },
+      ['방 만들기', '5자리 코드를 친구에게 알려 주기'], ['참가', '친구 코드 입력 (두 사람 모두 같은 최신 버전: Ctrl+F5)'], ['Y', '채팅'], ['미니맵', '친구 = 초록 점 · 이름 (멀면 가장자리에 거리)'], ['함께하는 것', '친구 모습·이름표(세계 공통 좌표라 실제로 가까우면 보임) · 거인(방장의 거인을 함께 상대, 참가자가 베도 방장 쪽 거인이 맞고 쓰러짐) · 폭발 · 신호탄'], ['따로 움직이는 것', '마레군 · 동료']] },
     { id: 'etc', icon: '⚙️', title: '설정 · 기타', items: [
       ['일시정지 탭', '전투 · 세계 · 화면 · 조작 · 소리 · 조작법'], ['화질', '균형(자동 조절) · 노트북 안정 · 고화질'], ['프레임 제한', '자동 · 제한 안 함 · 60 · 30'], ['F3', '성능 표시'],
       ['끼임 탈출', '몇 초 전 안전한 자리로'], ['저장', '시작 화면 설정 → 기타 → 내보내기 · 가져오기 · 초기화']] },
