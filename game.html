@@ -17088,7 +17088,7 @@ const Up91 = {
   const wi0 = World.init;
   World.init = function (...a) {
     const r = wi0.apply(this, a);
-    try { if (!Up91.light) { Up91.light = new THREE.PointLight(0xffa54a, 0, 60, 2); Up91.light.userData = { t: 0, d: 0.3 }; } if (this.scene && Up91.light.parent !== this.scene) this.scene.add(Up91.light); } catch (e) { console.warn('up91 light', e); }
+    try { if (!Up91.light) { Up91.light = new THREE.PointLight(0xffa54a, 0, 60, 2); Up91.light.userData = { t: 0, d: 0.3 }; } /* 92차: 장면에 점광원을 넣지 않음(모든 재질 셰이더에 빛 계산이 늘어 CPU·GPU 부담) → 섬광은 하늘빛 밝기로 대신(upgrade92.js) */ if (Up91.light.parent) Up91.light.parent.remove(Up91.light); } catch (e) { console.warn('up91 light', e); }
     return r;
   };
   const bm0 = Arms.boom;
@@ -20296,6 +20296,16 @@ html.ps92 #ws92,html.cine92 #ws92,html.at92 #ws92,html.title #ws92{display:none!
     if (e.target && e.target.closest && e.target.closest('button,input,#pause,#guide92,#net92,#atlasModal')) return;
     e.stopImmediatePropagation(); if (TS.slot === 2) TS.fire(); else TS.flare();
   }, true);
+}
+
+// (라) 폭발·포구·번개 섬광: 점광원 대신 그 순간 하늘빛(반구광) 밝기를 거리에 따라 잠깐 올림 — 셰이더 부담 없음
+{
+  const r0 = renderer.render.bind(renderer); let hemi = null, hs = null;
+  renderer.render = function (sc, cam) {
+    const L = typeof Up91 !== 'undefined' && Up91.light; let add = 0;
+    if (L && L.userData.t && L.intensity > 0.05 && cam === camera) { if (!hemi || hs !== sc) { hs = sc; hemi = null; sc.traverse(o => { if (!hemi && o.isHemisphereLight) hemi = o; }); } if (hemi) { const d = L.position.distanceTo(cam.position), k = Math.max(0, 1 - d / Math.max(1, L.distance * 2.2)); add = L.intensity * k * k * 0.12; hemi.intensity += add; } }
+    try { return r0(sc, cam); } finally { if (add && hemi) hemi.intensity -= add; }
+  };
 }
 
 </script>
