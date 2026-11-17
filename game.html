@@ -20446,6 +20446,110 @@ html.ps92 #ws92,html.cine92 #ws92,html.at92 #ws92,html.title #ws92{display:none!
   const lv0 = N.leave; N.leave = function () { this.endMirror(); return lv0.apply(this, arguments); };
 }
 
+// ---------- ⑲ 온라인 3판 (강병현: 참가했는데 안 보이고 미니맵에도 없고 같은 서버가 아니다 → 실시간으로 같이) ----------
+// ① 같은 세계: 참가하면 방장 위치로 자동 이동(다른 장소면 그 장소로 이동 후 자동 재접속), 방장이 장소를 옮기면 같은 코드로 방을 다시 열고 친구들도 따라와 자동 재접속
+// ② 뒤에 있는 창(다른 탭·창)에서도 내 위치를 계속 보냄(게임 화면이 멈춰도 0.25초마다)
+// ③ 연결 상태 표시: 오른쪽 위 '🌐 방 코드 · 친구 n명 · 지연 ms' (끊기면 빨간색·다시 연결 중)
+{
+  const N = Net92, KEY = 'astraea-net-room';
+  const G = (x, z) => { const [a, b] = Nuke.kmOf(x, z); return [Math.round(a * 10000) / 10, Math.round(b * 10000) / 10]; };
+  const Lc = (gx, gz) => Nuke.sceneOf(gx / 1000, gz / 1000);
+  const save = () => { try { if (N.code) sessionStorage.setItem(KEY, JSON.stringify({ code: N.code, host: N.host, name: N.name, at: Date.now() })); } catch (_) {} };
+  const clear = () => { try { sessionStorage.removeItem(KEY); } catch (_) {} };
+  // 방장: 친구가 들어오면 내 위치('where')를 보냄 · 친구는 방장 근처로
+  const wire0 = N.wire;
+  N.wire = function (c) {
+    wire0.call(this, c);
+    c.on('open', () => { save(); if (this.host) this.sendWhere(c); });
+    c.on('close', () => { if (!this.host && this.peer && !this._leaving) this.retry(); });
+  };
+  N.sendWhere = function (c) { const p = Player.pos, [gx, gz] = G(p.x, p.z); this.send({ t: 'where', map: World.mapId, gx, gz, y: +p.y.toFixed(1), wild: World.mapId === 'wild' }, c); };
+  const recv1 = N.recv;
+  N.recv = function (raw, c) {
+    let m; try { m = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return; }
+    if (m && m.t === 'ping') { try { c.send(JSON.stringify({ t: 'pong', ts: m.ts })); } catch (e) {} return; }
+    if (m && m.t === 'pong') { this.ping = Math.round(performance.now() - m.ts); return; }
+    if (m && m.t === 'where' && !this.host) { this.follow(m); return; }
+    return recv1.call(this, raw, c);
+  };
+  N.follow = function (m) {
+    const [lx, lz] = Lc(m.gx, m.gz), d = Math.hypot(lx - Player.pos.x, lz - Player.pos.z);
+    const sameMap = m.map === World.mapId || (m.wild && World.mapId === 'wild');
+    if (sameMap && d < 2500 && Math.abs(lx) < 1e8) { Player.pos.set(lx + 6, m.y + 1, lz + 6); Player.vel.set(0, 0, 0); if (Player.releaseHook) Player.releaseHook(); this.say('방장 옆으로 이동했습니다', '#9fe0b0'); return; }
+    // 다른 장소: 그곳으로 이동 → 새로 열리면 같은 방에 자동 재접속
+    save(); this._leaving = true; this.say('방장이 있는 곳으로 이동합니다…', '#9fe0b0');
+    setTimeout(() => {
+      try {
+        if (m.wild) { Atlas.warp([m.gx / 1000 + 0.008, m.gz / 1000 - 0.008]); return; }
+        const q = Atlas.PLACES[m.map]; if (!q) return; const x = m.gx - q.pos[0] * 1000 + 6, z = -(m.gz - q.pos[1] * 1000) + 6;
+        sessionStorage.setItem('astraea-handoff', JSON.stringify({ id: m.map, x, z, y: m.y + 1, yaw: 0, riding: false })); sessionStorage.setItem('astraea-story-pending', JSON.stringify({ free: true }));
+        Atlas.travelTo(m.map);
+      } catch (e) { console.warn('net follow', e); }
+    }, 700);
+  };
+  // 끊기면(방장이 장소를 옮겨 다시 여는 중 등) 3초마다 다시 참가, 1분까지
+  N.retry = function () {
+    if (this._rt) return; const code = this.code, t0 = Date.now(); this.say('연결이 끊겼습니다 · 다시 연결 중…', '#ffb347');
+    this._rt = setInterval(() => { if (this.conns.size || Date.now() - t0 > 60000 || this._leaving) { clearInterval(this._rt); this._rt = null; return; } this.join(code).catch(() => {}); }, 3000);
+  };
+  // 방장이 다시 열 때 같은 코드(이전 연결이 서버에서 정리될 때까지 재시도)
+  N.reopen = async function (code) {
+    await this.load(); for (let i = 0; i < 12; i++) {
+      this.leave(true); this.host = true; this.code = code; let bad = false;
+      this.peer = new Peer('astraea92-room-' + code, { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' }] } });
+      this.peer.on('connection', c => this.wire(c));
+      const ok = await new Promise(r => { this.peer.on('open', () => r(true)); this.peer.on('error', e => { if (e.type === 'unavailable-id') bad = true; r(false); }); setTimeout(() => r(false), 8000); });
+      if (ok && !bad) { this.ready = true; save(); this.say(`방 ${code} 다시 열림 · 친구들이 곧 따라옵니다`, '#9fe0b0'); return; }
+      await new Promise(r => setTimeout(r, 3000));
+    }
+    this.say('방을 다시 열지 못했습니다 · 새로 만들어 주세요', '#ff6a5a');
+  };
+  const lv1 = N.leave; N.leave = function (quiet) { if (!quiet) { clear(); this._leaving = true; if (this._rt) { clearInterval(this._rt); this._rt = null; } } const r = lv1.apply(this, arguments); if (!quiet) setTimeout(() => { this._leaving = false; }, 0); return r; };
+  const cr1 = N.create; N.create = async function () { this._leaving = false; const r = await cr1.apply(this, arguments); save(); return r; };
+  const jn1 = N.join; N.join = async function (code) { this._leaving = false; const r = await jn1.apply(this, arguments); this.code = String(code || '').trim().toUpperCase(); save(); return r; };
+  // 장소가 새로 열린 뒤(게임 시작 후) 자동으로 같은 방에
+  { let st = null; try { st = JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch (_) {}
+    if (st && Date.now() - st.at < 180000) { const t = setInterval(() => { if (typeof Freeplay === 'undefined' || !Freeplay.ready) return; clearInterval(t); N.name = st.name || N.name; if (st.host) N.reopen(st.code); else { N.join(st.code).catch(() => {}); N.say('같은 방에 다시 들어가는 중…', '#9fe0b0'); } }, 500); } }
+  // 방장이 다른 장소로 가면(페이지가 다시 열림) 저장해 둔 코드로 다시 엶 · 장소를 옮기기 직전에 저장
+  addEventListener('pagehide', () => { if (N.peer && N.code) save(); });
+  // 뒤 창에서도 위치 보내기 + 지연 측정
+  setInterval(() => { if (!N.peer || !N.conns.size) return; if (document.hidden || !(typeof Game !== 'undefined' && Game.running)) { N.t = 1; N.tt = 1; try { N.update(0.25); } catch (e) {} } }, 250);
+  setInterval(() => { if (N.peer && N.conns.size) N.send({ t: 'ping', ts: performance.now() }); if (N.host && N.conns.size && (N._wt = (N._wt || 0) + 1) % 3 === 0) N.sendWhereAll && N.sendWhereAll(); }, 2000);
+  // 방장이 장소를 옮긴 게 아니라 같은 장소 안에서 멀리 가면(4km) 친구들이 따라올 수 있게 가끔 위치 공지 — 친구는 너무 멀면(4km) 자동으로 방장 옆으로
+  N.sendWhereAll = function () { const p = Player.pos, [gx, gz] = G(p.x, p.z); this.send({ t: 'where2', map: World.mapId, gx, gz, y: +p.y.toFixed(1), wild: World.mapId === 'wild' }); };
+  const recv2 = N.recv; N.recv = function (raw, c) { let m; try { m = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return; } if (m && m.t === 'where2') { if (!this.host) { const [lx, lz] = Lc(m.gx, m.gz); if (!(m.map === World.mapId || (m.wild && World.mapId === 'wild')) || Math.hypot(lx - Player.pos.x, lz - Player.pos.z) > 4000) { if (!this._farMsg || Date.now() - this._farMsg > 8000) { this._farMsg = Date.now(); this.say(`방장이 멀리 있습니다 · 일시정지 → 친구와 같이 → '방장에게 가기'`, '#ffb347'); } } } return; } return recv2.call(this, raw, c); };
+  // 상태 표시
+  const css = document.createElement('style');
+  css.textContent = `#nst92{position:fixed;right:18px;top:148px;z-index:15;pointer-events:none;padding:5px 10px;border-radius:999px;font:800 11.5px 'Noto Sans KR',sans-serif;color:#eaffef;background:rgba(10,40,24,.78);border:1px solid rgba(120,255,170,.45);display:none}#nst92.bad{background:rgba(60,14,10,.8);border-color:rgba(255,120,100,.6);color:#ffd9d2}html.ps92 #nst92,html.cine92 #nst92{display:none!important}`;
+  document.head.appendChild(css);
+  const tag = document.createElement('div'); tag.id = 'nst92'; const addT = () => document.body.appendChild(tag); if (document.body) addT(); else document.addEventListener('DOMContentLoaded', addT);
+  setInterval(() => { if (!N.peer && !N._rt) { tag.style.display = 'none'; return; } tag.style.display = 'block'; const n = N.conns.size, ok = n > 0; tag.classList.toggle('bad', !ok); tag.textContent = ok ? `🌐 방 ${N.code} · ${N.host ? '방장' : '참가'} · 친구 ${n}명${N.ping ? ` · 지연 ${N.ping}ms` : ''}` : (N.host ? `🌐 방 ${N.code} · 친구를 기다리는 중` : `🌐 방 ${N.code} · 연결 중…`); }, 300);
+  // 접속 창: '방장에게 가기' 버튼(참가자)
+  setInterval(() => { const el = document.querySelector('#net92 .bx'); if (!el || el.querySelector('.gohost')) return; const b = document.createElement('button'); b.className = 'gohost'; b.textContent = '방장에게 가기'; b.style.marginTop = '8px'; b.onclick = () => { if (!N.host && N.conns.size) N.send({ t: 'wantwhere' }); }; const row = el.querySelector('.row:last-of-type'); (row || el).appendChild(b); }, 1000);
+  const recv3 = N.recv; N.recv = function (raw, c) { let m; try { m = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { return; } if (m && m.t === 'wantwhere') { if (this.host) this.sendWhere(c); return; } return recv3.call(this, raw, c); };
+}
+
+// ---------- ⑳ 시작 화면 '🌐 온라인 모드' (강병현 지시) · 시작 전에 참가해도 게임이 시작되면 방장 옆으로 ----------
+{
+  const N = Net92;
+  const f1 = N.follow;
+  N.follow = function (m) { if (typeof Game !== 'undefined' && Game.running) return f1.call(this, m); this._pendWhere = m; this.say('방에 들어왔습니다 · 게임을 시작하면 방장 옆으로 갑니다', '#9fe0b0'); };
+  setInterval(() => { if (N._pendWhere && typeof Game !== 'undefined' && Game.running) { const m = N._pendWhere; N._pendWhere = null; setTimeout(() => f1.call(N, m), 600); } }, 400);
+  const css = document.createElement('style');
+  css.textContent = `html.title #net92{z-index:1000}#overlay nav.links .net92t{border-color:rgba(120,255,170,.55)!important;color:#bfffd6!important}`;
+  document.head.appendChild(css);
+  const add = () => { const nav = document.querySelector('#overlay nav.links'); if (nav && !nav.querySelector('.net92t')) { const b = document.createElement('button'); b.type = 'button'; b.className = 'net92t'; b.textContent = '🌐 온라인 모드'; b.onclick = e => { e.stopPropagation(); if (N.open) N.open(); }; const g = nav.querySelector('.guide92b'); nav.insertBefore(b, g ? g.nextSibling : nav.firstChild); } };
+  const go = () => { add(); setInterval(add, 800); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+}
+// 접속 창 상태 글자: 실제 연결 상태(서버 연결·친구 수)로 · '방장에게 가기'는 참가자만
+{ const N = Net92, ld0 = N.load; N.load = function () { N._loading = true; return ld0.apply(this, arguments).finally(() => { N._loading = false; }); };
+  const op = () => { if (!N.ui || N.ui._w) return; N.ui._w = true; const r0 = N.ui.refresh; N.ui.refresh = function () { r0.apply(this, arguments); fixSt(); }; };
+  var fixSt = () => { const el = document.getElementById('net92'); if (!el) return; const st = el.querySelector('.st'), g = el.querySelector('.gohost'), on = !!(N.peer && N.peer.open);
+  if (st) st.textContent = N._loading && !N.peer ? '온라인 기능을 불러오는 중…' : !N.peer ? '오프라인' : !on ? '서버에 연결 중…' : N.host ? (N.conns.size ? `방장 · 친구 ${N.conns.size}명과 연결됨` : '방 열림 · 친구를 기다리는 중') : (N.conns.size ? '참가함 · 방장과 연결됨' : '방장에게 연결 중…');
+  if (g) g.style.display = N.peer && !N.host ? '' : 'none'; };
+  setInterval(() => { const el = document.getElementById('net92'); if (el && el.style.display === 'grid') { op(); fixSt(); if (!window.Peer && !N._loading && !N._pre) { N._pre = true; N.load().catch(() => { N._pre = false; }); } } }, 300); }
+
 </script>
 <script>
 // ===== 92차-3: 소리 전면 개편 (강병현 지시: 부스터·입체기동 소리 구분, 품질↑, 강약·겹침 정리, 너무 크지 않게, 고증) =====
@@ -20614,7 +20718,7 @@ html.ps92 #ws92,html.cine92 #ws92,html.at92 #ws92,html.title #ws92{display:none!
 //   무기 목록(비행정·전함·전차·열차·발사차량)과 9거인 스킬은 게임 데이터에서 직접 읽어 와서, 무기·스킬을 바꾸면 설명도 자동으로 바뀝니다.
 //   항목 형식: [키(없으면 ''), 설명]. 섹션: { id, icon, title, intro, items, live(선택: 게임 데이터에서 항목을 만드는 함수) }
 const Guide = {
-  VERSION: '92차-12 · 2026-11-17',
+  VERSION: '92차-13 · 2026-11-17',
   GUIDE: [
     { id: 'start', icon: '🏁', title: '시작하기', intro: '거인이 몰려오는 성벽의 세계. 입체기동으로 날아올라 목덜미를 베고, 위기에는 9거인으로 변신합니다. 전함·비행정·전차·열차·핵 기지까지 모두 직접 조종할 수 있습니다.', items: [
       ['출격', '자유 모드로 시작 (장소는 세계 지도·들판에서 이동)'], ['훈련으로 출격', '피해 없음 · 거인화 게이지 가득 · 표적 거인 소환'], ['3인칭 · 1인칭', '시작 화면 또는 V · 휠로 언제든 바꿈'],
@@ -20649,7 +20753,7 @@ const Guide = {
     { id: 'world', icon: '🌦️', title: '날씨 · 시간', items: [['날씨', '자동 · 맑음 · 비 · 폭풍우(먹구름·강풍·번개·천둥)'], ['시간', '흐름(20분에 하루) · 새벽 · 아침 · 낮 · 오후 · 저녁 · 밤']] },
     { id: 'map', icon: '🗺️', title: '지도 · 이동', items: [['M', '미니맵 160m → 800m → 4km → 20km → 세계 지도 (M·Esc 닫기)'], ['세계 지도', '장소 클릭 = 빠른 이동 · 섬 아무 곳 = 들판'], ['G', '들판에서 가까운 장소로 들어가기'], ['장소 경계', '걸어서·타고 나가면 실제 크기 들판으로 이어짐']] },
     { id: 'online', icon: '🌐', title: '친구와 같이 (온라인)', intro: '일시정지 → 🌐 친구와 같이. 공개 중개 서버(PeerJS)를 거쳐 기기끼리 직접 연결됩니다.', items: [
-      ['방 만들기', '5자리 코드를 친구에게 알려 주기'], ['참가', '친구 코드 입력 (두 사람 모두 같은 최신 버전: Ctrl+F5)'], ['Y', '채팅'], ['미니맵', '친구 = 초록 점 · 이름 (멀면 가장자리에 거리)'], ['함께하는 것', '친구 모습·이름표(세계 공통 좌표라 실제로 가까우면 보임) · 거인(방장의 거인을 함께 상대, 참가자가 베도 방장 쪽 거인이 맞고 쓰러짐) · 폭발 · 신호탄'], ['따로 움직이는 것', '마레군 · 동료']] },
+      ['방 만들기', '5자리 코드를 친구에게 알려 주기'], ['시작 화면', '🌐 온라인 모드 → 방 만들기 또는 참가 (일시정지 → 🌐 친구와 같이도 같음)'], ['참가', '친구 코드 입력 → 방장이 있는 장소·위치로 자동 이동 (다른 장소면 그곳으로 옮긴 뒤 자동 재접속) · 두 사람 모두 Ctrl+F5'], ['연결 표시', '오른쪽 위 🌐 방 코드 · 친구 수 · 지연(ms) · 끊기면 빨간색과 자동 재연결'], ['방장이 장소를 옮기면', '같은 코드로 방이 다시 열리고 친구는 알림 → 접속 창의 「방장에게 가기」'], ['Y', '채팅'], ['미니맵', '친구 = 초록 점 · 이름 (멀면 가장자리에 거리)'], ['함께하는 것', '친구 모습·이름표(세계 공통 좌표라 실제로 가까우면 보임) · 거인(방장의 거인을 함께 상대, 참가자가 베도 방장 쪽 거인이 맞고 쓰러짐) · 폭발 · 신호탄'], ['따로 움직이는 것', '마레군 · 동료']] },
     { id: 'etc', icon: '⚙️', title: '설정 · 기타', items: [
       ['일시정지 탭', '전투 · 세계 · 화면 · 조작 · 소리 · 조작법'], ['화질', '균형(자동 조절) · 노트북 안정 · 고화질'], ['프레임 제한', '자동 · 제한 안 함 · 60 · 30'], ['F3', '성능 표시'],
       ['끼임 탈출', '몇 초 전 안전한 자리로'], ['저장', '시작 화면 설정 → 기타 → 내보내기 · 가져오기 · 초기화']] },
