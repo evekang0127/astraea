@@ -10619,7 +10619,7 @@ const Minimap = {
       for (const id in Atlas.PLACES) {
         const q = Atlas.PLACES[id]; if (q.overseas) continue;
         let [x, z] = F.toLocal(q.pos[0] * 1000, q.pos[1] * 1000); x -= px; z -= pz;
-        const d = Math.hypot(x, z), edge = this.RANGE * 0.9, out = d > edge;
+        const d = Math.hypot(x, z), edge = this.RANGE * 0.72, out = d > edge;   // 93차: 0.9면 이름이 원 밖으로 잘림
         if (out) { if (d > 400000) continue; x *= edge / d; z *= edge / d; }
         ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.arc(x * k, z * k, out ? 5 : 8, 0, Math.PI * 2); ctx.fill();
         ctx.save(); ctx.translate(x * k, z * k); ctx.rotate(-Player.yaw);
@@ -20718,7 +20718,7 @@ html.ps92 #ws92,html.cine92 #ws92,html.at92 #ws92,html.title #ws92{display:none!
 //   무기 목록(비행정·전함·전차·열차·발사차량)과 9거인 스킬은 게임 데이터에서 직접 읽어 와서, 무기·스킬을 바꾸면 설명도 자동으로 바뀝니다.
 //   항목 형식: [키(없으면 ''), 설명]. 섹션: { id, icon, title, intro, items, live(선택: 게임 데이터에서 항목을 만드는 함수) }
 const Guide = {
-  VERSION: '92차-13 · 2026-11-17',
+  VERSION: '93차-a · 2026-11-18',
   GUIDE: [
     { id: 'start', icon: '🏁', title: '시작하기', intro: '거인이 몰려오는 성벽의 세계. 입체기동으로 날아올라 목덜미를 베고, 위기에는 9거인으로 변신합니다. 전함·비행정·전차·열차·핵 기지까지 모두 직접 조종할 수 있습니다.', items: [
       ['출격', '자유 모드로 시작 (장소는 세계 지도·들판에서 이동)'], ['훈련으로 출격', '피해 없음 · 거인화 게이지 가득 · 표적 거인 소환'], ['3인칭 · 1인칭', '시작 화면 또는 V · 휠로 언제든 바꿈'],
@@ -20735,7 +20735,7 @@ const Guide = {
       live: () => typeof Shifter === 'undefined' || !Shifter.skills ? [] : Object.keys(Shifter.skills).map(k => [(typeof Nine !== 'undefined' && Nine.defs[k] && Nine.defs[k].name) || k, Shifter.skills[k].map((s, i) => `${i + 1} ${s[0]}(${s[1]}초)`).join(' · ') + (Shifter.stats[k] ? ` · 체력 ${Shifter.stats[k].hp} · 지속 ${Shifter.stats[k].dur}초` : '')]) },
     { id: 'horse', icon: '🐎', title: '말', items: [['H', '말 부르기 · 타기 · 내리기'], ['Shift', '질주'], ['체력', '말이 받는 피해의 70%를 대신 받음 · 쓰러지면 30초 뒤 다시 부름']] },
     { id: 'air', icon: '✈️', title: '비행정', intro: '하늘에서 날아와 와이어로 끌어올려 태워 줍니다.', items: [
-      ['P (땅 위)', '비행정 부르기'], ['F', '가까이서 타기 · 내리기'], ['W S', '추력 올리기 · 내리기(브레이크)'], ['마우스 · A D', '방향'], ['Shift', '부스트'],
+      ['P (땅 위)', '비행정 부르기'], ['땅 근접 경고', '땅에 빠르게 가까워지면 화면에 ▲ PULL UP · 삐 소리 → 기수 올리기 · S 감속'], ['F', '가까이서 타기 · 내리기'], ['W S', '추력 올리기 · 내리기(브레이크)'], ['마우스 · A D', '방향'], ['Shift', '부스트'],
       ['L', '고도 고정 (무기를 겨눠도 일정 고도) · PgUp/PgDn 높이'], ['클릭 · 우클릭 · 휠', '발사 · 조준경 · 배율'], ['O · [ ]', '자동 운항(지도에서 목적지) · 배속']],
       live: () => typeof Aircraft === 'undefined' || !Aircraft.W ? [] : Aircraft.W.map((w, i) => [`${i + 1}`, `${w.name}${w.max ? ` · ${w.max}발` : ''}${w.lock ? ' · 락온' : ''}`]) },
     { id: 'ship', icon: '🚢', title: '전함', intro: '최고 87노트 · 체력 3000. 계기판: 엔진 단계·속도·방위·타각·부스터.', items: [
@@ -20743,13 +20743,13 @@ const Guide = {
       ['Shift', '부스터 (게이지 소모)'], ['클릭 · 우클릭', '발사 · 조준경'], ['O · [ ]', '자동 항해 · 배속(최대 ×500)']],
       live: () => typeof Ship === 'undefined' || !Ship.W ? [] : Ship.W.map((w, i) => [`${i + 1}`, `${w.name}${w.max ? ` · ${w.max}발` : ''}${w.lock ? ' · 락온' : ''}`]) },
     { id: 'land', icon: '🛡️', title: '전차 · 발사차량 · 열차', intro: '땅 위에서 부르면 바로 옵니다. 타고 있을 때 받는 피해는 차량 체력이 받습니다.', items: [
-      ['B', '전차 부르기 · 마우스 포탑 · 1 주포 2 기관총 · 거인 들이받기 · 체력 2500'], ['N', 'ICBM 이동식 발사차량 · 1 재래식 탄도미사일(조준점) · 2 핵 탄도미사일(지도에서 좌표 → 표적 고정·무장·발사 키 → 발사 · 장전 30초)'], ['우클릭 (누르고 있기)', '조준경 · 휠 배율'],
+      ['부르는 자리', '주변의 평평한 빈 땅을 자동으로 찾아 놓음 (좁은 골목이면 넓은 곳에서 부르라는 안내)'], ['B', '전차 부르기 · 마우스 포탑 · 1 주포 2 기관총 · 거인 들이받기 · 체력 2500'], ['N', 'ICBM 이동식 발사차량 · 1 재래식 탄도미사일(조준점) · 2 핵 탄도미사일(지도에서 좌표 → 표적 고정·무장·발사 키 → 발사 · 장전 30초)'], ['우클릭 (누르고 있기)', '조준경 · 휠 배율'],
       ['K', '장갑 열차 · 근처 평지에 직선 선로를 깔고 배치 · W/S 전진·후진'], ['F', '타기 · 내리기'], ['W S A D', '주행 · 회전'], ['Space · Shift', '제동 · 부스트'], ['휠', '카메라 거리']] },
     { id: 'cannon', icon: '💣', title: '대포', items: [['F (포신 옆 6m)', '성벽 대포·해안 포대 등에 타기'], ['마우스 · 클릭', '360° 조준 · 발사(조준점에 정확히 떨어지는 탄도)'], ['휠', '확대 · 축소']] },
     { id: 'nuke', icon: '☢️', title: '핵 기지 · ICBM', intro: '모든 장소에 있는 지하 150m 미사일 기지. 보안 절차를 거쳐 발사합니다.', items: [
       ['입구 경비 초소', '출입 카드 받기 → 엘리베이터(F)'], ['보안 문 1 · 2', '카드 단말기 · 손바닥 인식'], ['통제실 봉투', '인증 코드 확인'], ['주 콘솔(F)', '사일로 선택 → 지도에서 표적 클릭 → 코드 입력 → 2초 눌러 무장'],
       ['발사 키 A · B', '양쪽 키를 5초 안에 돌린 뒤 주 콘솔에서 F 길게 = 발사'], ['비상 전화', '전 세계 지도자 호출 → 종말의 날 연출'], ['연출 중', '마우스로 시점 돌리기 · 휠 확대 · 가운데 클릭 원위치'], ['황폐화 지우기', '일시정지 빠른 버튼']] },
-    { id: 'marley', icon: '🎯', title: '마레군', items: [['전차 · 기구 · 장갑 열차 · 비행선 · 군함', '나와 탈것을 공격 · 빨간 원 = 포탄 떨어질 곳'], ['설정 → 전투 → 마레군', '끄기 · 적게 · 보통 · 많게']] },
+    { id: 'marley', icon: '🎯', title: '마레군', items: [['출격 직후 20초', '마레군이 공격하지 않음 (출격·빠른 이동·부활 뒤 숨 고르기)'], ['전차 · 기구 · 장갑 열차 · 비행선 · 군함', '나와 탈것을 공격 · 빨간 원 = 포탄 떨어질 곳'], ['설정 → 전투 → 마레군', '끄기 · 적게 · 보통 · 많게']] },
     { id: 'world', icon: '🌦️', title: '날씨 · 시간', items: [['날씨', '자동 · 맑음 · 비 · 폭풍우(먹구름·강풍·번개·천둥)'], ['시간', '흐름(20분에 하루) · 새벽 · 아침 · 낮 · 오후 · 저녁 · 밤']] },
     { id: 'map', icon: '🗺️', title: '지도 · 이동', items: [['M', '미니맵 160m → 800m → 4km → 20km → 세계 지도 (M·Esc 닫기)'], ['세계 지도', '장소 클릭 = 빠른 이동 · 섬 아무 곳 = 들판'], ['G', '들판에서 가까운 장소로 들어가기'], ['장소 경계', '걸어서·타고 나가면 실제 크기 들판으로 이어짐']] },
     { id: 'online', icon: '🌐', title: '친구와 같이 (온라인)', intro: '일시정지 → 🌐 친구와 같이. 공개 중개 서버(PeerJS)를 거쳐 기기끼리 직접 연결됩니다.', items: [
@@ -20804,6 +20804,300 @@ const Guide = {
   const go = () => { add(); setInterval(add, 800); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
   addEventListener('keydown', e => { if (e.code === 'F1') { e.preventDefault(); const m = document.getElementById('guide92'); if (m && m.style.display === 'grid') Guide.close(); else { if (typeof Game !== 'undefined' && Game.running && typeof setPaused === 'function') setPaused(true); Guide.open('key'); } } });
+}
+
+</script>
+<script>
+// ===== 93차-a (2026-11-18): 직접 플레이에서 찾은 버그·GUI 겹침 수정 — 기존 기능은 그대로, 감싸기(wrapper)로만 고침 =====
+// 근거: E:\Astraea\문서\ASTRAEA_93차_업그레이드_프롬프트.md 4장(B-1~B-15·A-3·A-4)
+const Up93 = { graceUntil: 0 };
+
+// ---------- B-2: 시작 화면 오른쪽 위 — Google 로그인 버튼이 안내 글자·약관 링크를 덮던 것 ----------
+{
+  const c = document.createElement('style');
+  c.textContent = `.account{flex-wrap:wrap;justify-content:flex-end;row-gap:6px;max-width:min(560px,70vw)}
+.account #googleButton{flex:0 0 auto;position:relative;min-height:40px;order:2}
+.account #accountStatus{order:1;flex:1 1 100%;text-align:right;line-height:1.3}
+.account #logout{order:2}.account .legal{order:3;flex:1 1 100%;text-align:right}`;
+  document.head.appendChild(c);
+}
+
+// ---------- B-3: 출격·빠른 이동·부활 직후 20초 동안 마레군 공격 없음(경고만) ----------
+{
+  const GRACE = 20000;
+  Up93.grace = () => { Up93.graceUntil = performance.now() + GRACE; };
+  Up93.inGrace = () => performance.now() < Up93.graceUntil;
+  // 첫 출격(Game.started가 켜질 때) + 부활(체력이 0 → 양수)
+  let started = false, wasDead = false;
+  setInterval(() => {
+    if (typeof Game === 'undefined') return;
+    if (Game.started && !started) { started = true; Up93.grace(); }
+    const dead = !!(Game.over || Game.dying); if (wasDead && !dead) Up93.grace(); wasDead = dead;
+  }, 250);
+  if (typeof Marley !== 'undefined') {
+    for (const k of ['fireAt', 'artillery', 'bomb', 'salvo', 'mg']) {
+      const f = Marley[k]; if (typeof f !== 'function') continue;
+      Marley[k] = function (u) { if (Up93.inGrace()) { if (u && typeof u === 'object' && 'cool' in u) u.cool = Math.max(u.cool, 2); return; } return f.apply(this, arguments); };
+    }
+  }
+}
+
+// ---------- B-4: 화면 가운데 알림(#msg)이 밝거나 어두운 배경에 묻히던 것 → 어두운 판·테두리, 긴 글은 작게, 글 길이만큼 오래 ----------
+{
+  const c = document.createElement('style');
+  c.textContent = `#msg{left:50%!important;right:auto!important;transform:translateX(-50%);width:max-content;max-width:min(860px,86vw);padding:10px 22px;border-radius:12px;
+background:rgba(8,11,18,.72);border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 26px rgba(0,0,0,.35);font-size:26px;line-height:1.3;
+text-shadow:0 1px 2px #000,0 0 6px rgba(0,0,0,.9);-webkit-text-stroke:.4px rgba(0,0,0,.6);white-space:normal;word-break:keep-all}
+#msg.long{font-size:18px;padding:8px 18px}#msg.mid{font-size:22px}`;
+  document.head.appendChild(c);
+  const t0 = Game.toast;
+  Game.toast = function (text, color) {
+    const r = t0.apply(this, arguments);
+    try {
+      const el = this.$('msg'), n = String(text || '').length;
+      el.classList.toggle('long', n > 30); el.classList.toggle('mid', n > 18 && n <= 30);
+      const ms = Math.min(4200, 1200 + Math.max(0, n - 12) * 70);   // 긴 글은 읽을 시간만큼
+      clearTimeout(this._toastTimer); this._toastTimer = setTimeout(() => el.style.opacity = 0, ms);
+    } catch (e) {}
+    return r;
+  };
+}
+
+// ---------- B-5: 적 이름표 — HUD 구역(체력·무기칸·미니맵·안내)과 겹치면 숨김, 건물에 가려지면 흐리게, 가까운 8개만 ----------
+{
+  const zones = []; let zt = 0;
+  const ZID = ['hud', 'minimap', 'ws92', 'tutor', 'wp88', 'vhp88', 'vhp92', 'shud92', 'skillbar', 'mw88', 'dnClock', 'trainBadge', 'nst92'];
+  const readZones = () => { zones.length = 0; for (const id of ZID) { const e = document.getElementById(id); if (!e || e.hidden) continue; const r = e.getBoundingClientRect(); if (r.width > 2 && r.height > 2) zones.push([r.left - 6, r.top - 6, r.right + 6, r.bottom + 6]); } };
+  const occ = new WeakMap(), ray = new THREE.Raycaster(), v = new THREE.Vector3(), dir = new THREE.Vector3(); let rr = 0;
+  const u1 = Marley.update;
+  Marley.update = function (dt) {
+    u1.call(this, dt);
+    if (!this.on || !Game.running) return;
+    const box = document.getElementById('mt88'); if (!box) return; const T = box.children;
+    const now = performance.now(); if (now - zt > 500) { zt = now; readZones(); }
+    const cp = camera.position, cand = [];
+    for (const u of this.list) { if (u.dead) continue; v.copy(u.pos); v.y += u.height + (u.air ? 6 : 3); const d = v.distanceTo(cp); if (d > 1200) continue; const p = v.clone().project(camera); if (p.z > 1 || Math.abs(p.x) > 1 || Math.abs(p.y) > 1) continue; cand.push({ u, d, x: (p.x + 1) / 2 * innerWidth, y: (1 - p.y) / 2 * innerHeight, w: v.clone() }); }
+    cand.sort((a, b) => a.d - b.d); cand.length = Math.min(cand.length, 8);
+    // 가림 검사: 한 프레임에 2개씩 돌아가며(결과 0.5초 유지)
+    for (let k = 0; k < 2 && cand.length; k++) { const c = cand[(rr++) % cand.length]; const o = occ.get(c.u); if (o && now - o.t < 500) continue; dir.copy(c.w).sub(cp); const dist = dir.length(); dir.divideScalar(dist); ray.set(cp, dir); ray.far = dist - 4; const h = World.hookables && ray.intersectObjects(World.hookables, false)[0]; occ.set(c.u, { t: now, hid: !!h }); }
+    let i = 0;
+    for (const c of cand) {
+      const e = T[i]; if (!e) break; const L = c.x - 32, Tp = c.y - 22, R = L + 120, B = Tp + 28;
+      if (zones.some(z => R > z[0] && L < z[2] && B > z[1] && Tp < z[3])) continue;   // HUD 구역과 겹치면 생략
+      i++; e.style.display = 'block'; e.style.transform = `translate(${L.toFixed(0)}px,${Tp.toFixed(0)}px)`;
+      const o = occ.get(c.u), far = c.d > 600; e.style.opacity = o && o.hid ? '0.38' : far ? '0.75' : '1';
+      const txt = `${c.u.name} · ${Math.round(c.d)}m`; if (e._t !== txt) { e._t = txt; e.firstChild.textContent = txt; }
+      e.children[1].firstChild.style.width = Math.max(0, c.u.hp / c.u.maxHp * 100).toFixed(0) + '%';
+    }
+    for (; i < T.length; i++) T[i].style.display = 'none';
+  };
+}
+
+// ---------- B-6: 점수 기능은 없앴는데 남아 있던 글자 ----------
+{
+  const fix = () => { const b = document.getElementById('toMenu'); if (b && /점수/.test(b.textContent)) b.textContent = '메인 화면으로 (새 게임)'; };
+  fix(); document.addEventListener('DOMContentLoaded', fix);
+}
+
+// ---------- B-7: 안내(튜토리얼) — 탈것·거인화·연출 중에는 숨김, 한 단계가 40초 넘으면 다음으로 ----------
+if (typeof Tutor !== 'undefined') {
+  for (const st of Tutor.steps) if (!st.wait) st.wait = 40;
+  const busy = () => (typeof Shifter !== 'undefined' && (Shifter.active || Shifter.charging)) || (typeof Ship !== 'undefined' && Ship.cur) || (typeof Aircraft !== 'undefined' && (Aircraft.cur || Aircraft.grab)) || (window.Veh92 && Veh92.cur) || (typeof Horse !== 'undefined' && Horse.riding) || (typeof Cannons !== 'undefined' && Cannons.cur) || (typeof Nuke !== 'undefined' && (Nuke.inBunker || Nuke.riding)) || (typeof ICBM !== 'undefined' && ICBM.busy && ICBM.busy());
+  const tu0 = Tutor.update;
+  Tutor.update = function (dt) {
+    if (this.i >= 0 && this.s && this.el) {
+      if (busy()) { if (!this.el.hidden) { this.el.hidden = true; this._hid93 = true; } return; }
+      if (this._hid93) { this._hid93 = false; this.el.hidden = false; }
+    }
+    return tu0.apply(this, arguments);
+  };
+}
+
+// ---------- B-8: 비행정·탈것 무기 목록(#wp88)이 미니맵과 겹치던 것 → 미니맵 위까지만, 넘치면 아래쪽 항목 접기 ----------
+{
+  const c = document.createElement('style');
+  c.textContent = `#wp88{overflow:hidden}#wp88.fit93 .row:not(.on){padding-top:2px!important;padding-bottom:2px!important}`;
+  document.head.appendChild(c);
+  setInterval(() => {
+    const w = document.getElementById('wp88'), m = document.getElementById('minimap'); if (!w || !m || w.hidden || getComputedStyle(w).display === 'none') return;
+    const mr = m.getBoundingClientRect(), gap = 14, bottom = Math.max(232, innerHeight - mr.top + gap);
+    if (w._b93 !== bottom) { w._b93 = bottom; w.style.bottom = bottom + 'px'; }
+    const maxH = Math.max(160, innerHeight - bottom - 120); if (w._h93 !== maxH) { w._h93 = maxH; w.style.maxHeight = maxH + 'px'; }
+    w.classList.toggle('fit93', w.scrollHeight > maxH);
+  }, 500);
+}
+
+// ---------- B-9: 세계 지도 — '내 위치' 글자가 장소 이름과 겹침, 파라디 섬 장소 이름 안 보임, 왼쪽 위 글자 잘림 ----------
+if (typeof Atlas !== 'undefined') {
+  if (Atlas.meMark) { const mm = Atlas.meMark; Atlas.meMark = function () { return String(mm.apply(this, arguments)).replace('<text y="62" class="me-t">', '<text x="46" y="12" class="me-t" style="text-anchor:start">'); }; }
+  if (Atlas.svg) { const sv = Atlas.svg; Atlas.svg = function () { return String(sv.apply(this, arguments)).replace('<text x="-2400" y="', '<text x="-1950" y="'); }; }
+  const c = document.createElement('style');
+  c.textContent = `.atlas.far .pl:not(.ov):hover .pn,.atlas.far .pl:not(.ov):focus-within .pn{display:block!important}
+.atlas .pl:not(.ov) .pn{paint-order:stroke;stroke:#000;stroke-width:8px}`;
+  document.head.appendChild(c);
+}
+
+// ---------- B-11: 일시정지·지도·설명·온라인 창이 열리면 게임 HUD를 모두 숨김(훈련 띠·시계 등이 창 위로 비치던 것) ----------
+{
+  const H = document.documentElement, st = (c, on) => { if (H.classList.contains(c) !== on) H.classList.toggle(c, on); };
+  setInterval(() => {
+    const g = document.getElementById('guide92'), n = document.getElementById('net92');
+    st('gd93', !!(g && g.style.display && g.style.display !== 'none')); st('nt93', !!(n && n.style.display === 'grid'));
+  }, 150);
+  const HUD = ['#trainBadge', '#dnClock', '#hud', '#minimap', '#ws92', '#mt88', '#mw88', '#tutor', '#nst92', '#vhp92', '#vhp88', '#wp88', '#shud92', '#crosshair', '#skillbar', '#msg', '#info', '#hint', '#speedlines', '#pullup93'];
+  const sel = [];
+  for (const k of ['ps92', 'at92', 'gd93', 'nt93']) for (const h of HUD) sel.push(`html.${k} ${h}`);
+  const c = document.createElement('style'); c.textContent = sel.join(',') + '{visibility:hidden!important}'; document.head.appendChild(c);
+}
+
+// ---------- 창 겹침: 지도·게임 설명·온라인 창은 한 번에 하나만 ----------
+{
+  const closeGuide = () => { try { if (typeof Guide !== 'undefined' && Guide.close) Guide.close(); } catch (e) {} };
+  const closeNet = () => { const n = document.getElementById('net92'); if (n) n.style.display = 'none'; };
+  const atlasOpen = () => { const a = document.getElementById('atlasModal'); return !!(a && !a.hidden); };
+  const closeAtlas = () => { try { if (atlasOpen() && Atlas.closeModal) Atlas.closeModal(false); } catch (e) {} };
+  if (typeof Guide !== 'undefined' && Guide.open) { const go = Guide.open; Guide.open = function () { closeAtlas(); closeNet(); return go.apply(this, arguments); }; }
+  if (typeof Atlas !== 'undefined' && Atlas.openModal) { const ao = Atlas.openModal; Atlas.openModal = function () { closeGuide(); closeNet(); return ao.apply(this, arguments); }; }
+  // Net92.open은 DOMContentLoaded 뒤에 만들어짐 → 그때 감쌈
+  const wrapNet = () => { if (window.Net92 && Net92.open && !Net92.open._w93) { const no = Net92.open; Net92.open = function () { closeGuide(); closeAtlas(); return no.apply(this, arguments); }; Net92.open._w93 = true; } };
+  setInterval(wrapNet, 1000); wrapNet();
+}
+
+// ---------- B-12: '표적 거인 소환'·훈련 표적이 골목에서는 안 나오던 것 → 주변 빈 땅을 둥글게 찾아 앞 40~120m에 ----------
+if (typeof Game !== 'undefined' && Game.trainTargets) {
+  const spot = (d0, d1, r) => { const f = Player.forward(); const base = Math.atan2(f.x, f.z);
+    for (let d = d0; d <= d1; d += 10) for (let i = 0; i < 16; i++) { const a = base + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.35; const x = Player.pos.x + Math.sin(a) * d, z = Player.pos.z + Math.cos(a) * d; if (World.isFree(x, z, r) && World.waterLevel(x, z) === null) return [x, z]; }
+    return null; };
+  const sp0 = Game.trainTargets;
+  Game.trainTargets = function () {
+    const before = Titans.list.length; const r = sp0.apply(this, arguments);
+    const made = Titans.list.length - before;
+    if (made < 3) {   // 골목이라 원래 방법으로 못 놓은 만큼 주변에서 찾아 놓음
+      const f = Player.forward();
+      for (let k = made; k < 3; k++) { const s = spot(40 + k * 15, 160, 5); if (!s) break; const h = [8, 12, 15][k]; const t = new Titan(scene, s[0], s[1], h, false, null); t.dummy = true; t.speed = 0; t.sight = 0; t.attackCd = 1e9; t.root.rotation.y = Math.atan2(-f.x, -f.z); Titans.list.push(t); }
+      Titans._hooksDirty = true;
+    }
+    return r;
+  };
+}
+
+// ---------- B-1: 탈것(전차·발사차량)을 좁은 곳에서 부르면 건물 속에 생겨 못 타던 것 → 둥글게 빈 땅(건물·물 없음·평평)을 찾음 ----------
+if (window.Veh92 && Veh92.spawnNear) {
+  const V = Veh92;
+  const flat = (x, z, r) => { const h0 = Arms.floor(x, z); for (const [dx, dz] of [[r, 0], [-r, 0], [0, r], [0, -r]]) if (Math.abs(Arms.floor(x + dx, z + dz) - h0) > 2.2) return false; return true; };
+  V.findSpot = function (r) {
+    const p = Player.pos, f = Player.forward(), base = Math.atan2(f.x, f.z);
+    for (let d = 10; d <= 90; d += 6) for (let i = 0; i < 20; i++) {
+      const a = base + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (Math.PI / 10), x = p.x + Math.sin(a) * d, z = p.z + Math.cos(a) * d;
+      if (this.dry(x, z) && World.isFree(x, z, r) && flat(x, z, r) && Math.abs(Arms.floor(x, z) - p.y) < 12) return [x, z];
+    }
+    return null;
+  };
+  const sn0 = V.spawnNear;
+  V.spawnNear = function (kind) {
+    const r = kind === 'tel' ? 7 : 5, s = this.findSpot(r);
+    if (!s) { Game.toast('주변에 탈것을 놓을 빈 땅이 없습니다 · 넓은 곳에서 불러 주세요', '#ffb347'); return; }
+    // 원래 함수가 앞 16m에 놓은 뒤 → 찾은 자리로 옮김(나머지 처리·연출은 원래대로)
+    sn0.call(this, kind);
+    const v = this.list.find(q => q.kind === kind && !q.dead); if (!v) return;
+    v.root.position.set(s[0], Arms.floor(s[0], s[1]), s[1]); v.yaw = Math.atan2(-(s[0] - Player.pos.x), -(s[1] - Player.pos.z)) + Math.PI;
+    for (let i = 0; i < 24; i++) Arms.dust.emit(v.root.position, new THREE.Vector3(Effects.rand(8), 3 + Math.random() * 4, Effects.rand(8)), 1.2, 2, 5);
+  };
+  // F로 탈 수 있는 거리도 차량 크기만큼 넉넉하게(9m → 길이에 맞춰)
+  const nr0 = V.near;
+  V.near = function () { const b = nr0.call(this); if (b) return b; let best = null, bd = 1e9; for (const v of this.list) { if (v.dead) continue; const d = v.root.position.distanceTo(Player.pos) - v.len * 0.6; if (d < 6 + v.len * 0.4 && d < bd) { bd = d; best = v; } } return best; };
+}
+
+// ---------- 동료가 건물 벽에 옆으로 붙어 서 있던 것(비행 방향으로 몸 전체를 돌림) → 몸은 좌우만, 위아래 기울기는 35°까지. 카메라 바로 앞 동료는 숨김 ----------
+if (typeof Allies !== 'undefined') {
+  const fly0 = Allies.fly;
+  Allies.fly = function (a, goal, speed, dt) {
+    const r = fly0.apply(this, arguments);
+    const vx = a.vel.x, vy = a.vel.y, vz = a.vel.z, hz = Math.hypot(vx, vz);
+    if (hz > 0.5) { const pitch = Math.max(-0.6, Math.min(0.6, Math.atan2(vy, hz))); a.root.rotation.set(pitch, Math.atan2(-vx, -vz), 0, 'YXZ'); }
+    else a.root.rotation.set(0, a.root.rotation.y, 0, 'YXZ');
+    return r;
+  };
+  // 걷는 동료 자리를 플레이어 주변 7m → 9m(카메라·화면 가림 줄임)
+  const up0 = Allies.update;
+  Allies.update = function (dt, player) {
+    const r = up0.apply(this, arguments);
+    if (typeof camera !== 'undefined') for (const a of this.list) { if (a.removed || !a.root) continue; const near = a.root.position.distanceTo(camera.position) < 2.6; if (a.root.visible === near) a.root.visible = !near; }
+    return r;
+  };
+}
+
+// ---------- A-3: 거인화 3인칭 카메라가 지붕·벽 속으로 파고들던 것 → 카메라 둘레 4방향 짧은 검사로 벽에서 밀어냄 ----------
+if (typeof Shifter !== 'undefined' && Shifter.updateCamera) {
+  const ray = new THREE.Raycaster(), D = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)], push = new THREE.Vector3(), w = new THREE.Vector3();
+  let fr = 0;
+  const uc0 = Shifter.updateCamera;
+  Shifter.updateCamera = function (cam) {
+    const r = uc0.apply(this, arguments);
+    if (!Player.thirdPerson || !World.hookables) return r;
+    // 골목처럼 뒤가 막혀 카메라가 거인 몸 가까이 끌려오면 → 앞으로 당기는 대신 지붕 위로 올려 내려다봄(부드럽게)
+    const t = this.titan;
+    if (t && t.height < 200) {
+      const eye = this._eye, want = this._up93 || (this._up93 = new THREE.Vector3()), cur = this._cam93 || (this._cam93 = cam.position.clone());
+      const close = cam.position.distanceTo(eye) < Math.max(6, t.height * 0.55);
+      if (close) {
+        want.copy(eye).addScaledVector(Player.lookDir().setY(0).normalize(), -t.height * 0.5); want.y = eye.y + t.height * 0.85 + 8;   // 골목 위에서 비스듬히 내려다봄
+        w.copy(want).sub(eye); const dd = w.length(); w.divideScalar(dd); ray.set(eye, w); ray.far = dd; const h = ray.intersectObjects(World.hookables, false)[0];
+        if (h) want.copy(eye).addScaledVector(w, Math.max(2, h.distance - 1.5));
+        cur.lerp(want, 0.18); cam.position.copy(cur);
+        const look = this._lk93 || (this._lk93 = new THREE.Vector3()); look.copy(eye).addScaledVector(Player.lookDir().setY(0).normalize(), t.height * 1.1); look.y = eye.y - t.height * 0.15; cam.lookAt(look);   // 거인과 앞쪽이 함께 보이게
+        return r;
+      }
+      cur.copy(cam.position);
+    }
+    if ((fr++ & 1) && this._push93) { cam.position.add(this._push93); return r; }   // 검사는 2프레임에 한 번(결과 재사용)
+    push.set(0, 0, 0); const R = 3.2;
+    for (const d of D) { w.copy(d).applyQuaternion(cam.quaternion); ray.set(cam.position, w); ray.far = R; const h = ray.intersectObjects(World.hookables, false)[0]; if (h) push.addScaledVector(w, -(R - h.distance)); }
+    this._push93 = (this._push93 || new THREE.Vector3()).copy(push);
+    cam.position.add(push);
+    return r;
+  };
+}
+
+// ---------- A-4: 비행정 — 땅 근접 경고(PULL UP)와 추락 알림을 길게 ----------
+if (typeof Aircraft !== 'undefined') {
+  const c = document.createElement('style');
+  c.textContent = `#pullup93{position:fixed;left:50%;top:38%;transform:translateX(-50%);z-index:30;pointer-events:none;display:none;font:900 22px/1 'Inter','Noto Sans KR',sans-serif;letter-spacing:4px;color:#fff;background:rgba(200,30,20,.88);padding:10px 22px;border-radius:8px;box-shadow:0 0 24px rgba(255,60,40,.7);animation:pu93 .5s steps(2) infinite}
+@keyframes pu93{50%{opacity:.35}}html.title #pullup93,html.cine92 #pullup93{display:none!important}`;
+  document.head.appendChild(c);
+  const el = document.createElement('div'); el.id = 'pullup93'; el.textContent = '▲ PULL UP · 기수 올려 (S 감속)';
+  const add = () => document.body.appendChild(el); if (document.body) add(); else document.addEventListener('DOMContentLoaded', add);
+  let beepT = 0;
+  setInterval(() => {
+    const a = Aircraft.cur; let on = false;
+    if (a && Game.running && !a.onGround) {
+      const p = a.root.position, fl = Aircraft.floorAt ? Aircraft.floorAt(p.x, p.z) : 0, alt = p.y - fl, vy = a.vel.y;
+      const tti = vy < -1 ? alt / -vy : 1e9;   // 땅에 닿기까지 남은 시간
+      on = alt < 120 && (tti < 3.5 || (alt < 22 && vy < -4));
+    }
+    el.style.display = on ? 'block' : 'none';
+    if (on && performance.now() - beepT > 500 && typeof Arms !== 'undefined' && Arms.beep) { beepT = performance.now(); Arms.beep(880, 0.08, 0.06); }
+  }, 100);
+  const cr0 = Aircraft.crash;
+  Aircraft.crash = function (a) { const was = this.cur === a; const r = cr0.apply(this, arguments); if (was) setTimeout(() => Game.toast(a.temp ? '비행정 추락! · P로 새 비행정을 부를 수 있습니다' : '비행정 추락! 6초 뒤 격납고에 새 비행정', '#ff8a5a'), 50); return r; };
+}
+
+// ---------- B-15: 출발 지점(성벽 위)에서 바로 앞이 높은 돌 구조물이면, 성벽 바깥(거인 쪽)이 보이게 시작 방향을 돌림 ----------
+{
+  let done = false;
+  setInterval(() => {
+    if (done || typeof Game === 'undefined' || !Game.started || !Game.running) return; done = true;
+    try {
+      if (Player.pos.distanceTo(World.START) > 6) return;   // 이어하기·다른 자리에서 시작했으면 그대로
+      const ray = new THREE.Raycaster(), from = Player.pos.clone().setY(Player.pos.y + 1.6);
+      const blocked = yaw => { ray.set(from, new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw))); ray.far = 25; return !!ray.intersectObjects(World.hookables, false)[0]; };
+      if (!blocked(Player.yaw)) return;
+      // 거인이 많은 쪽 중 막히지 않은 방향
+      let best = null, bs = -1;
+      for (let i = 0; i < 24; i++) { const yaw = i / 24 * Math.PI * 2; if (blocked(yaw)) continue; let s = 0; for (const t of Titans.list) { if (t.dead) continue; const dx = t.pos.x - Player.pos.x, dz = t.pos.z - Player.pos.z; const ang = Math.atan2(-dx, -dz); const df = Math.abs(Math.atan2(Math.sin(ang - yaw), Math.cos(ang - yaw))); if (df < 0.6) s++; } if (s > bs) { bs = s; best = yaw; } }
+      if (best !== null) Player.yaw = best;
+    } catch (e) {}
+  }, 500);
 }
 
 </script>
