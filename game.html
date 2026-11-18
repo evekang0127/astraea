@@ -20718,13 +20718,13 @@ html.ps92 #ws92,html.cine92 #ws92,html.at92 #ws92,html.title #ws92{display:none!
 //   무기 목록(비행정·전함·전차·열차·발사차량)과 9거인 스킬은 게임 데이터에서 직접 읽어 와서, 무기·스킬을 바꾸면 설명도 자동으로 바뀝니다.
 //   항목 형식: [키(없으면 ''), 설명]. 섹션: { id, icon, title, intro, items, live(선택: 게임 데이터에서 항목을 만드는 함수) }
 const Guide = {
-  VERSION: '93차-a · 2026-11-18',
+  VERSION: '93차-b · 2026-11-18',
   GUIDE: [
     { id: 'start', icon: '🏁', title: '시작하기', intro: '거인이 몰려오는 성벽의 세계. 입체기동으로 날아올라 목덜미를 베고, 위기에는 9거인으로 변신합니다. 전함·비행정·전차·열차·핵 기지까지 모두 직접 조종할 수 있습니다.', items: [
       ['출격', '자유 모드로 시작 (장소는 세계 지도·들판에서 이동)'], ['훈련으로 출격', '피해 없음 · 거인화 게이지 가득 · 표적 거인 소환'], ['3인칭 · 1인칭', '시작 화면 또는 V · 휠로 언제든 바꿈'],
       ['모드 변경', '일시정지 → 자유 ↔ 스토리(장 선택)'], ['이어하기', '시작 화면에 마지막 장소·위치에서 이어서 시작'], ['Esc', '일시정지 · 설정 · 이 설명']] },
     { id: 'odm', icon: '🧭', title: '입체기동', intro: '와이어를 건물·성벽·나무·거인에 걸고 감아 날아다닙니다.', items: [
-      ['W A S D', '이동 (공중에서 W = 진행 방향 바꾸기)'], ['우클릭 (누르고 있기)', '양손 와이어 걸기 · 떼면 해제'], ['Space', '점프 · 와이어 빨리 감기'], ['Shift', '달리기 · 공중 가스 분사(부스트)'],
+      ['W A S D', '이동 (공중에서 W = 진행 방향 바꾸기)'], ['우클릭 (누르고 있기)', '양손 와이어 걸기 · 떼면 해제'], ['Space', '점프 · 와이어 빨리 감기'], ['벽 오르기', '벽·건물·성벽 바로 앞에서 위를 보고 우클릭 + Space(또는 W) → 와이어를 위로 다시 박으며 타고 올라가 꼭대기에 올라섬'], ['조준 보정', '위를 볼 때 발밑 턱·가까운 낮은 벽 대신 같은 방향의 더 높은 곳에 걸림 (일시정지 → 조작 → 와이어 조준 보조로 끄기)'], ['Shift', '달리기 · 공중 가스 분사(부스트)'],
       ['Q', '회피'], ['V · 휠', '1인칭 · 3인칭'], ['속도', '빠를수록 베기 위력·즉사 확률이 올라감 · 화면 가장자리 속도선']] },
     { id: 'attack', icon: '⚔️', title: '공격 · 원작 장비', intro: '거인은 목덜미를 베어야 쓰러집니다.', items: [
       ['1 · 2 · 3', '무기칸: 1 칼 · 2 뇌창 · 3 신호탄 (클릭 = 고른 무기 사용)'], ['좌클릭 (칼)', '베기 · 목덜미 근처면 돌진 베기 · 빠르게 날며 베면 회전 베기'], ['X 또는 2 + 클릭', '뇌창(무한) · 거인에 박힌 뒤 1초 뒤 폭발 · 목덜미면 즉사'],
@@ -21098,6 +21098,100 @@ if (typeof Aircraft !== 'undefined') {
       if (best !== null) Player.yaw = best;
     } catch (e) {}
   }, 500);
+}
+
+// ===== 93차-b: 입체기동 — 벽·건물 앞에서 와이어로 올라가지 못하던 것(A-1·A-2) =====
+// 원인(진단): 3인칭 카메라 조준선이 눈앞 3~15m의 낮은 벽면에 맞아 그 점까지만 끌려가고 멈춤(레이캐스트 자체는 정확)
+// ① 조준 보정: 카메라와 몸 사이(몸보다 가까운) 벽에 맞으면 무시하고 머리에서 다시 쏨 / 위를 보는데 가까운 낮은 벽이면 같은 방향 위쪽으로 더 높은 곳을 찾음
+// ② 벽 오르기: 와이어가 가까운 수직 벽에 박혀 있고 Space·W를 누르면 0.25초마다 벽 위쪽에 다시 박아 달려 올라감, 꼭대기를 넘으면 튀어 올라 넘어감
+// ③ 끼임 안내: 3초 동안 와이어를 잡고 눌러도 1m도 못 움직이면 힌트
+// 설정: 일시정지 → 조작 탭 '와이어 조준 보조'(켜기/끄기, 기본 켜기)
+{
+  const P = Player, R = new THREE.Raycaster(), V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), NM = new THREE.Matrix3();
+  Up93.hookAssist = true; try { Up93.hookAssist = localStorage.getItem('astraea-hook-assist') !== '0'; } catch (_) {}
+  const head = () => V3.set(P.pos.x, P.pos.y + 1.7, P.pos.z);
+  const cast = (from, dir, far) => { R.layers.enable(1); R.set(from, dir); R.far = far; const hs = []; R.intersectObjects(World.hookables, false, hs); if (typeof Titans !== 'undefined') Titans.raycast(R, hs); hs.sort((a, b) => a.distance - b.distance); return hs[0] || null; };
+  // 수직 벽인지: 같은 방향으로 높이만 1.5m 다르게 두 번 쏴서 거의 같은 거리에 맞으면 벽(면 법선은 92차 BVH 결과에서 믿을 수 없어 쓰지 않음)
+  const isWall = (from, dir, far = 8) => { const a = cast(from.clone(), dir, far); if (!a) return null; const b = cast(from.clone().setY(from.y + 1.5), dir, far); return b && Math.abs(a.distance - b.distance) < 0.6 ? a : null; };
+  const normalY = h => { if (!h || !h.face) return 1; NM.getNormalMatrix(h.object.matrixWorld); return Math.abs(V2.copy(h.face.normal).applyMatrix3(NM).normalize().y); };
+  const ah0 = P.aimHit;
+  P.aimHit = function (cam, spread = 0, pitch = 0) {
+    const hit = ah0.call(this, cam, spread, pitch);
+    if (!Up93.hookAssist || (typeof Shifter !== 'undefined' && Shifter.active)) return hit;
+    const hip = this.hipPos(), camD = cam.position.distanceTo(hip);
+    const dir = V1; cam.getWorldDirection(dir);
+    if (spread) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion), spread);
+    if (pitch) dir.applyAxisAngle(new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion), pitch);
+    let h = hit;
+    // ① 카메라와 몸 사이에서 맞음 → 머리에서 같은 방향으로 다시
+    if (h && dir.y > 0.2 && h.point.y < hip.y + 2) h = null;   // 위를 보는데 발밑·턱에 걸림 → 무시
+    if (!h || h.distance < camD + 0.5) { const h2 = cast(head().clone(), dir, this.HOOK_RANGE); if (h2 && h2.distance > 2 && !(dir.y > 0.2 && h2.point.y < hip.y + 2)) h = h2; }
+    // ② 위를 보는데(조준 방향 y>0.25) 맞은 곳이 없거나(발밑 턱이라 버림) 가깝고 낮으면 → 같은 방향 위쪽으로 더 높은 지점 찾기
+    const up = dir.y > 0.25;
+    if (up && (!h || (h.point.distanceTo(hip) < 20 && h.point.y < this.pos.y + 11))) {
+      const baseY = h ? h.point.y : hip.y; const flat = new THREE.Vector3(dir.x, 0, dir.z); const fl = flat.length() || 1; flat.divideScalar(fl);
+      for (const el of [Math.asin(Math.min(0.99, dir.y)), 0.35, 0.6, 0.85, 1.1, 1.3]) {   // 지금 각도부터 위로 75°까지
+        const d = new THREE.Vector3(flat.x * Math.cos(el), Math.sin(el), flat.z * Math.cos(el));
+        const h3 = cast(head().clone(), d, this.HOOK_RANGE);
+        if (h3 && h3.point.y > Math.max(baseY + 6, hip.y + 2)) { h = h3; break; }
+      }
+    }
+    if (!h) {
+      if (!(up && hit && hit.point.y < hip.y + 2)) return hit;
+      // 발밑 높이에 걸렸는데 그게 바로 앞 '벽면'이면 그대로 걸고(아래 벽 오르기가 위로 다시 박아 줌), 턱·땅이면 걸지 않음
+      const fd = new THREE.Vector3(dir.x, 0, dir.z); if (fd.lengthSq() < 1e-6) return null; fd.normalize();
+      return isWall(new THREE.Vector3(hip.x, hip.y + 0.3, hip.z), fd, 6) ? hit : null;
+    }
+    return h.point.distanceTo(hip) > this.HOOK_RANGE ? hit : h;
+  };
+  // ② 벽 오르기
+  let climbT = 0, stuckT = 0, stuckFrom = null, hintT = 0;
+  const pu0 = P.update;
+  P.update = function (dt) {
+    const r = pu0.apply(this, arguments);
+    try {
+      if (!Up93.hookAssist || !Game.running || (typeof Shifter !== 'undefined' && Shifter.active)) return r;
+      const hooks = this.hooks.filter(h => h && h.attached); if (!hooks.length) { stuckT = 0; stuckFrom = null; return r; }
+      const k = this.keys, pushing = k.Space || k.KeyW;
+      // 끼임 감지
+      if (pushing) { if (!stuckFrom) stuckFrom = this.pos.clone(); stuckT += dt; if (stuckT > 3) { if (this.pos.distanceTo(stuckFrom) < 1 && performance.now() - hintT > 6000) { hintT = performance.now(); Game.toast('벽에 붙어 못 움직입니다 · 위를 보고 다시 걸거나 Q 회피', '#ffd27a'); } stuckT = 0; stuckFrom = this.pos.clone(); } } else { stuckT = 0; stuckFrom = null; }
+      if (!pushing) return r;
+      climbT -= dt; if (climbT > 0) return r;
+      const hip = this.hipPos(), a = this.hookPoint(hooks[0]);
+      const toW = V1.copy(a).sub(hip); const horiz = Math.hypot(toW.x, toW.z);
+      Up93._dbg = { st: 'far', horiz: +horiz.toFixed(1), ay: +a.y.toFixed(1), hy: +hip.y.toFixed(1) };
+      if (horiz > 7 || a.y > hip.y + 14) return r;   // 벽이 멀거나 이미 높이 박혀 있으면 원래 동작
+      const wd = new THREE.Vector3(toW.x, 0, toW.z).normalize();
+      const probe = isWall(new THREE.Vector3(hip.x, hip.y + 0.3, hip.z), wd, 8); Up93._dbg.probe = probe ? +probe.distance.toFixed(1) : null; if (!probe) return r;
+      climbT = 0.22;
+      // 위쪽 9m에서 벽 쪽으로 → 맞으면 거기에 다시 박음(벽 타고 달려 올라감), 안 맞으면 꼭대기 → 올라섬
+      const up = new THREE.Vector3(hip.x - wd.x * 0.6, hip.y + 9, hip.z - wd.z * 0.6), h = cast(up, wd, probe.distance + 4);
+      Up93._dbg.up = h ? +h.distance.toFixed(1) : null;
+      if (h) {
+        for (let s = 0; s < 2; s++) { const hh = this.hooks[s]; if (!hh) continue; const ho = h.object; hh.obj = ho; hh.local = ho.worldToLocal(h.point.clone().addScaledVector(new THREE.Vector3(-wd.z, 0, wd.x), s ? 0.5 : -0.5)); hh.length = h.point.distanceTo(hip); hh.travel = hh.length; hh.attached = true; }
+        this.vel.y = Math.max(this.vel.y, 15); this.vel.x += wd.x * 1.5; this.vel.z += wd.z * 1.5;
+        if (typeof Effects !== 'undefined' && Effects.gasBurst) Effects.gasBurst(hip, new THREE.Vector3(0, -1, 0));
+      } else {
+        // 꼭대기: 벽 너머 1.5m 위에서 아래로 쏴서 윗면을 찾아 올라섬(mantle)
+        const top = cast(new THREE.Vector3(hip.x + wd.x * (probe.distance + 1.2), hip.y + 12, hip.z + wd.z * (probe.distance + 1.2)), new THREE.Vector3(0, -1, 0), 24);
+        Up93._dbg.top = top ? +top.point.y.toFixed(1) : null;
+        if (top && top.point.y > hip.y - 3 && top.point.y < hip.y + 12) {
+          this.releaseHook(); this.pos.set(top.point.x, top.point.y + 0.15, top.point.z); this.vel.set(wd.x * 3, 2, wd.z * 3); this.onGround = true;
+          if (typeof Effects !== 'undefined' && Effects.gasBurst) Effects.gasBurst(this.hipPos(), new THREE.Vector3(0, -1, 0));
+          Game.toast('올라섬', '#9fe0b0'); climbT = 0.8;
+        }
+      }
+    } catch (e) {}
+    return r;
+  };
+  // 설정(일시정지 → 조작 탭)에 켜기/끄기 — 다른 설정과 같은 <label><select> 꼴로 넣으면 92차 탭이 칩 모양으로 바꿔 줌
+  setInterval(() => {
+    const pane = document.querySelector('#pause .pn92 [data-p="ctrl"]'); if (!pane || document.getElementById('pHookAssist')) return;
+    const l = document.createElement('label'); l.appendChild(document.createTextNode('와이어 조준 보조 · 벽 오르기'));
+    const sl = document.createElement('select'); sl.id = 'pHookAssist'; sl.innerHTML = '<option value="1">켜기</option><option value="0">끄기</option>'; sl.value = Up93.hookAssist ? '1' : '0';
+    sl.addEventListener('change', () => { Up93.hookAssist = sl.value === '1'; try { localStorage.setItem('astraea-hook-assist', sl.value); } catch (_) {} });
+    l.appendChild(sl); pane.appendChild(l);
+  }, 800);
 }
 
 </script>
