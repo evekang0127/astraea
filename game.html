@@ -20718,7 +20718,7 @@ html.ps92 #ws92,html.cine92 #ws92,html.at92 #ws92,html.title #ws92{display:none!
 //   무기 목록(비행정·전함·전차·열차·발사차량)과 9거인 스킬은 게임 데이터에서 직접 읽어 와서, 무기·스킬을 바꾸면 설명도 자동으로 바뀝니다.
 //   항목 형식: [키(없으면 ''), 설명]. 섹션: { id, icon, title, intro, items, live(선택: 게임 데이터에서 항목을 만드는 함수) }
 const Guide = {
-  VERSION: '93차-b · 2026-11-18',
+  VERSION: '93차-c · 2026-11-19',
   GUIDE: [
     { id: 'start', icon: '🏁', title: '시작하기', intro: '거인이 몰려오는 성벽의 세계. 입체기동으로 날아올라 목덜미를 베고, 위기에는 9거인으로 변신합니다. 전함·비행정·전차·열차·핵 기지까지 모두 직접 조종할 수 있습니다.', items: [
       ['출격', '자유 모드로 시작 (장소는 세계 지도·들판에서 이동)'], ['훈련으로 출격', '피해 없음 · 거인화 게이지 가득 · 표적 거인 소환'], ['3인칭 · 1인칭', '시작 화면 또는 V · 휠로 언제든 바꿈'],
@@ -20995,6 +20995,7 @@ if (window.Veh92 && Veh92.spawnNear) {
   };
   const sn0 = V.spawnNear;
   V.spawnNear = function (kind) {
+    try { if (Arms.init) Arms.init(); } catch (e) {}   // 무기를 한 번도 안 쓴 상태면 먼지 효과가 아직 없어 오류(92차부터 있던 것)
     const r = kind === 'tel' ? 7 : 5, s = this.findSpot(r);
     if (!s) { Game.toast('주변에 탈것을 놓을 빈 땅이 없습니다 · 넓은 곳에서 불러 주세요', '#ffb347'); return; }
     // 원래 함수가 앞 16m에 놓은 뒤 → 찾은 자리로 옮김(나머지 처리·연출은 원래대로)
@@ -21192,6 +21193,45 @@ if (typeof Aircraft !== 'undefined') {
     sl.addEventListener('change', () => { Up93.hookAssist = sl.value === '1'; try { localStorage.setItem('astraea-hook-assist', sl.value); } catch (_) {} });
     l.appendChild(sl); pane.appendChild(l);
   }, 800);
+}
+
+// ===== 93차-c: 멈칫(히치) 제거 — 측정: 첫 소리 S.init 479ms(소리 재료 150만 개·잔향 생성), 세계 지도 열기 366ms(큰 SVG를 매번 새로 만듦), 일시정지 첫 열기 142ms(설정 칩 수백 개 배치) =====
+{
+  // ① 소리: 페이지를 불러오는 동안(로딩 화면) 미리 준비 — 사용자가 처음 누를 때는 resume만
+  try { if (typeof Sound !== 'undefined' && !Sound.ctx && Sound.init) Sound.init(); } catch (e) {}
+  // ② 세계 지도: 같은 장소에서는 한 번 만든 지도를 다시 씀(내 위치 표시만 새로)
+  if (typeof Atlas !== 'undefined' && Atlas.openModal) {
+    const ao = Atlas.openModal;
+    Atlas.openModal = function () {
+      const m = document.getElementById('atlasModal');
+      if (m && m._map93 === World.mapId && m.querySelector('.host svg')) {
+        this.fromPause = typeof Game !== 'undefined' && Game.started && !Game.running;
+        try { const me = m.querySelector('.me-pt'), pl = m.querySelector('svg .pl'), host = me ? me.parentNode : pl && pl.parentNode; if (host && this.meMark) { const t = document.createElementNS('http://www.w3.org/2000/svg', 'g'); t.innerHTML = this.meMark(); const n = t.firstElementChild; if (me) me.remove(); if (n) host.appendChild(n); } } catch (e) {}   // 시작 화면에서 미리 만든 지도에는 내 위치가 없어서 없으면 새로 넣음
+        m.hidden = false; return;
+      }
+      const r = ao.apply(this, arguments); const m2 = document.getElementById('atlasModal'); if (m2) m2._map93 = World.mapId; return r;
+    };
+  }
+  // ③ 시작 화면에서 한가할 때 지도·일시정지 창을 보이지 않게 한 번 열었다 닫음(배치·그리기 준비) → 게임 중 첫 열기 멈칫 제거
+  const warm = async () => {
+    const raf = () => new Promise(r => requestAnimationFrame(() => r()));
+    try {
+      if (typeof Game === 'undefined' || Game.started) return;
+      const st = document.createElement('style'); st.textContent = '#atlasModal.warm93,#pause.warm93{visibility:hidden!important;pointer-events:none!important}'; document.head.appendChild(st);
+      if (typeof Atlas !== 'undefined' && Atlas.openModal && !document.getElementById('atlasModal')) {
+        Atlas.openModal(); const m = document.getElementById('atlasModal'); if (m) { m.classList.add('warm93'); await raf(); await raf(); m.hidden = true; m.classList.remove('warm93'); }
+      }
+      if (Game.started) return;
+      const p = document.getElementById('pause');
+      if (p && p.hidden) { p.classList.add('warm93'); p.hidden = false; if (typeof Menu !== 'undefined' && Menu.showPause) try { Menu.showPause(); } catch (e) {} await raf(); await new Promise(r => setTimeout(r, 650)); await raf(); if (!Game.started) p.hidden = true; p.classList.remove('warm93'); }
+    } catch (e) {}
+  };
+  const go = () => { const idle = window.requestIdleCallback || (f => setTimeout(f, 1)); setTimeout(() => idle(warm, { timeout: 3000 }), 2500); };
+  if (document.readyState === 'complete') go(); else addEventListener('load', go);
+}
+// ⑤ 이름표 묶음은 독립 배치 구역(글자가 바뀌어도 문서 전체 배치에 번지지 않게). 매 프레임 배치 4~5ms 문제는 93d에서 계속
+{
+  const c = document.createElement('style'); c.textContent = '#mt88{contain:strict}#mt88 .t{contain:layout style}'; document.head.appendChild(c);
 }
 
 </script>
